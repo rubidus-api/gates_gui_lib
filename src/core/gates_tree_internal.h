@@ -1,0 +1,598 @@
+/* gates_gui_lib — core-internal tree structures, shared by src/core modules
+ * (tree, widget, layout, paint, hit). Never installed; public API stays in
+ * include/gates. Platform-free. */
+#ifndef GATES_TREE_INTERNAL_H
+#define GATES_TREE_INTERNAL_H
+
+#include <gates/tree.h>
+#include <gates/geometry.h>
+#include <gates/text_edit.h>
+#include <gates/event.h>
+#include <gates/clipboard.h>
+#include <gates/command.h>
+#include <gates/overlay.h>
+#include <gates/draw.h>
+#include <gates/theme.h>
+#include <gates/view.h>
+#include <gates/post.h>
+#include <gates/timer.h>
+#include <gates/access.h>
+#include <gates/input.h>
+
+/* One queued notification: kind/origin plus the source's handle. The payload
+ * is read from the widget when the event is delivered (latest state). */
+typedef struct gates_i_event_t {
+    gates_u32 node_index;
+    gates_u32 generation;
+    gates_u8 kind;           /* gates_event_kind_t, or GATES_I_EVENT_COMMAND */
+    gates_u8 origin;         /* gates_event_origin_t */
+    gates_u32 aux;           /* GATES_I_EVENT_COMMAND: the command id (node = scope);
+                              * SORT_REQUESTED: the column id */
+    gates_u64 item;          /* ACTIVATED from a view: the row's id at queue time */
+} gates_i_event_t;
+
+/* Queue-only kind for command invocations (never a public gates_event_kind_t). */
+#define GATES_I_EVENT_COMMAND 0x40u
+
+/* One open overlay (gates_overlay.c). */
+#define GATES_I_OVERLAY_MAX 8u
+typedef struct gates_i_overlay_t {
+    gates_u32 index;
+    gates_u32 generation;
+    gates_node_kind_t kind;      /* GATES_NODE_DIALOG or GATES_NODE_MENU */
+    gates_point_t at;            /* menu anchor */
+    gates_i32 above_y;           /* menu: bottom edge when it must open upwards */
+    gates_u32 prev_focus_index;  /* dialog: focus to restore (GATES_NONE = none) */
+    gates_u32 prev_focus_generation;
+    gates_u32 prev_scope;        /* dialog: focus_scope to restore */
+    bool needs_focus;            /* dialog: focus its first control at the next layout */
+    bool pressed_inside;         /* menu: a press started inside it */
+} gates_i_overlay_t;
+
+/* A node's message handler (gates_post.c, plan-0012). */
+typedef struct gates_i_msg_handler_t {
+    gates_u32 index;
+    gates_u32 generation;
+    gates_message_fn fn;
+    void *user;
+} gates_i_msg_handler_t;
+
+/* One timer (gates_timer.c, plan-0012). */
+typedef struct gates_i_timer_t {
+    gates_timer_id_t id;
+    gates_u32 index;
+    gates_u32 generation;
+    gates_u32 interval;
+    bool repeat;
+    bool alive;
+    gates_u64 due;
+    gates_timer_fn fn;
+    void *user;
+} gates_i_timer_t;
+
+/* Accessibility properties the application set on a node (gates_access.c). */
+typedef struct gates_i_access_prop_t {
+    gates_u32 index;
+    gates_u32 generation;
+    gates_u8 *name;
+    gates_u32 name_len;
+    gates_u8 *id;
+    gates_u32 id_len;
+    gates_live_t live;
+    gates_node_t labelled_by;
+} gates_i_access_prop_t;
+
+/* One registered command (gates_command.c). */
+typedef struct gates_i_command_t {
+    bool alive;
+    gates_u32 scope_index;
+    gates_u32 scope_generation;
+    gates_command_id_t id;
+    gates_u8 *label;         /* owned copy */
+    gates_u32 label_len;
+    gates_shortcut_t shortcut;
+    gates_command_role_t role;
+    bool enabled;
+    bool checked;
+    gates_command_fn invoke;
+    void *user;
+} gates_i_command_t;
+
+#define GATES_NONE UINT32_MAX
+
+/* Widget chrome geometry, shared by layout (intrinsic size), paint (drawing)
+ * and hit testing (cell math) so the three cannot disagree. */
+#define GATES_BUTTON_PAD_X    8
+#define GATES_BUTTON_PAD_Y    4
+#define GATES_BUTTON_BORDER   1
+#define GATES_CHECK_BOX      12
+#define GATES_CHECK_GAP       6
+#define GATES_TEXTBOX_PAD_X   4
+#define GATES_TEXTBOX_PAD_Y   3
+#define GATES_TEXTBOX_BORDER  1
+#define GATES_SEPARATOR_SPACE 4   /* space on each side of a separator's line */
+#define GATES_PROGRESS_H     10
+
+/* Dirty bits (RFC-0001 dirty layout / dirty paint; v1 resolves them as
+ * full relayout / full repaint — see plan-0003 decision 6). */
+#define GATES_DIRTY_LAYOUT 0x1u
+#define GATES_DIRTY_PAINT  0x2u
+
+/* Layout kinds (RFC-0001 §11). Values mirror the public gates_layout_t. */
+typedef enum gates_layout_kind_i {
+    GATES_LAYOUT_NONE = 0,
+    GATES_LAYOUT_ABSOLUTE,
+    GATES_LAYOUT_ROW,
+    GATES_LAYOUT_COLUMN,
+    GATES_LAYOUT_STACK,
+    GATES_LAYOUT_SPLIT,
+    GATES_LAYOUT_SCROLL,
+    GATES_LAYOUT_FORM,
+} gates_layout_kind_i;
+
+/* Non-widget drag targets (split handle, scroll thumb). */
+typedef enum gates_drag_kind_i {
+    GATES_DRAG_NONE = 0,
+    GATES_DRAG_SPLIT,
+    GATES_DRAG_SCROLL_THUMB,
+    GATES_DRAG_TEXT_SELECT,
+    GATES_DRAG_VIEW_VTHUMB,      /* plan-0011: a view's scrollbar thumbs and a header edge */
+    GATES_DRAG_VIEW_HTHUMB,
+    GATES_DRAG_VIEW_COLUMN,
+} gates_drag_kind_i;
+
+typedef enum gates_align_i {
+    GATES_ALIGN_STRETCH = 0,
+    GATES_ALIGN_START,
+    GATES_ALIGN_CENTER,
+    GATES_ALIGN_END,
+} gates_align_i;
+
+/* One option of a radio group or choice (plan-0010); labels live in the same
+ * block as the array. */
+typedef struct gates_i_option_t {
+    gates_u32 id;
+    const gates_u8 *label;
+    gates_u32 label_len;
+    bool disabled;
+} gates_i_option_t;
+
+/* Widget state (label/button/checkbox payload; RFC-0001 §6.2 state_index). */
+typedef struct gates_widget_state_t {
+    bool in_use;
+    gates_u32 next_free;
+
+    gates_u8 *text;          /* owned copy (tree allocator) */
+    gates_u32 text_len;
+    gates_i32 font_size;     /* 0 -> backend default */
+    bool checked;
+    bool disabled;
+
+    /* Textbox only: edit core plus its single-line view state. */
+    gates_text_edit_t *edit;
+    gates_u32 cols;          /* intrinsic width in cells */
+    gates_i32 view_cells;    /* horizontal scroll, in cells (paint keeps it) */
+    gates_u32 ime_cursor;    /* IME cursor, bytes into the preedit (plan-0006) */
+    gates_rect_t caret_rect; /* last painted caret, window coordinates */
+    bool caret_valid;        /* caret_rect is from a paint of the focused box */
+    /* Editing policy (plan-0008). */
+    bool read_only;
+    bool password;
+    gates_u32 max_bytes;     /* 0 = unlimited */
+    struct gates_i_undo *undo; /* lazily allocated history, null = empty */
+    /* Offer kept after LIMIT_EXCEEDED: the refused input and where it was to go. */
+    gates_u8 *offer;
+    gates_u32 offer_len;
+    gates_u32 offer_begin;
+    gates_u32 offer_end;
+    gates_u32 offer_revision;
+    gates_u32 offer_fit;
+
+    gates_u32 revision;      /* committed text / checked changes (plan-0007) */
+    bool not_focusable;      /* taken out of the Tab order (plan-0009) */
+    /* Button bound to a command (plan-0009); cmd_id 0 = none. */
+    gates_u32 cmd_scope_index;
+    gates_u32 cmd_scope_generation;
+    gates_command_id_t cmd_id;
+    /* Menu overlay (plan-0009 stage 2): its command ids, their scope, selection. */
+    gates_command_id_t *menu_ids;
+    gates_u32 menu_count;
+    gates_i32 menu_sel;          /* -1 = none */
+    gates_u32 menu_scope_index;
+    gates_u32 menu_scope_generation;
+    bool menu_is_list;           /* a choice's option list: scope = the choice, ids = option ids */
+    gates_i32 menu_min_w;        /* a choice's list: at least as wide as the choice */
+    /* Radio group / choice (plan-0010): one allocation holds array and labels. */
+    bool has_options;
+    gates_i_option_t *opts;
+    gates_u32 opt_count;
+    gates_u32 opt_sel;           /* selected id, 0 = none */
+    gates_i32 opt_press;         /* radio: row a press started on, -1 = none */
+    /* Virtual view (plan-0011): columns, model binding, scroll and selection. */
+    struct gates_i_view *view;
+    /* Form (plan-0010 stage 2): its field table. */
+    struct gates_i_field *fields;
+    gates_u32 field_count;
+    gates_u32 field_cap;
+    /* Progress (per-mille), textbox error state, label shown as an error (plan-0010). */
+    gates_i32 value;
+    bool invalid;
+    gates_event_fn on_event; /* typed notifications; null = none queued */
+    void *event_user;
+
+    void (*on_click)(gates_tree_t *tree, gates_node_t node, void *user);
+    void (*on_toggle)(gates_tree_t *tree, gates_node_t node, bool checked, void *user);
+    void *cb_user;
+} gates_widget_state_t;
+
+typedef struct gates_node_slot_t {
+    gates_u32 generation;
+    gates_u32 next_free;
+    bool alive;
+    bool destroy_pending;
+
+    gates_node_kind_t kind;
+    gates_u32 state_index;   /* widget state pool index or GATES_NONE */
+
+    gates_u32 parent;
+    gates_u32 first_child;
+    gates_u32 last_child;
+    gates_u32 prev_sibling;
+    gates_u32 next_sibling;
+    gates_u32 child_count;
+
+    /* Layout (container props + child props + results). */
+    gates_u8 layout_kind;    /* gates_layout_kind_i */
+    gates_u8 grow;           /* child main-axis weight (0 = fixed) */
+    gates_u8 align;          /* gates_align_i, child cross-axis */
+    gates_i32 padding;
+    gates_i32 gap;
+    gates_u32 active_child;  /* STACK: index into child order */
+    gates_rect_t abs_rect;   /* ABSOLUTE child request */
+    gates_size_t pref;       /* measure() result */
+    gates_rect_t layout_rect;/* arrange() result */
+
+    /* SPLIT: first-pane share in per-mille (no float in the core) + direction. */
+    gates_i32 split_ratio;
+    gates_u8 split_vertical;
+    /* SCROLL: vertical offset (>=0) and measured content size. */
+    gates_i32 scroll_offset;
+    gates_i32 scroll_arranged; /* scroll_offset used by the last arrange */
+    gates_size_t content_size;
+    /* FORM: the label column width found by the last measure. */
+    gates_i32 form_label_w;
+
+    gates_u32 dirty;         /* GATES_DIRTY_* */
+    bool hidden;             /* plan-0010: no space, no paint, no hit, no focus */
+    void *user_data;
+} gates_node_slot_t;
+
+struct gates_tree {
+    gates_allocator_t alloc;
+
+    gates_node_slot_t *slots;
+    gates_u32 capacity;
+    gates_u32 first_free;
+
+    gates_u32 root;
+    gates_u32 live_count;
+
+    gates_u32 *pending;
+    gates_u32 pending_len;
+    gates_u32 pending_cap;
+
+    /* Widget state pool. */
+    gates_widget_state_t *states;
+    gates_u32 state_cap;
+    gates_u32 state_first_free; /* GATES_NONE when full */
+
+    /* Interaction state (slot indices or GATES_NONE). */
+    gates_u32 hover;
+    gates_u32 pressed;
+
+    /* Active drag on a split handle or scroll thumb. */
+    gates_u32 drag_node;
+    gates_u8 drag_kind;          /* gates_drag_kind_i */
+    gates_point_t drag_start;    /* pointer position when the drag began */
+    gates_i32 drag_start_value;  /* pane-A px (split) or offset px (scroll) */
+
+    gates_u32 focus;         /* focused node index or GATES_NONE */
+
+    /* Cached from the text backend at layout time so pointer routing can do
+     * cell arithmetic without a backend handle. */
+    gates_i32 line_height;
+    gates_i32 advance;
+
+    gates_u32 dirty_bits;    /* aggregate of all marks since last clear */
+
+    /* Typed notification queue (plan-0007). Entries before event_head are being
+     * delivered; coalescing only merges into undelivered entries. */
+    gates_i_event_t *events;
+    gates_u32 event_len;
+    gates_u32 event_cap;
+    gates_u32 event_head;
+    bool dispatching;
+    /* Payload copies. While a handler holds event_text, growth allocates a new
+     * block and parks the old one in event_text_retired until it returns. */
+    gates_u8 *event_text;
+    gates_u32 event_text_cap;
+    gates_u8 *event_text_busy;
+    gates_u8 *event_text_retired;
+    gates_err_t input_error; /* last input-path failure, see gates_input_take_error */
+
+    /* Clipboard provider (plan-0008); has_clipboard false = none. */
+    gates_clipboard_t clipboard;
+    bool has_clipboard;
+
+    /* Keyboard (plan-0009): control held down by Space until key-up. */
+    gates_u32 key_press;     /* slot index or GATES_NONE */
+    gates_u32 focus_scope;   /* slot index of the scope root; GATES_NONE = tree root */
+    gates_i_command_t *commands;
+    gates_u32 command_count;
+    gates_u32 command_cap;
+    /* Open overlays, topmost last (plan-0009 stage 2). */
+    gates_i_overlay_t overlays[GATES_I_OVERLAY_MAX];
+    gates_u32 overlay_count;
+
+    /* Posting and timers (plan-0012). */
+    gates_u64 serial;            /* unique for the process, never reused */
+    gates_sender_t *sender;      /* attached sender (not a reference) or null */
+    gates_i_msg_handler_t *msg_handlers;
+    gates_u32 msg_handler_count;
+    gates_u32 msg_handler_cap;
+    gates_i_timer_t *timers;
+    gates_u32 timer_count;
+    gates_u32 timer_cap;
+    gates_timer_id_t next_timer_id;
+    gates_clock_fn clock;
+    void (*clock_changed)(void *ctx);
+    void *clock_ctx;
+
+    /* Accessibility (plan-0014). */
+    bool access_on;
+    gates_access_change_t access_changes[GATES_ACCESS_CHANGES_MAX];
+    gates_u32 access_change_count;
+    bool access_overflow;
+    gates_i_access_prop_t *access_props;
+    gates_u32 access_prop_count;
+    gates_u32 access_prop_cap;
+    gates_u8 *access_buf;        /* strings handed out by gates_access_info */
+    gates_u32 access_buf_cap;
+    gates_u8 *announce;
+    gates_u32 announce_len;
+    bool announce_assertive;
+};
+
+/* Event queue helpers (gates_event.c). Reserve before mutating: `slots` more
+ * entries and payload capacity for `text_bytes`. Push never allocates. */
+gates_err_t gates_i_event_reserve(gates_tree_t *tree, gates_u32 slots, gates_u32 text_bytes);
+void gates_i_event_push(gates_tree_t *tree, gates_u32 idx, gates_event_kind_t kind,
+                        gates_event_origin_t origin);
+/* Reserve + push in one step; failure drops the event and records input_error. */
+void gates_i_event_try_push(gates_tree_t *tree, gates_u32 idx, gates_event_kind_t kind,
+                            gates_u32 text_bytes);
+/* Drops undelivered events for a slot (handler removed). */
+void gates_i_event_purge(gates_tree_t *tree, gates_u32 idx);
+void gates_i_event_free(gates_tree_t *tree);
+
+/* Textbox editing (gates_textbox.c, plan-0008). */
+typedef enum gates_i_unit_t {
+    GATES_I_UNIT_TYPE,       /* typed characters: consecutive ones merge */
+    GATES_I_UNIT_DEL_BACK,   /* Backspace run */
+    GATES_I_UNIT_DEL_FWD,    /* Delete run */
+    GATES_I_UNIT_OTHER,      /* paste, cut, IME commit, replace, accept: one unit each */
+} gates_i_unit_t;
+/* The one path every textbox text change takes: replaces bytes [b,e) with
+ * text. Checks the maximum length (a user edit past it becomes an offer plus
+ * LIMIT_EXCEEDED, and OUT_OF_BOUNDS is returned), reserves the event and the
+ * text before touching anything, records undo (dropping the oldest history
+ * when memory is short), applies, bumps the revision and, for user edits,
+ * queues TEXT_CHANGED. Read-only and composition checks are the caller's. */
+gates_err_t gates_i_box_edit(gates_tree_t *tree, gates_u32 idx, gates_u32 b, gates_u32 e,
+                             gates_str_t text, gates_i_unit_t unit, bool user);
+/* Ends a typing/deletion run so the next edit starts a new undo unit. */
+void gates_i_box_seal(gates_widget_state_t *st);
+/* Undo / redo on the box (user edits). OK and nothing done when empty. */
+gates_err_t gates_i_box_undo(gates_tree_t *tree, gates_u32 idx);
+gates_err_t gates_i_box_redo(gates_tree_t *tree, gates_u32 idx);
+/* Drops history and the pending offer (programmatic set, raw edit bridge). */
+void gates_i_box_forget(gates_tree_t *tree, gates_widget_state_t *st);
+/* Frees history and offer when the widget state is released. */
+void gates_i_box_free(gates_tree_t *tree, gates_widget_state_t *st);
+/* Display cells: password boxes show one cell per codepoint. */
+gates_u32 gates_i_box_cells_before(const gates_widget_state_t *st, gates_u32 offset);
+gates_u32 gates_i_box_offset_at_cell(const gates_widget_state_t *st, gates_u32 cell);
+/* Clipboard helpers (gates_clipboard.c). normalize: single-line paste policy
+ * (CRLF/CR/LF/TAB -> one space, other controls dropped, invalid UTF-8 ->
+ * U+FFFD) into a new block from `alloc`. */
+gates_err_t gates_i_paste_normalize(gates_allocator_t alloc, gates_str_t in, gates_u8 **out,
+                                    gates_u32 *out_len);
+
+/* Focus (gates_focus.c, plan-0009). */
+bool gates_i_focus_eligible(const gates_tree_t *tree, gates_u32 idx);
+/* When the focused node is no longer eligible (disabled, hidden, command
+ * gone), focus moves to the next eligible control in tree order, or to none. */
+void gates_i_focus_check(gates_tree_t *tree);
+/* Before `idx`'s subtree is unlinked: moves focus out of it if it is inside. */
+void gates_i_focus_leave_subtree(gates_tree_t *tree, gates_u32 idx);
+/* Nothing hidden on the way up, on the shown stack pages, inside the focus scope. */
+bool gates_i_reachable(const gates_tree_t *tree, gates_u32 idx);
+/* Scrolls every scroll ancestor so the node's rect is inside its viewport. */
+void gates_i_scroll_into_view(gates_tree_t *tree, gates_u32 idx);
+/* The scope root that commands and traversal use now. */
+gates_u32 gates_i_scope_root(const gates_tree_t *tree);
+
+/* Commands (gates_command.c). */
+/* Inert: disabled, or bound to a command that is disabled or gone. */
+bool gates_i_widget_inert(const gates_tree_t *tree, const gates_widget_state_t *st);
+/* A widget's visible text: a bound button shows its command's label. */
+gates_str_t gates_i_widget_label(const gates_tree_t *tree, const gates_widget_state_t *st);
+/* Finds a live command (null when missing). */
+gates_i_command_t *gates_i_command_find(const gates_tree_t *tree, gates_u32 scope_index,
+                                        gates_u32 scope_generation, gates_command_id_t id);
+/* The command whose shortcut this key is, in the active scope chain (or null). */
+gates_i_command_t *gates_i_command_for_key(const gates_tree_t *tree,
+                                           const gates_key_event_t *ev);
+/* The active scope's command with this role (or null). */
+gates_i_command_t *gates_i_command_with_role(const gates_tree_t *tree,
+                                             gates_command_role_t role);
+/* Queues an invocation of `c` (reserved slot required: push never allocates). */
+void gates_i_command_push(gates_tree_t *tree, const gates_i_command_t *c,
+                          gates_event_origin_t origin);
+void gates_i_commands_free(gates_tree_t *tree);
+
+/* Activation of a button/checkbox (gates_hit.c): reserve, toggle, queue, legacy callback. */
+void gates_i_activate(gates_tree_t *tree, gates_u32 idx);
+
+/* Overlays (gates_overlay.c). */
+/* Where overlay i goes for a viewport, given its measured preferred size. */
+gates_rect_t gates_i_overlay_place(const gates_tree_t *tree, gates_u32 i, gates_size_t pref,
+                                   gates_size_t viewport);
+/* After layout: give a newly opened dialog's first control the focus. */
+void gates_i_overlays_after_layout(gates_tree_t *tree);
+/* Pointer routing: the node to hit-test from (a modal dialog, or the root);
+ * true in *consumed when the top menu took the event entirely. */
+gates_u32 gates_i_overlay_pointer(gates_tree_t *tree, const gates_pointer_event_t *ev,
+                                  bool *consumed);
+/* Keys while a menu is on top (true: consumed). */
+bool gates_i_overlay_key(gates_tree_t *tree, const gates_key_event_t *ev);
+/* Escape with no cancel command while a dialog is on top: cancels it. */
+bool gates_i_overlay_escape(gates_tree_t *tree);
+/* gates_node_destroy on an open overlay: forget it silently (no event). */
+void gates_i_overlay_node_destroyed(gates_tree_t *tree, gates_u32 idx);
+bool gates_i_overlay_is_dialog_scope(const gates_tree_t *tree, gates_u32 scope);
+gates_size_t gates_i_menu_measure(const gates_tree_t *tree, const gates_widget_state_t *st,
+                                  const gates_text_backend_t *text, gates_i32 font_size);
+gates_err_t gates_i_menu_paint(const gates_tree_t *tree, gates_u32 idx, gates_draw_list_t *dl,
+                               const gates_theme_t *theme, const gates_text_backend_t *text);
+void gates_i_menu_free(gates_tree_t *tree, gates_widget_state_t *st);
+
+/* Options (gates_choice.c, plan-0010). */
+#define GATES_RADIO_ROW_GAP 4
+#define GATES_CHOICE_ARROW_CELLS 2
+/* Height of one radio row for a line height. */
+gates_i32 gates_i_radio_row_h(gates_i32 line_height);
+/* The radio row under p (by the cached line height), or -1. */
+gates_i32 gates_i_radio_row_at(const gates_tree_t *tree, gates_u32 idx, gates_point_t p);
+const gates_i_option_t *gates_i_option_find(const gates_widget_state_t *st, gates_u32 id);
+bool gates_i_options_any_enabled(const gates_widget_state_t *st);
+/* A person selects `id` (enabled option): reserves the event first (no
+ * change without it), selects, bumps the revision, queues VALUE_CHANGED.
+ * OK and nothing done when it is already selected. */
+gates_err_t gates_i_option_pick(gates_tree_t *tree, gates_u32 idx, gates_u32 id);
+/* Radio keys on the focused group (true: consumed). */
+bool gates_i_radio_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t *ev);
+/* Space on a radio group: selects the first enabled option when none is. */
+void gates_i_radio_activate(gates_tree_t *tree, gates_u32 idx);
+gates_size_t gates_i_options_measure(const gates_tree_t *tree, const gates_node_slot_t *s,
+                                     const gates_text_backend_t *text);
+gates_err_t gates_i_options_paint(const gates_tree_t *tree, gates_u32 idx, gates_draw_list_t *dl,
+                                  const gates_theme_t *theme, const gates_text_backend_t *text,
+                                  bool pressed, bool hovered);
+void gates_i_options_free(gates_tree_t *tree, gates_widget_state_t *st);
+/* Choice list (gates_overlay.c): opens it (errors go to input_error); the
+ * list's overlay index for a choice, or -1; closes lists whose choice can no
+ * longer be used (disabled, hidden, unreachable) or, with `idx`, that one. */
+void gates_i_choice_open(gates_tree_t *tree, gates_u32 idx);
+gates_i32 gates_i_choice_list_find(const gates_tree_t *tree, gates_u32 idx);
+void gates_i_choice_lists_check(gates_tree_t *tree, gates_u32 only_idx);
+
+/* Queues an event carrying `aux` / `item` (reserved slot required). */
+void gates_i_event_push_ex(gates_tree_t *tree, gates_u32 idx, gates_event_kind_t kind,
+                           gates_event_origin_t origin, gates_u32 aux, gates_u64 item);
+
+/* Virtual views (gates_view.c, plan-0011). */
+void gates_i_view_free(gates_tree_t *tree, gates_widget_state_t *st);
+gates_item_id_t gates_i_view_selected(const gates_widget_state_t *st);
+/* Accessibility (gates_view.c, plan-0014 stage 2): rows as items - the rows
+ * shown now plus the selection; cells only for shown rows. */
+#define GATES_I_VIEW_LIST 0u
+#define GATES_I_VIEW_TABLE 1u
+#define GATES_I_VIEW_TREE 2u
+typedef struct gates_i_view_item_t {
+    gates_u64 row, count;        /* position in the model, model rows */
+    bool shown, selected, has_info;
+    gates_rect_t rect;           /* when shown */
+    gates_row_info_t info;       /* tree rows */
+    gates_u32 columns;
+} gates_i_view_item_t;
+gates_u32 gates_i_view_kind(const gates_tree_t *tree, gates_u32 idx);
+gates_u64 gates_i_view_item_count(gates_tree_t *tree, gates_u32 idx);
+gates_item_id_t gates_i_view_item_at(gates_tree_t *tree, gates_u32 idx, gates_u64 k);
+bool gates_i_view_item(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id, gates_i_view_item_t *out);
+gates_str_t gates_i_view_cell(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id, gates_u32 col);
+gates_item_id_t gates_i_view_row_at(gates_tree_t *tree, gates_u32 idx, gates_point_t p);
+gates_err_t gates_i_view_pick_id(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id);
+gates_err_t gates_i_view_activate_id(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id);
+gates_err_t gates_i_view_expand_id(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id, bool open);
+bool gates_i_view_scroll_info(gates_tree_t *tree, gates_u32 idx, gates_u32 *pos, gates_u32 *page);
+gates_err_t gates_i_view_scroll_set(gates_tree_t *tree, gates_u32 idx, gates_u32 pos);
+gates_err_t gates_i_view_scroll_step(gates_tree_t *tree, gates_u32 idx, gates_i32 amount, bool page);
+gates_size_t gates_i_view_measure(const gates_tree_t *tree, const gates_node_slot_t *s,
+                                  const gates_text_backend_t *text);
+gates_err_t gates_i_view_paint(const gates_tree_t *tree, gates_u32 idx, gates_draw_list_t *dl,
+                               const gates_theme_t *theme, const gates_text_backend_t *text);
+bool gates_i_view_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t *ev);
+/* Left press on the view (true: taken, possibly starting a drag). */
+bool gates_i_view_pointer_down(gates_tree_t *tree, gates_u32 idx, gates_point_t p,
+                               gates_u32 clicks);
+void gates_i_view_pointer_up(gates_tree_t *tree, gates_u32 idx, gates_point_t p);
+void gates_i_view_drag(gates_tree_t *tree, gates_point_t p);
+bool gates_i_view_wheel(gates_tree_t *tree, gates_u32 idx, gates_vec2_t wheel);
+
+/* Posting and timers: freed with the tree (gates_post.c / gates_timer.c). */
+void gates_i_post_tree_free(gates_tree_t *tree);
+void gates_i_timers_free(gates_tree_t *tree);
+
+/* Accessibility (gates_access.c): records a change when enabled; frees. */
+void gates_i_access_log(gates_tree_t *tree, gates_access_change_kind_t kind, gates_u32 idx,
+                        gates_u64 item);
+void gates_i_access_free(gates_tree_t *tree);
+gates_live_t gates_i_access_live(const gates_tree_t *tree, gates_u32 idx);
+
+/* What a form knows about one of its editors (gates_form.c): false when the
+ * node is not a form editor. */
+typedef struct gates_i_field_info_t {
+    gates_u32 id;
+    gates_node_t label, help, error;
+    bool required;
+} gates_i_field_info_t;
+bool gates_i_form_field_info(const gates_tree_t *tree, gates_u32 editor_idx,
+                             gates_i_field_info_t *out);
+/* Chooses and invokes a menu entry by command id, like a click (gates_overlay.c). */
+gates_err_t gates_i_menu_invoke(gates_tree_t *tree, gates_u32 menu_idx, gates_command_id_t id);
+/* Menu row geometry for accessibility bounds. */
+gates_rect_t gates_i_menu_row_rect(const gates_tree_t *tree, gates_u32 menu_idx, gates_u32 row);
+
+/* Form (gates_form.c). */
+void gates_i_form_free(gates_tree_t *tree, gates_widget_state_t *st);
+
+/* Frees a detached, never-exposed subtree at once, without allocating. */
+void gates_i_discard_detached(gates_tree_t *tree, gates_node_t node);
+
+/* Shared helpers implemented in gates_tree.c. */
+gates_node_slot_t *gates_i_slot(const gates_tree_t *tree, gates_u32 idx);
+bool gates_i_valid(const gates_tree_t *tree, gates_node_t node);
+gates_node_t gates_i_handle(const gates_tree_t *tree, gates_u32 idx);
+void gates_i_mark_dirty(gates_tree_t *tree, gates_u32 idx, gates_u32 bits);
+
+/* Widget state pool (gates_tree.c owns storage; gates_widget.c uses it). */
+gates_err_t gates_i_state_acquire(gates_tree_t *tree, gates_u32 *out_index);
+void gates_i_state_release(gates_tree_t *tree, gates_u32 state_index);
+gates_widget_state_t *gates_i_state(const gates_tree_t *tree, gates_u32 state_index);
+
+/* Split/scroll chrome geometry, derived from layout results.
+ * Owned by gates_layout.c; used by paint and hit testing so the three agree.
+ * All return empty rects when the node is not that kind (or not scrollable). */
+gates_rect_t gates_i_split_handle(const gates_tree_t *tree, gates_u32 idx);
+bool gates_i_scrollable(const gates_tree_t *tree, gates_u32 idx);
+gates_rect_t gates_i_scroll_viewport(const gates_tree_t *tree, gates_u32 idx);
+gates_rect_t gates_i_scroll_track(const gates_tree_t *tree, gates_u32 idx);
+gates_rect_t gates_i_scroll_thumb(const gates_tree_t *tree, gates_u32 idx);
+/* Clamps a scroll offset into the legal range; returns the clamped value. */
+gates_i32 gates_i_scroll_clamp(const gates_tree_t *tree, gates_u32 idx, gates_i32 offset);
+
+/* Text area inside a textbox's border and padding (empty for other kinds). */
+gates_rect_t gates_i_textbox_inner(const gates_tree_t *tree, gates_u32 idx);
+
+#endif /* GATES_TREE_INTERNAL_H */

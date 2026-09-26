@@ -1,0 +1,1313 @@
+/* gates_gui_lib - virtual views: the shared rows engine behind list and table
+ * (plan-0011, RFC-0003 8). One node per view; the model is asked only for
+ * painted rows; selection is an item id; offsets are 64-bit rows.
+ * Platform-free. */
+#include <gates/view.h>
+#include <gates/event.h>
+#include <gates/layout.h>
+#include "gates_tree_internal.h"
+
+#include <string.h>
+
+#define VIEW_ROW_PAD 4           /* row height = line height + this */
+#define VIEW_CELL_PAD 4          /* text inset inside a cell */
+#define VIEW_EDGE 3              /* header edge grab distance for resizing */
+#define VIEW_WHEEL_ROWS 3
+#define VIEW_STEP_CELLS 4        /* Left/Right and horizontal wheel step */
+
+typedef struct gates_i_column {
+    gates_column_id_t id;
+    const gates_u8 *label;
+    gates_u32 label_len;
+    gates_i32 width;
+    gates_i32 min_width;
+} gates_i_column_t;
+
+/* Log view ring (stage 2): lines in arrival order, ids consecutive. */
+typedef struct gates_i_line {
+    gates_item_id_t id;
+    gates_u8 *text;
+    gates_u32 len;
+} gates_i_line_t;
+
+struct gates_i_log {
+    gates_u32 max_lines;
+    gates_usize_t max_bytes;
+    gates_i_line_t *lines;       /* max_lines slots */
+    gates_u32 head, n;
+    gates_usize_t bytes;
+    gates_item_id_t next_id;
+    gates_u64 dropped;
+};
+
+struct gates_i_view {
+    bool header;
+    bool tree;
+    struct gates_i_log *log;     /* a log view owns its model */
+    bool follow;                 /* log: keep the last line in view */
+    gates_u32 ncol;
+    gates_i_column_t *cols;      /* one block: array, then labels */
+    bool has_model;
+    gates_rows_model_t model;
+    gates_u64 first;             /* first row shown */
+    gates_i32 scroll_x;
+    gates_item_id_t sel;
+    gates_u64 sel_row;           /* last known row of the selection */
+    gates_i32 press_col;         /* header cell pressed, -1 = none */
+    gates_u64 drag_first;
+    gates_i32 drag_value;
+    gates_i32 drag_col;
+};
+
+typedef struct view_geom_t {
+    gates_rect_t inner, header, body, vtrack, vthumb, htrack, hthumb;
+    gates_i32 row_h;
+    gates_u64 count;
+    gates_u64 first;             /* clamped copy of the stored offset */
+    gates_u64 max_first;
+    gates_u32 visible;           /* whole rows that fit (at least 1) */
+    gates_u32 painted;           /* rows touched by the body, capped */
+    gates_i32 content_w;
+    gates_i32 max_x;
+    gates_i32 scroll_x;          /* clamped copy */
+} view_geom_t;
+
+/* -- state -------------------------------------------------------------------------- */
+
+void gates_i_view_free(gates_tree_t *tree, gates_widget_state_t *st) {
+    if (st->view != nullptr) {
+        struct gates_i_log *lg = st->view->log;
+        if (lg != nullptr) {
+            for (gates_u32 k = 0; k < lg->n; k++) {
+                tree->alloc.free_fn(tree->alloc.ctx, lg->lines[(lg->head + k) % lg->max_lines].text);
+            }
+            tree->alloc.free_fn(tree->alloc.ctx, lg->lines);
+            tree->alloc.free_fn(tree->alloc.ctx, lg);
+        }
+        if (st->view->cols != nullptr) {
+            tree->alloc.free_fn(tree->alloc.ctx, st->view->cols);
+        }
+        tree->alloc.free_fn(tree->alloc.ctx, st->view);
+    }
+    st->view = nullptr;
+}
+
+gates_item_id_t gates_i_view_selected(const gates_widget_state_t *st) {
+    return st != nullptr && st->view != nullptr ? st->view->sel : 0;
+}
+
+static struct gates_i_view *view_of(const gates_tree_t *tree, gates_node_t node) {
+    if (tree == nullptr || !gates_i_valid(tree, node) ||
+        gates_i_slot(tree, node.index)->kind != GATES_NODE_VIEW) {
+        return nullptr;
+    }
+    const gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, node.index)->state_index);
+    return st != nullptr ? st->view : nullptr;
+}
+
+static struct gates_i_view *view_at(const gates_tree_t *tree, gates_u32 idx) {
+    const gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
+    return st != nullptr ? st->view : nullptr;
+}
+
+static gates_u64 model_count(struct gates_i_view *v) {
+    return v->has_model ? v->model.count(v->model.user) : 0;
+}
+
+/* -- 64-bit arithmetic that never narrows --------------------------------------------- */
+
+/* a * b / c for a < 2^31 and b <= c: both are shifted until c fits 32 bits. */
+static gates_u64 scale_down(gates_u64 a, gates_u64 b, gates_u64 c) {
+    while (c > 0xFFFFFFFFull) {
+        b >>= 1;
+        c >>= 1;
+    }
+    return c != 0 ? a * b / c : 0;
+}
+
+/* max * pos / travel for pos <= travel < 2^31, exact at both ends. */
+static gates_u64 scale_up(gates_u64 max, gates_u64 pos, gates_u64 travel) {
+    if (travel == 0) return 0;
+    return (max / travel) * pos + (max % travel) * pos / travel;
+}
+
+/* -- geometry, shared by layout queries, paint and hit testing ----------------------------- */
+
+static gates_i32 row_height(gates_i32 line_height) {
+    gates_i32 h = (line_height > 0 ? line_height : 16) + VIEW_ROW_PAD;
+    return h < GATES_ACCESS_MIN_TARGET ? GATES_ACCESS_MIN_TARGET : h; /* WCAG 2.5.8 */
+}
+
+static gates_i32 content_width(const struct gates_i_view *v, gates_i32 body_w) {
+    if (v->ncol == 0) return body_w;
+    gates_i32 w = 0;
+    for (gates_u32 i = 0; i < v->ncol; i++) w += v->cols[i].width;
+    return w;
+}
+
+static void geom(const gates_tree_t *tree, gates_u32 idx, const struct gates_i_view *v,
+                 gates_u64 count, gates_i32 line_height, view_geom_t *g) {
+    memset(g, 0, sizeof *g);
+    gates_rect_t r = gates_i_slot(tree, idx)->layout_rect;
+    g->inner = (gates_rect_t){ r.x + 1, r.y + 1, r.w - 2, r.h - 2 };
+    if (g->inner.w < 0) g->inner.w = 0;
+    if (g->inner.h < 0) g->inner.h = 0;
+    g->row_h = row_height(line_height);
+    g->count = count;
+    gates_i32 header_h = v->header && v->ncol > 0 ? g->row_h : 0;
+    if (header_h > g->inner.h) header_h = g->inner.h;
+    gates_i32 avail_h = g->inner.h - header_h;
+    gates_i32 cw = content_width(v, 0);
+    bool vbar = count > (gates_u64)(avail_h / g->row_h);
+    bool hbar = v->ncol > 0 && cw > g->inner.w - (vbar ? GATES_SCROLLBAR_PX : 0);
+    if (hbar && !vbar) {
+        vbar = count > (gates_u64)((avail_h - GATES_SCROLLBAR_PX) / g->row_h);
+    }
+    g->body = (gates_rect_t){ g->inner.x, g->inner.y + header_h,
+                              g->inner.w - (vbar ? GATES_SCROLLBAR_PX : 0),
+                              avail_h - (hbar ? GATES_SCROLLBAR_PX : 0) };
+    if (g->body.w < 0) g->body.w = 0;
+    if (g->body.h < 0) g->body.h = 0;
+    g->header = (gates_rect_t){ g->inner.x, g->inner.y, g->body.w, header_h };
+    gates_u32 fit = (gates_u32)(g->body.h / g->row_h);
+    g->visible = fit > 0 ? (fit < GATES_VIEW_MAX_ROWS ? fit : GATES_VIEW_MAX_ROWS) : 1;
+    gates_u32 touched = (gates_u32)((g->body.h + g->row_h - 1) / g->row_h);
+    if (touched > GATES_VIEW_MAX_ROWS) touched = GATES_VIEW_MAX_ROWS;
+    g->max_first = count > g->visible ? count - g->visible : 0;
+    g->first = v->first < g->max_first ? v->first : g->max_first;
+    gates_u64 left = count - g->first;
+    g->painted = left < touched ? (gates_u32)left : touched;
+    g->content_w = content_width(v, g->body.w);
+    g->max_x = g->content_w > g->body.w ? g->content_w - g->body.w : 0;
+    g->scroll_x = v->scroll_x < g->max_x ? (v->scroll_x > 0 ? v->scroll_x : 0) : g->max_x;
+    if (vbar) {
+        g->vtrack = (gates_rect_t){ g->body.x + g->body.w, g->body.y, GATES_SCROLLBAR_PX, g->body.h };
+        gates_i64 th = (gates_i64)scale_down((gates_u64)g->vtrack.h, g->visible,
+                                             count > g->visible ? count : g->visible);
+        if (th < GATES_SCROLLBAR_PX) th = GATES_SCROLLBAR_PX;
+        if (th > g->vtrack.h) th = g->vtrack.h;
+        gates_i32 travel = g->vtrack.h - (gates_i32)th;
+        gates_i32 y = (gates_i32)scale_down((gates_u64)travel, g->first, g->max_first);
+        g->vthumb = (gates_rect_t){ g->vtrack.x, g->vtrack.y + y, GATES_SCROLLBAR_PX, (gates_i32)th };
+    }
+    if (hbar) {
+        g->htrack = (gates_rect_t){ g->body.x, g->body.y + g->body.h, g->body.w, GATES_SCROLLBAR_PX };
+        gates_i32 tw = g->content_w > 0
+                           ? (gates_i32)(((gates_i64)g->htrack.w * g->body.w) / g->content_w)
+                           : g->htrack.w;
+        if (tw < GATES_SCROLLBAR_PX) tw = GATES_SCROLLBAR_PX;
+        if (tw > g->htrack.w) tw = g->htrack.w;
+        gates_i32 travel = g->htrack.w - tw;
+        gates_i32 x = g->max_x > 0 ? (gates_i32)(((gates_i64)travel * g->scroll_x) / g->max_x) : 0;
+        g->hthumb = (gates_rect_t){ g->htrack.x + x, g->htrack.y, tw, GATES_SCROLLBAR_PX };
+    }
+}
+
+/* Left edge of column position c (window x), after horizontal scrolling. */
+static gates_i32 col_left(const struct gates_i_view *v, const view_geom_t *g, gates_u32 c) {
+    gates_i32 x = g->body.x - g->scroll_x;
+    for (gates_u32 i = 0; i < c && i < v->ncol; i++) x += v->cols[i].width;
+    return x;
+}
+
+static gates_i32 col_width(const struct gates_i_view *v, const view_geom_t *g, gates_u32 c) {
+    return v->ncol == 0 ? g->body.w : v->cols[c].width;
+}
+
+static void geom_now(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v, view_geom_t *g) {
+    geom(tree, idx, v, model_count(v), tree->line_height, g);
+}
+
+/* -- creation and the public surface --------------------------------------------------------- */
+
+gates_err_t gates_view_create(gates_tree_t *tree, gates_node_t parent, const gates_view_desc_t *desc,
+                              gates_node_t *out_view) {
+    if (tree == nullptr || desc == nullptr || out_view == nullptr ||
+        (desc->column_count > 0 && desc->columns == nullptr)) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    *out_view = GATES_NODE_NULL;
+    if (!gates_node_eq(parent, GATES_NODE_NULL) && !gates_i_valid(tree, parent)) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    gates_usize_t bytes = 0;
+    for (gates_u32 i = 0; i < desc->column_count; i++) {
+        const gates_column_desc_t *c = &desc->columns[i];
+        if (c->id == 0 || (c->label.size > 0 && c->label.ptr == nullptr)) {
+            return PROVEN_ERR_INVALID_ARG;
+        }
+        for (gates_u32 k = 0; k < i; k++) {
+            if (desc->columns[k].id == c->id) return PROVEN_ERR_INVALID_ARG;
+        }
+        bytes += c->label.size;
+    }
+    gates_allocator_t a = tree->alloc;
+    proven_result_mem_mut_t rv = a.alloc_fn(a.ctx, sizeof(struct gates_i_view),
+                                            alignof(struct gates_i_view));
+    if (!proven_is_ok(rv.err)) {
+        return rv.err;
+    }
+    struct gates_i_view *v = (struct gates_i_view *)rv.value.ptr;
+    memset(v, 0, sizeof *v);
+    v->header = desc->header;
+    v->tree = desc->tree;
+    v->press_col = -1;
+    gates_err_t err = GATES_OK;
+    if (desc->column_count > 0) {
+        gates_usize_t head = (gates_usize_t)desc->column_count * sizeof(gates_i_column_t);
+        proven_result_mem_mut_t rc = a.alloc_fn(a.ctx, head + bytes, alignof(gates_i_column_t));
+        err = rc.err;
+        if (gates_is_ok(err)) {
+            v->cols = (gates_i_column_t *)rc.value.ptr;
+            v->ncol = desc->column_count;
+            gates_u8 *text = (gates_u8 *)rc.value.ptr + head;
+            gates_i32 adv = tree->advance > 0 ? tree->advance : 8;
+            for (gates_u32 i = 0; i < v->ncol; i++) {
+                const gates_column_desc_t *c = &desc->columns[i];
+                if (c->label.size > 0) memcpy(text, c->label.ptr, c->label.size);
+                gates_i32 minw = c->min_width > 0 ? c->min_width : 3 * adv;
+                gates_i32 w = c->width > 0 ? c->width : 12 * adv;
+                v->cols[i] = (gates_i_column_t){ .id = c->id, .label = text,
+                                                 .label_len = (gates_u32)c->label.size,
+                                                 .width = w < minw ? minw : w, .min_width = minw };
+                text += c->label.size;
+            }
+        }
+    }
+    gates_node_t node = GATES_NODE_NULL;
+    gates_u32 state = GATES_NONE;
+    if (gates_is_ok(err)) {
+        gates_node_desc_t nd = { .kind = GATES_NODE_VIEW };
+        err = gates_node_create(tree, GATES_NODE_NULL, &nd, &node);
+    }
+    if (gates_is_ok(err)) {
+        err = gates_i_state_acquire(tree, &state);
+        if (gates_is_ok(err)) gates_i_slot(tree, node.index)->state_index = state;
+    }
+    if (gates_is_ok(err) && !gates_node_eq(parent, GATES_NODE_NULL)) {
+        err = gates_node_append(tree, parent, node);
+    }
+    if (!gates_is_ok(err)) {
+        if (v->cols != nullptr) a.free_fn(a.ctx, v->cols);
+        a.free_fn(a.ctx, v);
+        if (!gates_node_eq(node, GATES_NODE_NULL)) gates_i_discard_detached(tree, node);
+        return err;
+    }
+    gates_i_state(tree, state)->view = v;
+    *out_view = node;
+    return GATES_OK;
+}
+
+gates_err_t gates_view_set_model(gates_tree_t *tree, gates_node_t view,
+                                 const gates_rows_model_t *model) {
+    struct gates_i_view *v = view_of(tree, view);
+    if (v == nullptr || v->log != nullptr || /* a log owns its model */
+        (model != nullptr && (model->count == nullptr || model->id_at == nullptr ||
+                              model->index_of == nullptr || model->cell == nullptr ||
+                              (v->tree && model->row_info == nullptr)))) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    v->has_model = model != nullptr;
+    v->model = model != nullptr ? *model : (gates_rows_model_t){0};
+    v->first = 0;
+    v->scroll_x = 0;
+    v->sel = 0;
+    v->sel_row = 0;
+    v->press_col = -1;
+    if (tree->drag_node == view.index &&
+        (tree->drag_kind == GATES_DRAG_VIEW_VTHUMB || tree->drag_kind == GATES_DRAG_VIEW_HTHUMB ||
+         tree->drag_kind == GATES_DRAG_VIEW_COLUMN)) {
+        tree->drag_kind = GATES_DRAG_NONE;
+        tree->drag_node = GATES_NONE;
+    }
+    gates_i_mark_dirty(tree, view.index, GATES_DIRTY_PAINT);
+    return GATES_OK;
+}
+
+/* Keeps row `row` in view (stored offset). */
+static void keep_visible(struct gates_i_view *v, const view_geom_t *g, gates_u64 row) {
+    gates_u64 first = g->first;
+    if (row < first) {
+        first = row;
+    } else if (row >= first + g->visible) {
+        first = row - g->visible + 1;
+    }
+    v->first = first < g->max_first ? first : g->max_first;
+}
+
+static gates_err_t reconcile(gates_tree_t *tree, gates_node_t view, struct gates_i_view *v);
+
+gates_err_t gates_view_model_changed(gates_tree_t *tree, gates_node_t view) {
+    struct gates_i_view *v = view_of(tree, view);
+    if (v == nullptr) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    return reconcile(tree, view, v);
+}
+
+/* Clamps the position and moves a selection whose item went away (PROGRAM). */
+static gates_err_t reconcile(gates_tree_t *tree, gates_node_t view, struct gates_i_view *v) {
+    view_geom_t g;
+    geom_now(tree, view.index, v, &g);
+    v->first = g.first;
+    v->scroll_x = g.scroll_x;
+    gates_err_t err = GATES_OK;
+    if (v->sel != 0 && v->has_model) {
+        gates_u64 row = 0;
+        if (v->model.index_of(v->model.user, v->sel, &row)) {
+            v->sel_row = row;
+        } else {
+            /* Gone: the item now nearest its old row, or nothing. */
+            gates_item_id_t next = 0;
+            if (g.count > 0) {
+                gates_u64 r = v->sel_row < g.count ? v->sel_row : g.count - 1;
+                next = v->model.id_at(v->model.user, r);
+                v->sel_row = r;
+            }
+            gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, view.index)->state_index);
+            if (st->on_event != nullptr) {
+                err = gates_i_event_reserve(tree, 1, 0);
+            }
+            v->sel = next;
+            st->revision++;
+            if (gates_is_ok(err)) {
+                gates_i_event_push_ex(tree, view.index, GATES_EVENT_SELECTION_CHANGED,
+                                      GATES_ORIGIN_PROGRAM, 0, 0);
+            }
+        }
+    }
+    gates_i_mark_dirty(tree, view.index, GATES_DIRTY_PAINT);
+    return err; /* the selection moved even when its announcement could not be queued */
+}
+
+gates_item_id_t gates_view_selected(const gates_tree_t *tree, gates_node_t view) {
+    const struct gates_i_view *v = view_of(tree, view);
+    return v != nullptr ? v->sel : 0;
+}
+
+gates_err_t gates_view_set_selected(gates_tree_t *tree, gates_node_t view, gates_item_id_t id) {
+    struct gates_i_view *v = view_of(tree, view);
+    if (v == nullptr) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    gates_u64 row = 0;
+    if (id != 0 && (!v->has_model || !v->model.index_of(v->model.user, id, &row))) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    if (v->sel != id) {
+        v->sel = id;
+        v->sel_row = row;
+        gates_i_state(tree, gates_i_slot(tree, view.index)->state_index)->revision++;
+        gates_i_mark_dirty(tree, view.index, GATES_DIRTY_PAINT);
+    }
+    return GATES_OK;
+}
+
+gates_err_t gates_view_scroll_to(gates_tree_t *tree, gates_node_t view, gates_item_id_t id) {
+    struct gates_i_view *v = view_of(tree, view);
+    gates_u64 row = 0;
+    if (v == nullptr || id == 0 || !v->has_model || !v->model.index_of(v->model.user, id, &row)) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    view_geom_t g;
+    geom_now(tree, view.index, v, &g);
+    keep_visible(v, &g, row);
+    gates_i_mark_dirty(tree, view.index, GATES_DIRTY_PAINT);
+    return GATES_OK;
+}
+
+gates_u64 gates_view_first_row(const gates_tree_t *tree, gates_node_t view) {
+    const struct gates_i_view *v = view_of(tree, view);
+    return v != nullptr ? v->first : 0;
+}
+
+gates_u32 gates_view_visible_rows(const gates_tree_t *tree, gates_node_t view) {
+    struct gates_i_view *v = view_of(tree, view);
+    if (v == nullptr) return 0;
+    view_geom_t g;
+    geom(tree, view.index, v, model_count(v), tree->line_height, &g);
+    return g.visible;
+}
+
+gates_i32 gates_view_scroll_x(const gates_tree_t *tree, gates_node_t view) {
+    const struct gates_i_view *v = view_of(tree, view);
+    return v != nullptr ? v->scroll_x : 0;
+}
+
+static gates_i_column_t *find_col(struct gates_i_view *v, gates_column_id_t id) {
+    for (gates_u32 i = 0; v != nullptr && i < v->ncol; i++) {
+        if (v->cols[i].id == id) return &v->cols[i];
+    }
+    return nullptr;
+}
+
+gates_i32 gates_view_column_width(const gates_tree_t *tree, gates_node_t view,
+                                  gates_column_id_t column) {
+    gates_i_column_t *c = find_col(view_of(tree, view), column);
+    return c != nullptr ? c->width : 0;
+}
+
+gates_err_t gates_view_set_column_width(gates_tree_t *tree, gates_node_t view,
+                                        gates_column_id_t column, gates_i32 width) {
+    gates_i_column_t *c = find_col(view_of(tree, view), column);
+    if (c == nullptr) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    c->width = width < c->min_width ? c->min_width : width;
+    gates_i_mark_dirty(tree, view.index, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
+    return GATES_OK;
+}
+
+gates_rect_t gates_view_part_rect(const gates_tree_t *tree, gates_node_t view,
+                                  gates_view_part_t part, gates_u64 index) {
+    struct gates_i_view *v = view_of(tree, view);
+    gates_rect_t none = { 0, 0, 0, 0 };
+    if (v == nullptr) return none;
+    view_geom_t g;
+    geom(tree, view.index, v, model_count(v), tree->line_height, &g);
+    switch (part) {
+    case GATES_VIEW_PART_BODY:
+        return g.body;
+    case GATES_VIEW_PART_ROW:
+        if (index < g.first || index - g.first >= g.painted) return none;
+        return (gates_rect_t){ g.body.x, g.body.y + (gates_i32)(index - g.first) * g.row_h,
+                               g.body.w, g.row_h };
+    case GATES_VIEW_PART_HEADER:
+        if (g.header.h == 0 || index >= v->ncol) return none;
+        return (gates_rect_t){ col_left(v, &g, (gates_u32)index), g.header.y,
+                               v->cols[index].width, g.header.h };
+    case GATES_VIEW_PART_VTHUMB:
+        return g.vthumb;
+    case GATES_VIEW_PART_HTHUMB:
+        return g.hthumb;
+    }
+    return none;
+}
+
+/* -- tree rows ---------------------------------------------------------------------------------- */
+
+/* The mark area of a tree row starts here (relative to the first column's left edge). */
+static gates_i32 tree_mark_x(const gates_row_info_t *info) {
+    return VIEW_CELL_PAD + (gates_i32)info->depth * GATES_VIEW_INDENT;
+}
+
+static gates_i32 tree_text_indent(const gates_row_info_t *info) {
+    return (gates_i32)info->depth * GATES_VIEW_INDENT + GATES_VIEW_INDENT;
+}
+
+/* A small triangle: pointing right when closed, down when open. */
+static gates_err_t paint_mark(gates_draw_list_t *dl, gates_i32 col_x, gates_i32 row_y, gates_i32 row_h,
+                              const gates_row_info_t *info, gates_color_t color) {
+    gates_i32 size = 9;
+    gates_i32 mx = col_x + tree_mark_x(info) + (GATES_VIEW_INDENT - size) / 2;
+    gates_i32 my = row_y + (row_h - size) / 2;
+    for (gates_i32 k = 0; k <= size / 2; k++) {
+        gates_rect_t r = info->expanded ? (gates_rect_t){ mx + k, my + 2 + k, size - 2 * k, 1 }
+                                        : (gates_rect_t){ mx + 2 + k, my + k, 1, size - 2 * k };
+        gates_err_t err = gates_draw_rect(dl, r, color);
+        if (!gates_is_ok(err)) return err;
+    }
+    return GATES_OK;
+}
+
+/* -- measure and paint ----------------------------------------------------------------------- */
+
+gates_size_t gates_i_view_measure(const gates_tree_t *tree, const gates_node_slot_t *s,
+                                  const gates_text_backend_t *text) {
+    const struct gates_i_view *v = gates_i_state(tree, s->state_index)->view;
+    gates_text_metrics_t m = text->metrics(text->ctx, 0);
+    gates_i32 row_h = row_height(m.line_height);
+    gates_i32 w = v->ncol > 0 ? content_width(v, 0) : 20 * m.advance;
+    gates_i32 h = (v->header && v->ncol > 0 ? row_h : 0) + 8 * row_h;
+    return (gates_size_t){ w + GATES_SCROLLBAR_PX + 2, h + 2 };
+}
+
+#define TRY_DRAW(x) do { gates_err_t e_ = (x); if (!gates_is_ok(e_)) return e_; } while (0)
+
+gates_err_t gates_i_view_paint(const gates_tree_t *tree, gates_u32 idx, gates_draw_list_t *dl,
+                               const gates_theme_t *theme, const gates_text_backend_t *text) {
+    struct gates_i_view *v = view_at(tree, idx);
+    const gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
+    gates_rect_t r = gates_i_slot(tree, idx)->layout_rect;
+    gates_text_metrics_t m = text->metrics(text->ctx, 0);
+    view_geom_t g;
+    geom(tree, idx, v, model_count(v), m.line_height, &g); /* count(): once per frame */
+    bool focused = tree->focus == idx;
+    bool inert = st->disabled;
+    TRY_DRAW(gates_draw_rect(dl, r, gates_theme_color(theme, GATES_COLOR_CONTROL_BG)));
+
+    /* Header: labels are ours, copied at creation. */
+    if (g.header.h > 0) {
+        TRY_DRAW(gates_draw_rect(dl, g.header, gates_theme_color(theme, GATES_COLOR_PANEL_BG)));
+        TRY_DRAW(gates_draw_clip_push(dl, g.header));
+        for (gates_u32 c = 0; c < v->ncol; c++) {
+            gates_rect_t hc = { col_left(v, &g, c), g.header.y, v->cols[c].width, g.header.h };
+            TRY_DRAW(gates_draw_rect(dl, (gates_rect_t){ hc.x + hc.w - 1, hc.y, 1, hc.h },
+                                     gates_theme_color(theme, GATES_COLOR_CONTROL_BORDER)));
+            if (v->cols[c].label_len > 0) {
+                TRY_DRAW(gates_draw_text(dl, (gates_rect_t){ hc.x + VIEW_CELL_PAD,
+                                                             hc.y + (hc.h - m.line_height) / 2,
+                                                             hc.w - 2 * VIEW_CELL_PAD, m.line_height },
+                                         (gates_str_t){ .ptr = v->cols[c].label,
+                                                        .size = v->cols[c].label_len },
+                                         0, gates_theme_color(theme, GATES_COLOR_PANEL_FG)));
+            }
+        }
+        TRY_DRAW(gates_draw_clip_pop(dl));
+        TRY_DRAW(gates_draw_rect(dl, (gates_rect_t){ g.header.x, g.header.y + g.header.h - 1,
+                                                     g.header.w, 1 },
+                                 gates_theme_color(theme, GATES_COLOR_CONTROL_BORDER)));
+    }
+
+    /* Rows: ids first (one id_at per painted row), then cells column by column. */
+    gates_item_id_t ids[GATES_VIEW_MAX_ROWS];
+    gates_row_info_t infos[GATES_VIEW_MAX_ROWS];
+    gates_i32 sel_k = -1;
+    for (gates_u32 k = 0; k < g.painted; k++) {
+        ids[k] = v->model.id_at(v->model.user, g.first + k);
+        if (ids[k] != 0 && ids[k] == v->sel) sel_k = (gates_i32)k;
+        infos[k] = (gates_row_info_t){0};
+        if (v->tree && ids[k] != 0) {
+            TRY_DRAW(v->model.row_info(v->model.user, ids[k], &infos[k])); /* painted rows only */
+        }
+    }
+    TRY_DRAW(gates_draw_clip_push(dl, g.body));
+    if (sel_k >= 0) {
+        TRY_DRAW(gates_draw_rect(dl, (gates_rect_t){ g.body.x, g.body.y + sel_k * g.row_h,
+                                                     g.body.w, g.row_h },
+                                 gates_theme_color(theme, GATES_COLOR_SELECTION_BG)));
+    }
+    gates_u32 ncol = v->ncol > 0 ? v->ncol : 1;
+    for (gates_u32 c = 0; c < ncol; c++) {
+        gates_rect_t cr = { col_left(v, &g, c), g.body.y, col_width(v, &g, c), g.body.h };
+        gates_rect_t clip = gates_rect_intersect(cr, g.body);
+        if (gates_rect_is_empty(clip)) continue; /* scrolled out: not asked for */
+        gates_column_id_t cid = v->ncol > 0 ? v->cols[c].id : 0;
+        TRY_DRAW(gates_draw_clip_push(dl, clip));
+        for (gates_u32 k = 0; k < g.painted; k++) {
+            if (ids[k] == 0) continue;
+            gates_cell_t cell = {0};
+            TRY_DRAW(v->model.cell(v->model.user, ids[k], cid, &cell));
+            if (cell.text.size == 0) continue;
+            gates_color_token_t fg = inert                     ? GATES_COLOR_CONTROL_DISABLED_FG
+                                     : (gates_i32)k == sel_k ? GATES_COLOR_SELECTION_FG
+                                     : infos[k].state == GATES_ROW_LOADING ? GATES_COLOR_CONTROL_DISABLED_FG
+                                     : infos[k].state == GATES_ROW_ERROR   ? GATES_COLOR_ERROR
+                                                                           : GATES_COLOR_CONTROL_FG;
+            gates_i32 indent = v->tree && c == 0 ? tree_text_indent(&infos[k]) : 0;
+            /* Copied into the draw list before the model is asked for anything else. */
+            TRY_DRAW(gates_draw_text(dl, (gates_rect_t){ cr.x + VIEW_CELL_PAD + indent,
+                                                         g.body.y + (gates_i32)k * g.row_h +
+                                                             (g.row_h - m.line_height) / 2,
+                                                         cr.w - 2 * VIEW_CELL_PAD, m.line_height },
+                                     cell.text, 0, gates_theme_color(theme, fg)));
+        }
+        if (v->tree && c == 0) {
+            for (gates_u32 k = 0; k < g.painted; k++) {
+                if (!infos[k].expandable) continue;
+                gates_color_token_t mt = (gates_i32)k == sel_k ? GATES_COLOR_SELECTION_FG
+                                                               : GATES_COLOR_CONTROL_FG;
+                TRY_DRAW(paint_mark(dl, cr.x, g.body.y + (gates_i32)k * g.row_h, g.row_h, &infos[k],
+                                    gates_theme_color(theme, mt)));
+            }
+        }
+        TRY_DRAW(gates_draw_clip_pop(dl));
+    }
+    if (focused && sel_k >= 0) {
+        TRY_DRAW(gates_draw_border(dl, (gates_rect_t){ g.body.x, g.body.y + sel_k * g.row_h,
+                                                       g.body.w, g.row_h },
+                                   gates_theme_focus_width(theme),
+                                   gates_theme_color(theme, GATES_COLOR_FOCUS_RING)));
+    }
+    TRY_DRAW(gates_draw_clip_pop(dl));
+
+    if (!gates_rect_is_empty(g.vtrack)) {
+        TRY_DRAW(gates_draw_rect(dl, g.vtrack, gates_theme_color(theme, GATES_COLOR_PANEL_BG)));
+        TRY_DRAW(gates_draw_rect(dl, g.vthumb, gates_theme_color(theme, GATES_COLOR_CONTROL_BORDER)));
+    }
+    if (!gates_rect_is_empty(g.htrack)) {
+        TRY_DRAW(gates_draw_rect(dl, g.htrack, gates_theme_color(theme, GATES_COLOR_PANEL_BG)));
+        TRY_DRAW(gates_draw_rect(dl, g.hthumb, gates_theme_color(theme, GATES_COLOR_CONTROL_BORDER)));
+    }
+    return gates_draw_border(dl, r, focused && sel_k < 0 ? gates_theme_focus_width(theme) : 1,
+                             gates_theme_color(theme, focused && sel_k < 0
+                                                                    ? GATES_COLOR_FOCUS_RING
+                                                                    : GATES_COLOR_CONTROL_BORDER));
+}
+
+/* -- interaction ------------------------------------------------------------------------------ */
+
+/* After a person moved the view: a log follows exactly when it shows its end. */
+static void note_scrolled(struct gates_i_view *v, const view_geom_t *g) {
+    if (v->log != nullptr) {
+        v->follow = v->first >= g->max_first;
+    }
+}
+
+/* Asks the model to open or close a tree row. */
+static void request_expand(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id, bool open) {
+    gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
+    if (st->on_event == nullptr) return;
+    gates_err_t err = gates_i_event_reserve(tree, 1, 0);
+    if (!gates_is_ok(err)) {
+        tree->input_error = err;
+        return;
+    }
+    gates_i_event_push_ex(tree, idx, GATES_EVENT_EXPAND_REQUESTED, GATES_ORIGIN_USER, open ? 1u : 0u, id);
+}
+
+/* A person selects row `row`: announced first (no change without it), kept in view. */
+static void pick(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v, const view_geom_t *g,
+                 gates_u64 row) {
+    if (!v->has_model || row >= g->count) return;
+    gates_item_id_t id = v->model.id_at(v->model.user, row);
+    if (id == 0) return;
+    if (id != v->sel) {
+        gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
+        if (st->on_event != nullptr) {
+            gates_err_t err = gates_i_event_reserve(tree, 1, 0);
+            if (!gates_is_ok(err)) {
+                tree->input_error = err;
+                return;
+            }
+        }
+        v->sel = id;
+        st->revision++;
+        gates_i_event_push_ex(tree, idx, GATES_EVENT_SELECTION_CHANGED, GATES_ORIGIN_USER, 0, 0);
+    }
+    v->sel_row = row;
+    keep_visible(v, g, row);
+    note_scrolled(v, g);
+    gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
+}
+
+static void activate(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v) {
+    if (v->sel == 0 || !v->has_model) return;
+    gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
+    if (st->on_event == nullptr) return;
+    gates_err_t err = gates_i_event_reserve(tree, 1, 0);
+    if (!gates_is_ok(err)) {
+        tree->input_error = err;
+        return;
+    }
+    gates_i_event_push_ex(tree, idx, GATES_EVENT_ACTIVATED, GATES_ORIGIN_USER, 0, v->sel);
+}
+
+static void scroll_x_by(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v,
+                        const view_geom_t *g, gates_i32 dx) {
+    gates_i32 x = g->scroll_x + dx;
+    if (x < 0) x = 0;
+    if (x > g->max_x) x = g->max_x;
+    if (x != v->scroll_x) {
+        v->scroll_x = x;
+        gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
+    }
+}
+
+static void scroll_rows(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v,
+                        const view_geom_t *g, gates_i64 rows) {
+    gates_u64 f = g->first;
+    if (rows < 0) {
+        gates_u64 up = (gates_u64)(-rows);
+        f = f > up ? f - up : 0;
+    } else {
+        gates_u64 down = (gates_u64)rows;
+        f = g->max_first - f > down ? f + down : g->max_first;
+    }
+    if (f != v->first) {
+        v->first = f;
+        gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
+    }
+    note_scrolled(v, g);
+}
+
+/* Left/Right in a tree: close or go to the parent, open or go to the first child. */
+static void tree_key(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v, const view_geom_t *g,
+                     bool right) {
+    gates_u64 row = 0;
+    if (v->sel == 0 || !v->has_model || !v->model.index_of(v->model.user, v->sel, &row)) return;
+    gates_row_info_t info = {0};
+    if (!gates_is_ok(v->model.row_info(v->model.user, v->sel, &info))) return;
+    if (right) {
+        if (info.expandable && !info.expanded) {
+            request_expand(tree, idx, v->sel, true);
+        } else if (info.expanded && row + 1 < g->count) {
+            pick(tree, idx, v, g, row + 1); /* the first child follows its parent */
+        }
+        return;
+    }
+    if (info.expanded) {
+        request_expand(tree, idx, v->sel, false);
+    } else if (info.parent != 0) {
+        gates_u64 prow = 0;
+        if (v->model.index_of(v->model.user, info.parent, &prow)) pick(tree, idx, v, g, prow);
+    }
+}
+
+bool gates_i_view_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t *ev) {
+    struct gates_i_view *v = view_at(tree, idx);
+    if (v == nullptr || ev->ctrl || ev->alt) {
+        return false;
+    }
+    view_geom_t g;
+    geom_now(tree, idx, v, &g);
+    gates_i32 step = VIEW_STEP_CELLS * (tree->advance > 0 ? tree->advance : 8);
+    switch (ev->key) {
+    case GATES_KEY_ENTER:
+        activate(tree, idx, v);
+        return true; /* never falls through to a default command */
+    case GATES_KEY_LEFT:
+    case GATES_KEY_RIGHT:
+        if (v->tree) {
+            tree_key(tree, idx, v, &g, ev->key == GATES_KEY_RIGHT);
+        } else {
+            scroll_x_by(tree, idx, v, &g, ev->key == GATES_KEY_RIGHT ? step : -step);
+        }
+        return true;
+    case GATES_KEY_UP:
+    case GATES_KEY_DOWN:
+    case GATES_KEY_PAGE_UP:
+    case GATES_KEY_PAGE_DOWN:
+    case GATES_KEY_HOME:
+    case GATES_KEY_END:
+        break;
+    default:
+        return false;
+    }
+    if (g.count == 0) {
+        return true;
+    }
+    gates_u64 row = 0;
+    bool have = v->sel != 0 && v->model.index_of(v->model.user, v->sel, &row);
+    gates_u64 last = g.count - 1;
+    gates_u64 target;
+    switch (ev->key) {
+    case GATES_KEY_DOWN:      target = !have ? 0 : (row < last ? row + 1 : last); break;
+    case GATES_KEY_UP:        target = !have || row == 0 ? 0 : row - 1; break;
+    case GATES_KEY_PAGE_DOWN: target = !have ? 0 : (last - row > g.visible ? row + g.visible : last); break;
+    case GATES_KEY_PAGE_UP:   target = !have || row < g.visible ? 0 : row - g.visible; break;
+    case GATES_KEY_HOME:      target = 0; break;
+    case GATES_KEY_END:
+    default:                  target = last; break;
+    }
+    pick(tree, idx, v, &g, target);
+    return true;
+}
+
+/* Header column position under x (or -1); *edge: within reach of its right edge. */
+static gates_i32 header_col_at(const struct gates_i_view *v, const view_geom_t *g, gates_point_t p,
+                               bool *edge) {
+    *edge = false;
+    if (g->header.h == 0 || !gates_rect_contains(g->header, p)) return -1;
+    for (gates_u32 c = 0; c < v->ncol; c++) {
+        gates_i32 x0 = col_left(v, g, c), x1 = x0 + v->cols[c].width;
+        if (p.x >= x1 - VIEW_EDGE && p.x <= x1 + VIEW_EDGE) {
+            *edge = true;
+            return (gates_i32)c;
+        }
+        if (p.x >= x0 && p.x < x1) return (gates_i32)c;
+    }
+    return -1;
+}
+
+bool gates_i_view_pointer_down(gates_tree_t *tree, gates_u32 idx, gates_point_t p,
+                               gates_u32 clicks) {
+    struct gates_i_view *v = view_at(tree, idx);
+    gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
+    if (v == nullptr || st->disabled) {
+        return false;
+    }
+    gates_tree_set_focus(tree, gates_i_handle(tree, idx));
+    view_geom_t g;
+    geom_now(tree, idx, v, &g);
+    if (gates_rect_contains(g.vthumb, p)) {
+        tree->drag_kind = GATES_DRAG_VIEW_VTHUMB;
+        tree->drag_node = idx;
+        tree->drag_start = p;
+        v->drag_first = g.first;
+        return true;
+    }
+    if (gates_rect_contains(g.vtrack, p)) {
+        scroll_rows(tree, idx, v, &g, p.y < g.vthumb.y ? -(gates_i64)g.visible : (gates_i64)g.visible);
+        return true;
+    }
+    if (gates_rect_contains(g.hthumb, p)) {
+        tree->drag_kind = GATES_DRAG_VIEW_HTHUMB;
+        tree->drag_node = idx;
+        tree->drag_start = p;
+        v->drag_value = g.scroll_x;
+        return true;
+    }
+    if (gates_rect_contains(g.htrack, p)) {
+        scroll_x_by(tree, idx, v, &g, p.x < g.hthumb.x ? -g.body.w : g.body.w);
+        return true;
+    }
+    bool edge = false;
+    gates_i32 c = header_col_at(v, &g, p, &edge);
+    if (c >= 0 && edge) {
+        tree->drag_kind = GATES_DRAG_VIEW_COLUMN;
+        tree->drag_node = idx;
+        tree->drag_start = p;
+        v->drag_col = c;
+        v->drag_value = v->cols[c].width;
+        return true;
+    }
+    if (c >= 0) {
+        v->press_col = c; /* sorts on release over the same column */
+        tree->pressed = idx;
+        return true;
+    }
+    if (gates_rect_contains(g.body, p) && v->has_model) {
+        gates_u64 k = (gates_u64)((p.y - g.body.y) / g.row_h);
+        if (k < g.painted && v->tree) {
+            /* A press on a row's open/close mark asks for it and selects nothing. */
+            gates_item_id_t id = v->model.id_at(v->model.user, g.first + k);
+            gates_row_info_t info = {0};
+            if (id != 0 && gates_is_ok(v->model.row_info(v->model.user, id, &info)) &&
+                info.expandable) {
+                gates_i32 mx = col_left(v, &g, 0) + tree_mark_x(&info);
+                if (p.x >= mx && p.x < mx + GATES_VIEW_INDENT) {
+                    request_expand(tree, idx, id, !info.expanded);
+                    return true;
+                }
+            }
+        }
+        if (k < g.painted) {
+            gates_item_id_t before = v->sel;
+            pick(tree, idx, v, &g, g.first + k);
+            if (clicks >= 2 && v->sel != 0 && v->sel == before) {
+                activate(tree, idx, v); /* double click on the selected row */
+            }
+        }
+    }
+    return true;
+}
+
+void gates_i_view_pointer_up(gates_tree_t *tree, gates_u32 idx, gates_point_t p) {
+    struct gates_i_view *v = view_at(tree, idx);
+    if (v == nullptr || v->press_col < 0) {
+        return;
+    }
+    view_geom_t g;
+    geom_now(tree, idx, v, &g);
+    bool edge = false;
+    gates_i32 c = header_col_at(v, &g, p, &edge);
+    gates_i32 pressed = v->press_col;
+    v->press_col = -1;
+    if (c != pressed) {
+        return;
+    }
+    gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
+    if (st->on_event == nullptr) return;
+    gates_err_t err = gates_i_event_reserve(tree, 1, 0);
+    if (!gates_is_ok(err)) {
+        tree->input_error = err;
+        return;
+    }
+    gates_i_event_push_ex(tree, idx, GATES_EVENT_SORT_REQUESTED, GATES_ORIGIN_USER,
+                          v->cols[c].id, 0);
+}
+
+void gates_i_view_drag(gates_tree_t *tree, gates_point_t p) {
+    gates_u32 idx = tree->drag_node;
+    struct gates_i_view *v = view_at(tree, idx);
+    if (v == nullptr) return;
+    view_geom_t g;
+    geom_now(tree, idx, v, &g);
+    if (tree->drag_kind == GATES_DRAG_VIEW_COLUMN) {
+        gates_i_column_t *c = &v->cols[v->drag_col];
+        gates_i32 w = v->drag_value + (p.x - tree->drag_start.x);
+        if (w < c->min_width) w = c->min_width;
+        if (w != c->width) {
+            c->width = w;
+            gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
+        }
+        return;
+    }
+    if (tree->drag_kind == GATES_DRAG_VIEW_HTHUMB) {
+        gates_i32 travel = g.htrack.w - g.hthumb.w;
+        if (travel <= 0) return;
+        gates_i32 x0 = g.max_x > 0 ? (gates_i32)(((gates_i64)travel * v->drag_value) / g.max_x) : 0;
+        gates_i32 pos = x0 + (p.x - tree->drag_start.x);
+        if (pos < 0) pos = 0;
+        if (pos > travel) pos = travel;
+        gates_i32 x = (gates_i32)(((gates_i64)g.max_x * pos) / travel);
+        if (x != v->scroll_x) {
+            v->scroll_x = x;
+            gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
+        }
+        return;
+    }
+    /* Vertical thumb: pixels map to rows through the thumb's travel, in 64 bits. */
+    gates_i32 travel = g.vtrack.h - g.vthumb.h;
+    if (travel <= 0) return;
+    gates_i64 start = (gates_i64)scale_down((gates_u64)travel, v->drag_first, g.max_first);
+    gates_i64 pos = start + (p.y - tree->drag_start.y);
+    if (pos < 0) pos = 0;
+    if (pos > travel) pos = travel;
+    gates_u64 f = scale_up(g.max_first, (gates_u64)pos, (gates_u64)travel);
+    if (f != v->first) {
+        v->first = f;
+        gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
+    }
+    note_scrolled(v, &g);
+}
+
+bool gates_i_view_wheel(gates_tree_t *tree, gates_u32 idx, gates_vec2_t wheel) {
+    struct gates_i_view *v = view_at(tree, idx);
+    if (v == nullptr) return false;
+    view_geom_t g;
+    geom_now(tree, idx, v, &g);
+    if (wheel.y != 0.0f) {
+        scroll_rows(tree, idx, v, &g, (gates_i64)(-wheel.y * (float)VIEW_WHEEL_ROWS));
+    }
+    if (wheel.x != 0.0f) {
+        gates_i32 step = VIEW_STEP_CELLS * (tree->advance > 0 ? tree->advance : 8);
+        scroll_x_by(tree, idx, v, &g, (gates_i32)(wheel.x * (float)step));
+    }
+    return true;
+}
+
+/* -- log view (stage 2) ---------------------------------------------------------------- */
+
+static gates_u64 log_count(void *u) { return ((struct gates_i_log *)u)->n; }
+
+static gates_item_id_t log_id_at(void *u, gates_u64 row) {
+    struct gates_i_log *lg = u;
+    return row < lg->n ? lg->lines[(lg->head + row) % lg->max_lines].id : 0;
+}
+
+static bool log_index_of(void *u, gates_item_id_t id, gates_u64 *row) {
+    struct gates_i_log *lg = u;
+    if (lg->n == 0) return false;
+    gates_item_id_t oldest = lg->lines[lg->head].id;
+    if (id < oldest || id - oldest >= lg->n) return false;
+    *row = id - oldest; /* ids are consecutive */
+    return true;
+}
+
+static gates_err_t log_cell(void *u, gates_item_id_t id, gates_column_id_t col, gates_cell_t *out) {
+    struct gates_i_log *lg = u;
+    (void)col;
+    gates_u64 row = 0;
+    if (!log_index_of(lg, id, &row)) return PROVEN_ERR_INVALID_ARG;
+    const gates_i_line_t *l = &lg->lines[(lg->head + row) % lg->max_lines];
+    out->text = (gates_str_t){ .ptr = l->text, .size = l->len };
+    return GATES_OK;
+}
+
+static struct gates_i_view *log_view(const gates_tree_t *tree, gates_node_t log) {
+    struct gates_i_view *v = view_of(tree, log);
+    return v != nullptr && v->log != nullptr ? v : nullptr;
+}
+
+gates_err_t gates_log_create(gates_tree_t *tree, gates_node_t parent, const gates_log_desc_t *desc,
+                             gates_node_t *out_log) {
+    if (tree == nullptr || desc == nullptr || out_log == nullptr ||
+        (!gates_node_eq(parent, GATES_NODE_NULL) && !gates_i_valid(tree, parent))) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    *out_log = GATES_NODE_NULL;
+    gates_node_t node = GATES_NODE_NULL;
+    gates_err_t err = gates_view_create(tree, GATES_NODE_NULL, &(gates_view_desc_t){0}, &node);
+    if (!gates_is_ok(err)) {
+        return err;
+    }
+    gates_allocator_t a = tree->alloc;
+    struct gates_i_log *lg = nullptr;
+    proven_result_mem_mut_t r = a.alloc_fn(a.ctx, sizeof *lg, alignof(struct gates_i_log));
+    err = r.err;
+    if (gates_is_ok(err)) {
+        lg = (struct gates_i_log *)r.value.ptr;
+        memset(lg, 0, sizeof *lg);
+        lg->max_lines = desc->max_lines != 0 ? desc->max_lines : 1000u;
+        lg->max_bytes = desc->max_bytes != 0 ? desc->max_bytes : (gates_usize_t)1 << 20;
+        lg->next_id = 1;
+        proven_result_mem_mut_t rl = a.alloc_fn(a.ctx, (gates_usize_t)lg->max_lines * sizeof(gates_i_line_t),
+                                                alignof(gates_i_line_t));
+        err = rl.err;
+        if (gates_is_ok(err)) {
+            lg->lines = (gates_i_line_t *)rl.value.ptr;
+        } else {
+            a.free_fn(a.ctx, lg);
+            lg = nullptr;
+        }
+    }
+    if (gates_is_ok(err) && !gates_node_eq(parent, GATES_NODE_NULL)) {
+        err = gates_node_append(tree, parent, node);
+        if (!gates_is_ok(err)) {
+            a.free_fn(a.ctx, lg->lines);
+            a.free_fn(a.ctx, lg);
+        }
+    }
+    if (!gates_is_ok(err)) {
+        gates_i_discard_detached(tree, node); /* frees the view state too */
+        return err;
+    }
+    struct gates_i_view *v = view_of(tree, node);
+    v->log = lg;
+    v->follow = true;
+    v->has_model = true;
+    v->model = (gates_rows_model_t){ .user = lg, .count = log_count, .id_at = log_id_at,
+                                     .index_of = log_index_of, .cell = log_cell };
+    *out_log = node;
+    return GATES_OK;
+}
+
+static void log_drop_oldest(gates_tree_t *tree, struct gates_i_log *lg) {
+    gates_i_line_t *l = &lg->lines[lg->head];
+    lg->bytes -= l->len;
+    tree->alloc.free_fn(tree->alloc.ctx, l->text);
+    *l = (gates_i_line_t){0};
+    lg->head = (lg->head + 1) % lg->max_lines;
+    lg->n--;
+    lg->dropped++;
+}
+
+gates_err_t gates_log_append(gates_tree_t *tree, gates_node_t log, gates_str_t line) {
+    struct gates_i_view *v = log_view(tree, log);
+    if (v == nullptr || (line.size > 0 && line.ptr == nullptr)) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    struct gates_i_log *lg = v->log;
+    if (line.size > lg->max_bytes || line.size > 0xFFFFFFFFu) {
+        return PROVEN_ERR_OUT_OF_BOUNDS;
+    }
+    gates_u8 *copy = nullptr;
+    if (line.size > 0) {
+        proven_result_mem_mut_t r = tree->alloc.alloc_fn(tree->alloc.ctx, line.size, 1);
+        if (!proven_is_ok(r.err)) {
+            return r.err; /* nothing dropped, nothing added */
+        }
+        copy = (gates_u8 *)r.value.ptr;
+        for (gates_usize_t i = 0; i < line.size; i++) {
+            gates_u8 c = line.ptr[i];
+            copy[i] = (c == '\r' || c == '\n' || c == '\t') ? (gates_u8)' ' : c;
+        }
+    }
+    gates_u64 dropped_now = 0;
+    while (lg->n > 0 && (lg->n == lg->max_lines || lg->bytes + line.size > lg->max_bytes)) {
+        log_drop_oldest(tree, lg);
+        dropped_now++;
+    }
+    lg->lines[(lg->head + lg->n) % lg->max_lines] =
+        (gates_i_line_t){ .id = lg->next_id++, .text = copy, .len = (gates_u32)line.size };
+    lg->n++;
+    lg->bytes += line.size;
+
+    /* Keep the same lines on screen, or follow the end. */
+    v->first = v->first > dropped_now ? v->first - dropped_now : 0;
+    v->sel_row = v->sel_row > dropped_now ? v->sel_row - dropped_now : 0;
+    view_geom_t g;
+    geom_now(tree, log.index, v, &g);
+    if (v->follow) {
+        v->first = g.max_first;
+    }
+    gates_err_t err = GATES_OK;
+    if (v->sel != 0 && dropped_now > 0) {
+        err = reconcile(tree, log, v); /* a dropped selection moves to the oldest line */
+        if (!gates_is_ok(err)) tree->input_error = err;
+    }
+    gates_i_mark_dirty(tree, log.index, GATES_DIRTY_PAINT);
+    return GATES_OK;
+}
+
+void gates_log_clear(gates_tree_t *tree, gates_node_t log) {
+    struct gates_i_view *v = log_view(tree, log);
+    if (v == nullptr) return;
+    struct gates_i_log *lg = v->log;
+    while (lg->n > 0) log_drop_oldest(tree, lg);
+    lg->head = 0;
+    lg->bytes = 0;
+    lg->dropped = 0;
+    v->first = 0;
+    v->sel = 0;
+    v->sel_row = 0;
+    v->follow = true;
+    gates_i_mark_dirty(tree, log.index, GATES_DIRTY_PAINT);
+}
+
+gates_u64 gates_log_count(const gates_tree_t *tree, gates_node_t log) {
+    const struct gates_i_view *v = log_view(tree, log);
+    return v != nullptr ? v->log->n : 0;
+}
+
+gates_u64 gates_log_dropped(const gates_tree_t *tree, gates_node_t log) {
+    const struct gates_i_view *v = log_view(tree, log);
+    return v != nullptr ? v->log->dropped : 0;
+}
+
+bool gates_log_following(const gates_tree_t *tree, gates_node_t log) {
+    const struct gates_i_view *v = log_view(tree, log);
+    return v != nullptr && v->follow;
+}
+
+gates_str_t gates_log_line(const gates_tree_t *tree, gates_node_t log, gates_item_id_t id) {
+    const struct gates_i_view *v = log_view(tree, log);
+    gates_cell_t cell = {0};
+    if (v == nullptr || !gates_is_ok(log_cell(v->log, id, 0, &cell))) {
+        return (gates_str_t){0};
+    }
+    return cell.text;
+}
+
+gates_err_t gates_log_set_following(gates_tree_t *tree, gates_node_t log, bool follow) {
+    struct gates_i_view *v = log_view(tree, log);
+    if (v == nullptr) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    v->follow = follow;
+    if (follow) {
+        view_geom_t g;
+        geom_now(tree, log.index, v, &g);
+        v->first = g.max_first;
+        gates_i_mark_dirty(tree, log.index, GATES_DIRTY_PAINT);
+    }
+    return GATES_OK;
+}
+
+/* -- accessibility (plan-0014 stage 2) ------------------------------------------------------
+ * Rows are items: the rows shown now, plus the selection wherever it is. Cells
+ * are read for shown rows only - gates never walks rows it does not show. */
+
+gates_u32 gates_i_view_kind(const gates_tree_t *tree, gates_u32 idx) {
+    const struct gates_i_view *v = view_at(tree, idx);
+    if (v == nullptr) return GATES_I_VIEW_LIST;
+    return v->tree ? GATES_I_VIEW_TREE : v->ncol > 0 && v->log == nullptr ? GATES_I_VIEW_TABLE : GATES_I_VIEW_LIST;
+}
+
+gates_u64 gates_i_view_item_count(gates_tree_t *tree, gates_u32 idx) {
+    struct gates_i_view *v = view_at(tree, idx);
+    if (v == nullptr || !v->has_model) return 0;
+    view_geom_t g;
+    geom_now(tree, idx, v, &g);
+    return g.painted;
+}
+
+gates_item_id_t gates_i_view_item_at(gates_tree_t *tree, gates_u32 idx, gates_u64 k) {
+    struct gates_i_view *v = view_at(tree, idx);
+    if (v == nullptr || !v->has_model) return 0;
+    view_geom_t g;
+    geom_now(tree, idx, v, &g);
+    return k < g.painted ? v->model.id_at(v->model.user, g.first + k) : 0;
+}
+
+bool gates_i_view_item(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id, gates_i_view_item_t *out) {
+    struct gates_i_view *v = view_at(tree, idx);
+    if (v == nullptr || !v->has_model || id == 0) return false;
+    gates_u64 row = 0;
+    if (!v->model.index_of(v->model.user, id, &row)) return false;
+    view_geom_t g;
+    geom_now(tree, idx, v, &g);
+    bool shown = row >= g.first && row - g.first < g.painted;
+    if (!shown && id != v->sel) return false;
+    memset(out, 0, sizeof *out);
+    out->row = row;
+    out->count = g.count;
+    out->shown = shown;
+    out->selected = id == v->sel;
+    out->columns = v->ncol > 0 ? v->ncol : 1;
+    if (shown) {
+        out->rect = (gates_rect_t){ g.body.x, g.body.y + (gates_i32)(row - g.first) * g.row_h, g.body.w, g.row_h };
+    }
+    if (v->tree && v->model.row_info != nullptr && gates_is_ok(v->model.row_info(v->model.user, id, &out->info))) {
+        out->has_info = true;
+    }
+    return true;
+}
+
+gates_str_t gates_i_view_cell(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id, gates_u32 col) {
+    struct gates_i_view *v = view_at(tree, idx);
+    gates_i_view_item_t it;
+    if (v == nullptr || !gates_i_view_item(tree, idx, id, &it) || !it.shown) return (gates_str_t){0};
+    gates_cell_t cell = {0};
+    gates_column_id_t cid = v->ncol > 0 ? (col < v->ncol ? v->cols[col].id : 0) : 0;
+    if (v->ncol > 0 && col >= v->ncol) return (gates_str_t){0};
+    return gates_is_ok(v->model.cell(v->model.user, id, cid, &cell)) ? cell.text : (gates_str_t){0};
+}
+
+gates_item_id_t gates_i_view_row_at(gates_tree_t *tree, gates_u32 idx, gates_point_t p) {
+    struct gates_i_view *v = view_at(tree, idx);
+    if (v == nullptr || !v->has_model) return 0;
+    view_geom_t g;
+    geom_now(tree, idx, v, &g);
+    if (!gates_rect_contains(g.body, p)) return 0;
+    gates_u64 k = (gates_u64)((p.y - g.body.y) / g.row_h);
+    return k < g.painted ? v->model.id_at(v->model.user, g.first + k) : 0;
+}
+
+gates_err_t gates_i_view_pick_id(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id) {
+    struct gates_i_view *v = view_at(tree, idx);
+    gates_u64 row = 0;
+    if (v == nullptr || !v->has_model || id == 0 || !v->model.index_of(v->model.user, id, &row)) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    view_geom_t g;
+    geom_now(tree, idx, v, &g);
+    gates_err_t before = tree->input_error; /* the input paths report here; keep the caller's */
+    tree->input_error = GATES_OK;
+    pick(tree, idx, v, &g, row);
+    gates_err_t err = tree->input_error;
+    tree->input_error = before;
+    return err;
+}
+
+gates_err_t gates_i_view_activate_id(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id) {
+    gates_err_t err = gates_i_view_pick_id(tree, idx, id);
+    if (!gates_is_ok(err)) return err;
+    gates_err_t before = tree->input_error;
+    tree->input_error = GATES_OK;
+    activate(tree, idx, view_at(tree, idx));
+    err = tree->input_error;
+    tree->input_error = before;
+    return err;
+}
+
+gates_err_t gates_i_view_expand_id(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id, bool open) {
+    gates_i_view_item_t it;
+    if (!gates_i_view_item(tree, idx, id, &it) || !it.has_info || !it.info.expandable) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    if (it.info.expanded == open) return GATES_OK;
+    gates_err_t before = tree->input_error;
+    tree->input_error = GATES_OK;
+    request_expand(tree, idx, id, open);
+    gates_err_t err = tree->input_error;
+    tree->input_error = before;
+    return err;
+}
+
+bool gates_i_view_scroll_info(gates_tree_t *tree, gates_u32 idx, gates_u32 *pos, gates_u32 *page) {
+    struct gates_i_view *v = view_at(tree, idx);
+    if (v == nullptr) return false;
+    view_geom_t g;
+    geom_now(tree, idx, v, &g);
+    if (g.max_first == 0) return false;
+    *pos = (gates_u32)scale_down(GATES_ACCESS_SCROLL_MAX, g.first, g.max_first);
+    *page = (gates_u32)scale_down(GATES_ACCESS_SCROLL_MAX, g.visible, g.count);
+    return true;
+}
+
+gates_err_t gates_i_view_scroll_set(gates_tree_t *tree, gates_u32 idx, gates_u32 pos) {
+    struct gates_i_view *v = view_at(tree, idx);
+    if (v == nullptr) return PROVEN_ERR_INVALID_ARG;
+    view_geom_t g;
+    geom_now(tree, idx, v, &g);
+    gates_u64 f = scale_up(g.max_first, pos > GATES_ACCESS_SCROLL_MAX ? GATES_ACCESS_SCROLL_MAX : pos,
+                           GATES_ACCESS_SCROLL_MAX);
+    if (f != v->first) {
+        v->first = f;
+        gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
+    }
+    note_scrolled(v, &g);
+    return GATES_OK;
+}
+
+gates_err_t gates_i_view_scroll_step(gates_tree_t *tree, gates_u32 idx, gates_i32 amount, bool page) {
+    struct gates_i_view *v = view_at(tree, idx);
+    if (v == nullptr) return PROVEN_ERR_INVALID_ARG;
+    view_geom_t g;
+    geom_now(tree, idx, v, &g);
+    scroll_rows(tree, idx, v, &g, (gates_i64)amount * (page ? (gates_i64)g.visible : 1));
+    return GATES_OK;
+}

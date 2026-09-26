@@ -1,0 +1,152 @@
+/* gates_gui_lib — Win32 backend internals. Only files under src/platform/win32
+ * may include this header (and windows.h). */
+#ifndef GATES_WIN32_INTERNAL_H
+#define GATES_WIN32_INTERNAL_H
+
+#ifndef UNICODE
+#define UNICODE
+#endif
+#ifndef _UNICODE
+#define _UNICODE
+#endif
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <objbase.h>
+
+#include <gates/app.h>
+#include <gates/window.h>
+#include <gates/render.h>
+#include <gates/text.h>
+#include <gates/theme.h>
+#include <gates/ui.h>
+#include <gates/clipboard.h>
+#include <gates/overlay.h>
+#include <gates/post.h>
+#include <gates/timer.h>
+#include <gates/access.h>
+
+struct gates_app {
+    gates_allocator_t alloc;
+    ATOM window_class;
+    HINSTANCE hinstance;
+    gates_u32 window_count;
+    bool running;
+    /* Posting (plan-0012): the app's sender and the message-only window that
+     * wakes the UI thread for it; every window, for the after-delivery pass. */
+    gates_sender_t *sender;
+    ATOM post_class;
+    HWND post_hwnd;
+    bool post_pending;           /* a delivery-turn timer is set */
+    struct gates_window *windows;
+    bool com_init;               /* CoInitializeEx succeeded: undo at destroy */
+};
+
+struct gates_window {
+    gates_app_t *app;
+    HWND hwnd;
+    gates_tree_t *tree;
+    gates_window_callbacks_t cb;
+    gates_draw_list_t draw_list;
+
+    /* Present surface: top-down 32-bit BGRA DIB section. */
+    HDC mem_dc;
+    HBITMAP dib;
+    HBITMAP dib_old;
+    void *dib_pixels;
+    gates_size_t dib_size;
+
+    /* UI pipeline (Phase 2): tree drives layout/paint when it has widgets. */
+    const gates_theme_t *theme;      /* points at theme_store */
+    gates_theme_t theme_store;
+    gates_theme_mode_t theme_mode;
+    gates_u32 dpi;                   /* this window's monitor DPI (96 = 100%) */
+    bool theme_custom;               /* set by gates_window_set_theme */
+    const gates_text_backend_t *text;
+    gates_size_t last_layout_size;
+
+    /* Input state. */
+    gates_point_t last_pos;
+    bool have_last_pos;
+    gates_u32 buttons;
+    gates_u32 pending_lead;  /* UTF-16 high surrogate awaiting its low half */
+
+    /* IME composition in progress and the node it started in (plan-0007). */
+    bool ime_active;
+    gates_node_t ime_node;
+    /* A GATES_WM_DISPATCH is queued for leftover events. */
+    bool dispatch_posted;
+    /* IME detached while a read-only or password box has focus (plan-0008). */
+    bool ime_off;
+    HIMC ime_saved;
+    /* Next window of the app (posting pass), and whether the tree timer is armed. */
+    struct gates_window *next_window;
+    bool timer_armed;
+    gates_u64 timer_due_at;      /* absolute due time the armed timer stands for */
+
+    /* Accessibility (plan-0014): UI Automation providers handed out, the focus
+     * and overlay count clients last heard of, the hidden system caret, and
+     * the scale: monitor DPI x application zoom x Windows text size. */
+    struct uia_el_t *uia_els;
+    gates_access_ref_t uia_focus;
+    gates_access_ref_t uia_opened;   /* a dialog to announce once laid out */
+    gates_u32 uia_overlays;
+    bool uia_draining;
+    bool caret_made;
+    gates_i32 caret_h;
+    gates_u32 monitor_dpi;
+    gates_u32 zoom;              /* percent, 100 = none */
+    bool strict;                 /* GATES_ACCESS_STRICT: audit after every layout */
+    gates_u32 strict_issues;     /* the count last reported */
+};
+
+/* Posted to itself when more events are queued than one turn delivers. */
+#define GATES_WM_DISPATCH (WM_APP + 0x47)
+#define GATES_WIN32_EVENTS_PER_TURN 64u
+/* Sent to the app's message-only window when posted messages wait (plan-0012). */
+#define GATES_WM_POST (WM_APP + 0x48)
+/* The app's message-only window: the timer for a delivery turn that had to wait. */
+#define GATES_WIN32_POST_TIMER_ID 0x6A7Fu
+/* The one Win32 timer per window that stands for the tree's next due timer. */
+#define GATES_WIN32_TIMER_ID 0x6A7Eu
+
+/* gates_win32_app.c: DPI helpers that exist only on newer Windows (loaded at run time). */
+gates_u32 gates_win32_dpi_for_window(HWND hwnd);
+gates_u32 gates_win32_system_dpi(void);
+
+/* gates_win32_window.c: re-arms the window's timer for the tree's next due one. */
+void gates_win32_arm_timer(gates_window_t *win);
+
+/* gates_win32_app.c */
+const wchar_t *gates_win32_class_name(void);
+
+/* gates_win32_window.c */
+LRESULT CALLBACK gates_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
+
+/* gates_win32_input.c — returns true when the message was consumed. */
+bool gates_win32_handle_input(gates_window_t *win, UINT msg, WPARAM wparam, LPARAM lparam);
+/* IMM32 composition (plan-0006): true when handled, with the LRESULT in *result. */
+bool gates_win32_handle_ime(gates_window_t *win, UINT msg, WPARAM wparam, LPARAM lparam,
+                            LRESULT *result);
+/* Moves the IME composition/candidate windows to the focused caret. */
+void gates_win32_ime_place(gates_window_t *win);
+/* Asks the IME to deliver an open composition as its result now (or drops it). */
+void gates_win32_ime_complete(gates_window_t *win);
+/* After every input message: deliver events, flush destroys, keep the IME in
+ * step with focus, request a repaint when dirty. */
+void gates_win32_after_input(gates_window_t *win);
+/* gates_win32_uia.c: WM_GETOBJECT (true when answered, with *result); UIA
+ * events for what changed (after every input pass); providers let go when the
+ * window goes; the hidden system caret that follows the text caret. */
+bool gates_win32_uia_getobject(gates_window_t *win, WPARAM wparam, LPARAM lparam, LRESULT *result);
+void gates_win32_uia_events(gates_window_t *win);
+void gates_win32_uia_detach(gates_window_t *win);
+void gates_win32_caret_follow(gates_window_t *win);
+void gates_win32_caret_drop(gates_window_t *win);
+/* gates_win32_window.c: the window's drawing DPI from its monitor, zoom and text size. */
+void gates_win32_rescale(gates_window_t *win);
+/* gates_win32_clipboard.c: CF_UNICODETEXT provider for the window's tree. */
+void gates_win32_install_clipboard(gates_window_t *win);
+/* Capture lost or mode cancelled: forget held buttons, press and drags. */
+void gates_win32_cancel_pointer(gates_window_t *win);
+
+#endif /* GATES_WIN32_INTERNAL_H */

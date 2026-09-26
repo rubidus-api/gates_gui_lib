@@ -1,0 +1,94 @@
+# Chapter 2 - Controls and layout
+
+Headers: `gates/widget.h`, `gates/layout.h`, `gates/geometry.h`.
+
+## The control matrix
+
+Every control is one node. The table is the whole finite set in 0.1.0: what the person does
+with it, the keys, the events the program receives, and what a screen reader hears (chapter 9).
+
+| Control | Create | The person | Keys | Events | Accessible as |
+|---|---|---|---|---|---|
+| panel | `gates_panel_create` | sees a group | - | - | nothing, or a group when named |
+| label | `gates_label_create` | reads text | - | - | text |
+| button | `gates_button_create` | asks for one action | Space (on release), Enter | ACTIVATED | button (Invoke) |
+| check box | `gates_checkbox_create` | turns an option on or off | Space | VALUE_CHANGED | check box (Toggle) |
+| text box | `gates_textbox_create` | types one line | editing keys, Ctrl+C/X/V/Z/Y, the IME | TEXT_CHANGED, PREEDIT_CHANGED, LIMIT_EXCEEDED | edit (Value, Text) |
+| radio group | `gates_radio_create` | picks one of a few | arrows, Home, End, Space | VALUE_CHANGED (result = option id) | group of radio buttons |
+| choice | `gates_choice_create` | picks one from a list | Space, Enter, Alt+Down open; arrows, Enter, Escape | VALUE_CHANGED | combo box (Selection, Expand) |
+| progress | `gates_progress_create` | sees how far work has come | - | - | progress bar (percent) |
+| separator | `gates_separator_create` | sees a division | - | - | separator |
+| view | `gates_view_create`, `gates_log_create` | chooses in a list, table, tree or log | arrows, PageUp/PageDown, Home, End, Enter; tree: Left/Right | SELECTION_CHANGED, ACTIVATED, SORT_REQUESTED, EXPAND_REQUESTED | list, table, tree (chapter 5) |
+| form | `gates_form_create` | fills labelled fields | - | the editors' events | group of fields (chapter 3) |
+| dialog, menu | `gates_dialog_open`, `gates_menu_open` | answers once, picks a command | Enter, Escape, arrows | DIALOG_CLOSED, MENU_CLOSED | window, menu (chapter 4) |
+
+Tab and Shift+Tab move focus through every enabled, shown control in tree order;
+`gates_widget_set_focusable` takes one out of the order. A disabled control
+(`gates_widget_set_disabled`) is drawn dimmed, ignores input and is skipped by Tab. A hidden
+node (`gates_node_set_hidden`) and everything under it take no space, are not drawn and cannot
+be reached. Radio groups and choices name their options by stable ids (`gates_option_t`), never
+by position; id 0 means "nothing selected".
+
+The older `on_click` / `on_toggle` arguments of the create functions run inside input routing
+and exist for compatibility; new code passes null and uses a handler.
+
+## Layout
+
+Layout is intrinsic: every control knows the size it wants, and a container arranges its
+children. The program chooses the container's kind (`gates_layout_set`):
+
+| Kind | Arranges children |
+|---|---|
+| `GATES_LAYOUT_KIND_COLUMN` | top to bottom, each as wide as the column |
+| `GATES_LAYOUT_KIND_ROW` | left to right, each as tall as the row |
+| `GATES_LAYOUT_KIND_STACK` | on top of each other; only the active one shows (pages) |
+| `GATES_LAYOUT_KIND_SPLIT` | two panes and a handle the person drags |
+| `GATES_LAYOUT_KIND_SCROLL` | a column in a viewport, with wheel and scroll bar |
+| `GATES_LAYOUT_KIND_FORM` | label beside editor, row by row (chapter 3) |
+| `GATES_LAYOUT_KIND_ABSOLUTE` | at rectangles the program gives |
+
+Padding and gap are set per container; `gates_layout_set_child_grow` lets a child take a share
+of the space left over, `gates_layout_set_child_align` places a child that does not stretch.
+Children never overlap in normal flow. A window lays its tree out before painting, in logical
+units; without a window, `gates_layout_run` does it.
+
+<!-- example: manual/examples/ex_03_layout.c -->
+```c
+/* manual example (host): layout - a column with a growing row.
+ * expect: the list takes the rest; buttons in a row */
+#include <gates/gates.h>
+
+#include <stdio.h>
+
+#define TRY(x) do { if (!gates_is_ok(x)) return 1; } while (0)
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    TRY(gates_tree_create(&(gates_tree_desc_t){0}, &t));
+    gates_node_t root = gates_tree_root(t), title, list, bar, ok, cancel;
+    TRY(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN));
+    TRY(gates_layout_set_padding(t, root, 8));   /* logical units: 1/96 inch */
+    TRY(gates_layout_set_gap(t, root, 6));
+    TRY(gates_label_create(t, root, GATES_STR("Files"), &title));
+    TRY(gates_panel_create(t, root, &list));
+    TRY(gates_layout_set_child_grow(t, list, 1)); /* takes the space left over */
+    TRY(gates_panel_create(t, root, &bar));
+    TRY(gates_layout_set(t, bar, GATES_LAYOUT_KIND_ROW));
+    TRY(gates_layout_set_gap(t, bar, 6));
+    TRY(gates_button_create(t, bar, GATES_STR("OK"), nullptr, nullptr, &ok));
+    TRY(gates_button_create(t, bar, GATES_STR("Cancel"), nullptr, nullptr, &cancel));
+    TRY(gates_layout_run(t, (gates_size_t){ 240, 320 }, gates_text_backend_builtin()));
+
+    gates_rect_t l = gates_node_layout_rect(t, list), a = gates_node_layout_rect(t, ok),
+                 b = gates_node_layout_rect(t, cancel), r = gates_node_layout_rect(t, bar);
+    /* The list ends one gap above the button row, which ends at the padding. */
+    bool rest = l.y + l.h + 6 == r.y && r.y + r.h == 320 - 8;
+    printf("%s; buttons %s\n", rest ? "the list takes the rest" : "the list does not grow",
+           a.y == b.y && b.x > a.x ? "in a row" : "not in a row");
+    gates_tree_destroy(t);
+    return 0;
+}
+```
+
+A scroll container follows keyboard focus: Tab into a control below the viewport and it
+scrolls into view. A stack page that is not active is neither drawn nor reachable.
