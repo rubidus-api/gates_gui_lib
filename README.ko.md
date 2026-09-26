@@ -3,7 +3,7 @@
 한국어 | **[English README](README.md)** (기준 문서는 영어판입니다)
 
 도구형 Windows 프로그램(설정 창, 기록 살펴보기, 로그 보기, 파일 탐색, 빌드 도구)을 위한 C23 의
-작은 유지형(retained) GUI 라이브러리입니다. 판은 **0.1.0** 입니다.
+작은 유지형(retained) GUI 라이브러리입니다. 판은 **0.2.0** 입니다.
 
 | | |
 |---|---|
@@ -25,6 +25,8 @@ HTML 과 CSS 를 떠올리시면 됩니다. 문서는 무엇이 무엇인지를 
 
 담긴 것:
 
+- **비례폭 글자** - 기본은 플랫폼의 UI 글꼴, 열을 맞춰야 하는 곳은 노드마다 고정폭 글꼴. 어느 쪽이든
+  캐럿, 고른 범위, 누른 자리가 정확합니다.
 - **컨트롤과 배치** - 이름표, 버튼, 체크박스, 한 줄 텍스트 상자, 라디오 그룹, 선택 상자, 진행
   막대, 구분선; 가로·세로·겹침·나눔·스크롤·폼 배치. 모든 좌표는 논리 단위(1/96 인치)이고
   모니터마다 배율이 맞춰집니다.
@@ -41,7 +43,7 @@ HTML 과 CSS 를 떠올리시면 됩니다. 문서는 무엇이 무엇인지를 
   자동화 도구가 모든 컨트롤을 읽고 쓸 수 있습니다; 강제 규칙(이름, 24 x 24 목표, 키보드 도달,
   대비, 포커스 표시)의 감사.
 
-브라우저 엔진도, 게임 UI 도, 픽셀까지 똑같이 그리는 도구도 아닙니다. 0.1.0 의 백엔드는
+브라우저 엔진도, 게임 UI 도, 픽셀까지 똑같이 그리는 도구도 아닙니다. 0.2.0 의 백엔드는
 소프트웨어 그리기를 쓰는 Win32 하나이고, 코어는 플랫폼에 묶이지 않은 C23 이라 어디서나
 시험이 돕니다.
 
@@ -51,9 +53,9 @@ HTML 과 CSS 를 떠올리시면 됩니다. 문서는 무엇이 무엇인지를 
 
 | 파일 | 내용 |
 |---|---|
-| `gates-0.1.0-examples-win64.zip` | 모든 예제를 바로 실행되는 Windows 10/11 x64 프로그램으로 - 설치 없음 |
-| `gates-0.1.0-sdk.zip` | 패키지: 헤더, 정적 라이브러리(mingw-w64 용 `lib/win64`), 매뉴얼, 외부 빌드 예제 |
-| `gates-0.1.0-src.zip` | 소스 코드 |
+| `gates-<판>-examples-win64.zip` | 모든 예제를 바로 실행되는 Windows 10/11 x64 프로그램으로 - 설치 없음 |
+| `gates-<판>-sdk.zip` | 패키지: 헤더, 정적 라이브러리(mingw-w64 용 `lib/win64`), 매뉴얼, 외부 빌드 예제 |
+| `gates-<판>-src.zip` | 소스 코드 |
 
 ## 첫 프로그램
 
@@ -62,7 +64,7 @@ HTML 과 CSS 를 떠올리시면 됩니다. 문서는 무엇이 무엇인지를 
 다음과 같습니다.
 
 ```sh
-x86_64-w64-mingw32-gcc -std=c23 -O2 -Igates-0.1.0/include hello.c -Lgates-0.1.0/lib/win64 \
+x86_64-w64-mingw32-gcc -std=c23 -O2 -Igates-0.2.0/include hello.c -Lgates-0.2.0/lib/win64 \
     -lgates -lproven -lgdi32 -luser32 -limm32 -ldwmapi -ladvapi32 -luiautomationcore \
     -lole32 -loleaut32 -luuid -mwindows -o hello.exe
 ```
@@ -75,8 +77,8 @@ mingw-w64(GCC 14 이상, Linux 또는 MSYS2)가 필요합니다.
 ```sh
 make test           # 코어 시험(gcc); clang 은 make test CC=clang
 make win            # 모든 예제를 Windows 프로그램으로, build/win/ 에
-make dist           # 패키지: dist/gates-0.1.0/ (헤더, 라이브러리, 매뉴얼)
-make dist-bin       # 예제 실행 파일: dist/gates-0.1.0-examples-win64/
+make dist           # 패키지: dist/gates-<판>/ (헤더, 라이브러리, 매뉴얼)
+make dist-bin       # 예제 실행 파일: dist/gates-<판>-examples-win64/
 make install PREFIX=/some/dir
 make package-check  # 패키지만으로 외부 프로그램이 빌드되는지 확인
 make manual-check   # 매뉴얼의 모든 프로그램이 빌드되는지(창 없는 것은 실행까지) 확인
@@ -98,10 +100,11 @@ gates 와 기반 라이브러리 proven 은 따로 된 정적 라이브러리입
 
 ## 상태
 
-0.1.0 은 첫 릴리스입니다. 코어 시험(약 1만 개 검사)이 GCC 와 Clang, AddressSanitizer 와
+0.2.0 은 고정폭 제한을 풀었습니다. 글은 시스템의 비례폭 UI 글꼴로 쓰이고, 로그와 코드처럼
+열을 맞춰야 하는 곳은 노드마다 고정폭 글꼴을 고를 수 있습니다. 코어 시험(약 1만 개 검사)이 GCC 와 Clang, AddressSanitizer 와
 UndefinedBehaviorSanitizer 아래에서 통과하고, 모든 예제가 mingw-w64 로 경고 없이 빌드됩니다.
 입력, 한국어 IME, 테마와 배율, UI Automation 과 내레이터, 예제 프로그램 같은 상호작용은
-Windows 11 에서 확인했습니다. 0.1.x 릴리스끼리는 소스가 호환되지만 바이너리 호환은 아직
+Windows 11 에서 확인했습니다. 마이너 판이 같은 릴리스끼리는 소스가 호환되지만 바이너리 호환은 아직
 약속하지 않으므로, 판이 바뀔 때마다 다시 빌드해 주세요.
 
 ## 라이선스

@@ -114,6 +114,16 @@ void *gates_node_user_data(const gates_tree_t *tree, gates_node_t node);
                                                 bool hidden);
 bool gates_node_hidden(const gates_tree_t *tree, gates_node_t node);
 
+/* Font (RFC-0004): a gates_font_t from gates/text.h - GATES_FONT_UI (the
+ * platform's proportional UI face, the default), GATES_FONT_MONO (fixed
+ * pitch), or GATES_FONT_INHERIT (-1, take the parent's). Like CSS
+ * font-family, a node's font applies to everything under it that does not
+ * choose its own. Dialogs and menus are not under the root: they start from
+ * GATES_FONT_UI unless set on them. INVALID_ARG for other values. */
+[[nodiscard]] gates_err_t gates_node_set_font(gates_tree_t *tree, gates_node_t node, gates_i32 font);
+/* The effective font: the node's own, else its nearest ancestor's, else GATES_FONT_UI. */
+gates_i32 gates_node_font(const gates_tree_t *tree, gates_node_t node);
+
 /* Counters for tests and diagnostics. */
 gates_u32 gates_tree_live_count(const gates_tree_t *tree);     /* valid nodes */
 gates_u32 gates_tree_pending_count(const gates_tree_t *tree);  /* awaiting flush */

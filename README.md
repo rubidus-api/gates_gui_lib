@@ -3,7 +3,7 @@
 **[한국어 README](README.ko.md)** | English
 
 A small retained-mode GUI library in C23 for tool-style Windows programs - settings panels,
-inspectors, log viewers, file browsers, build tools. Version **0.1.0**.
+inspectors, log viewers, file browsers, build tools. Version **0.2.0**.
 
 | | |
 |---|---|
@@ -26,6 +26,8 @@ keyboard and input method, readable by a screen reader - not when it matches a m
 
 What you get:
 
+- **Proportional text** - the platform's UI font by default, a fixed-pitch font per node where
+  alignment matters; exact caret, selection and hit testing either way.
 - **Controls and layout** - labels, buttons, check boxes, one-line text boxes, radio groups,
   choices, progress bars, separators; row, column, stack, split, scroll and form layouts; all
   coordinates in logical units (1/96 inch), scaled per monitor.
@@ -42,7 +44,7 @@ What you get:
   Automation provider, so Narrator and automation tools can read and use every control; an
   audit of enforced rules (names, 24 x 24 targets, keyboard reach, contrast, focus cues).
 
-It is not a browser engine, a game UI or a pixel-exact drawing kit. Version 0.1.0 has one
+It is not a browser engine, a game UI or a pixel-exact drawing kit. Version 0.2.0 has one
 backend: Win32 with a software renderer. The core is platform-free C23 and runs its tests
 anywhere.
 
@@ -52,9 +54,9 @@ From the [releases page](https://github.com/rubidus-api/gates_gui_lib/releases):
 
 | File | What |
 |---|---|
-| `gates-0.1.0-examples-win64.zip` | every example as a ready-to-run Windows 10/11 x64 program - no installation |
-| `gates-0.1.0-sdk.zip` | the package: headers, static libraries (`lib/win64` for mingw-w64), manual, a consumer example |
-| `gates-0.1.0-src.zip` | the source code |
+| `gates-<version>-examples-win64.zip` | every example as a ready-to-run Windows 10/11 x64 program - no installation |
+| `gates-<version>-sdk.zip` | the package: headers, static libraries (`lib/win64` for mingw-w64), manual, a consumer example |
+| `gates-<version>-src.zip` | the source code |
 
 ## A first program
 
@@ -88,7 +90,7 @@ int main(void) {
 Build it with mingw-w64 against the SDK:
 
 ```sh
-x86_64-w64-mingw32-gcc -std=c23 -O2 -Igates-0.1.0/include hello.c -Lgates-0.1.0/lib/win64 \
+x86_64-w64-mingw32-gcc -std=c23 -O2 -Igates-0.2.0/include hello.c -Lgates-0.2.0/lib/win64 \
     -lgates -lproven -lgdi32 -luser32 -limm32 -ldwmapi -ladvapi32 -luiautomationcore \
     -lole32 -loleaut32 -luuid -mwindows -o hello.exe
 ```
@@ -103,8 +105,8 @@ mingw-w64 (GCC 14+), on Linux or MSYS2.
 ```sh
 make test           # the core test suites (gcc); make test CC=clang for clang
 make win            # every example as a Windows program, into build/win/
-make dist           # the package: dist/gates-0.1.0/ (headers, libraries, manual)
-make dist-bin       # the example binaries: dist/gates-0.1.0-examples-win64/
+make dist           # the package: dist/gates-<version>/ (headers, libraries, manual)
+make dist-bin       # the example binaries: dist/gates-<version>-examples-win64/
 make install PREFIX=/some/dir
 make package-check  # the package builds a consumer from its own files alone
 make manual-check   # every program in the manual builds (and the headless ones run)
@@ -126,12 +128,13 @@ headless use on any system.
 
 ## Status
 
-0.1.0 is the first release. The core suites (nearly 10,000 checks) pass on GCC and Clang and
+0.2.0 lifts the monospace restriction: text is set in the system's proportional UI font, with
+a fixed-pitch font for logs and code chosen per node. The core suites (nearly 10,000 checks) pass on GCC and Clang and
 under AddressSanitizer and UndefinedBehaviorSanitizer; every example builds warning-free with
 mingw-w64; the interactive behaviour - input, the Korean IME, themes and scaling, UI
-Automation and Narrator, the example programs - is checked on Windows 11. 0.1.x releases are
-source compatible with each other; binary compatibility is not promised yet, so rebuild with
-every update.
+Automation and Narrator, the example programs - is checked on Windows 11. Releases with the
+same minor version are source compatible with each other; binary compatibility is not promised
+yet, so rebuild with every update.
 
 ## Repository layout
 

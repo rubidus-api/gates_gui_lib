@@ -100,6 +100,7 @@ static gates_err_t build_ui(demo_t *d) {
     gates_node_t n = GATES_NODE_NULL;
     TRY(gates_label_create(t, root, GATES_STR("Log: at most 200 lines, follows the end"), &n));
     TRY(gates_log_create(t, root, &(gates_log_desc_t){ .max_lines = 200 }, &d->log));
+    TRY(gates_node_set_font(t, d->log, GATES_FONT_MONO)); /* log lines read best aligned */
     TRY(gates_node_set_access_name(t, d->log, GATES_STR("Log")));
     TRY(gates_layout_set_child_grow(t, d->log, 1));
     TRY(gates_widget_set_handler(t, d->log, on_log, d));

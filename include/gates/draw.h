@@ -40,7 +40,7 @@ typedef struct gates_draw_cmd_t {
     gates_i32 thickness;      /* BORDER (>=1) */
     gates_u32 text_offset;    /* TEXT: into the list's frame text arena */
     gates_u32 text_len;       /* TEXT: bytes */
-    gates_i32 font_size;      /* TEXT: 0 -> backend default */
+    gates_i32 font;           /* TEXT: a gates_font_t (GATES_FONT_UI = 0, the default) */
 } gates_draw_cmd_t;
 
 /* Growable command list; treat the fields as read-only outside gates code.
@@ -77,7 +77,7 @@ void gates_draw_list_reset(gates_draw_list_t *dl);
 
 /* Emits TEXT for the assigned rect; text bytes are copied into the list. */
 [[nodiscard]] gates_err_t gates_draw_text(gates_draw_list_t *dl, gates_rect_t rect,
-                                          gates_str_t text, gates_i32 font_size,
+                                          gates_str_t text, gates_i32 font,
                                           gates_color_t color);
 
 /* Borrowed view of a TEXT command's bytes (valid until reset/deinit). */

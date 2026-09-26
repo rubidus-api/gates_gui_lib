@@ -2,8 +2,8 @@
  *
  * Semantic-first (RFC-0002): the app describes meaning — a column with a
  * title, a toolbar row, a two-page stack, checkboxes and a status label —
- * and the library lays out and paints it with theme tokens and the builtin
- * monospace text backend (native text quality arrives with Phase 3).
+ * and the library lays out and paints it with theme tokens and the
+ * system UI font (proportional, RFC-0004).
  *
  * Manual checklist (T011):
  *   - window opens; title, toolbar buttons, page content, status line render;

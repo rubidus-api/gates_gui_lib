@@ -59,6 +59,7 @@ static void slot_reset_links(gates_node_slot_t *s) {
 static void slot_reset_content(gates_node_slot_t *s) {
     s->kind = GATES_NODE_CUSTOM;
     s->state_index = GATES_NONE;
+    s->font = -1; /* GATES_FONT_INHERIT */
     s->layout_kind = GATES_LAYOUT_NONE;
     s->grow = 0;
     s->align = GATES_ALIGN_STRETCH;
@@ -804,6 +805,30 @@ gates_err_t gates_node_set_hidden(gates_tree_t *tree, gates_node_t node, bool hi
     gates_i_mark_dirty(tree, node.index, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
     gates_i_focus_check(tree); /* also closes a choice list inside it */
     return GATES_OK;
+}
+
+gates_err_t gates_node_set_font(gates_tree_t *tree, gates_node_t node, gates_i32 font) {
+    if (tree == nullptr || !gates_i_valid(tree, node) || font < -1 || font > 1) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    gates_node_slot_t *s = gates_i_slot(tree, node.index);
+    if (s->font != (gates_i8)font) {
+        s->font = (gates_i8)font;
+        gates_i_mark_dirty(tree, node.index, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
+    }
+    return GATES_OK;
+}
+
+gates_i32 gates_i_font(const gates_tree_t *tree, gates_u32 idx) {
+    for (gates_u32 p = idx; p != GATES_NONE; p = gates_i_slot(tree, p)->parent) {
+        gates_i8 f = gates_i_slot(tree, p)->font;
+        if (f >= 0) return f;
+    }
+    return 0; /* GATES_FONT_UI */
+}
+
+gates_i32 gates_node_font(const gates_tree_t *tree, gates_node_t node) {
+    return tree != nullptr && gates_i_valid(tree, node) ? gates_i_font(tree, node.index) : 0;
 }
 
 bool gates_node_hidden(const gates_tree_t *tree, gates_node_t node) {

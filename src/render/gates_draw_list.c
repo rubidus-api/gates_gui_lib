@@ -144,7 +144,7 @@ static gates_err_t text_reserve(gates_draw_list_t *dl, gates_u32 extra) {
 }
 
 gates_err_t gates_draw_text(gates_draw_list_t *dl, gates_rect_t rect, gates_str_t text,
-                            gates_i32 font_size, gates_color_t color) {
+                            gates_i32 font, gates_color_t color) {
     if (dl == nullptr || dl->cmds == nullptr) {
         return PROVEN_ERR_INVALID_ARG;
     }
@@ -159,7 +159,7 @@ gates_err_t gates_draw_text(gates_draw_list_t *dl, gates_rect_t rect, gates_str_
     gates_draw_cmd_t cmd = {
         .kind = GATES_DRAW_TEXT, .rect = rect, .color = color,
         .text_offset = offset, .text_len = (gates_u32)text.size,
-        .font_size = font_size,
+        .font = font,
     };
     err = push_cmd(dl, cmd);
     if (!gates_is_ok(err)) {

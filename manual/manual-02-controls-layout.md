@@ -4,7 +4,7 @@ Headers: `gates/widget.h`, `gates/layout.h`, `gates/geometry.h`.
 
 ## The control matrix
 
-Every control is one node. The table is the whole finite set in 0.1.0: what the person does
+Every control is one node. The table is the whole finite set in 0.2.0: what the person does
 with it, the keys, the events the program receives, and what a screen reader hears (chapter 9).
 
 | Control | Create | The person | Keys | Events | Accessible as |

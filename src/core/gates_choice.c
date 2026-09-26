@@ -352,10 +352,11 @@ static gates_str_t label_of(const gates_i_option_t *o) {
 gates_size_t gates_i_options_measure(const gates_tree_t *tree, const gates_node_slot_t *s,
                                      const gates_text_backend_t *text) {
     const gates_widget_state_t *st = gates_i_state(tree, s->state_index);
-    gates_text_metrics_t m = text->metrics(text->ctx, 0);
+    gates_i32 font = gates_i_slot_font(tree, s);
+    gates_text_metrics_t m = text->metrics(text->ctx, font);
     gates_i32 label_w = 0;
     for (gates_u32 i = 0; st != nullptr && i < st->opt_count; i++) {
-        gates_size_t ls = text->measure(text->ctx, 0, label_of(&st->opts[i]));
+        gates_size_t ls = text->measure(text->ctx, font, label_of(&st->opts[i]));
         if (ls.w > label_w) label_w = ls.w;
     }
     gates_i32 n = st != nullptr ? (gates_i32)st->opt_count : 0;
@@ -374,7 +375,8 @@ static gates_err_t paint_radio(const gates_tree_t *tree, gates_u32 idx, gates_dr
                                bool inert) {
     const gates_node_slot_t *s = gates_i_slot(tree, idx);
     const gates_widget_state_t *st = gates_i_state(tree, s->state_index);
-    gates_text_metrics_t m = text->metrics(text->ctx, 0);
+    gates_i32 font = gates_i_font(tree, idx);
+    gates_text_metrics_t m = text->metrics(text->ctx, font);
     gates_i32 row_h = gates_i_radio_row_h(m.line_height);
     gates_rect_t r = s->layout_rect;
     bool focused = tree->focus == idx;
@@ -395,12 +397,12 @@ static gates_err_t paint_radio(const gates_tree_t *tree, gates_u32 idx, gates_dr
                                   gates_theme_color(theme, GATES_COLOR_SELECTION_BG));
         }
         if (gates_is_ok(err) && o->label_len > 0) {
-            gates_size_t ls = text->measure(text->ctx, 0, label_of(o));
+            gates_size_t ls = text->measure(text->ctx, font, label_of(o));
             gates_color_token_t fg = inert || o->disabled ? GATES_COLOR_CONTROL_DISABLED_FG
                                                           : GATES_COLOR_PANEL_FG;
             err = gates_draw_text(dl, (gates_rect_t){ row.x + GATES_CHECK_BOX + GATES_CHECK_GAP,
                                                       row.y + (row_h - ls.h) / 2, ls.w, ls.h },
-                                  label_of(o), 0, gates_theme_color(theme, fg));
+                                  label_of(o), font, gates_theme_color(theme, fg));
         }
         if (gates_is_ok(err) && focused && (gates_i32)i == ring_row) {
             err = gates_draw_border(dl, row, gates_theme_focus_width(theme),
@@ -415,7 +417,8 @@ static gates_err_t paint_choice(const gates_tree_t *tree, gates_u32 idx, gates_d
                                 bool inert, bool pressed, bool hovered) {
     const gates_node_slot_t *s = gates_i_slot(tree, idx);
     const gates_widget_state_t *st = gates_i_state(tree, s->state_index);
-    gates_text_metrics_t m = text->metrics(text->ctx, 0);
+    gates_i32 font = gates_i_font(tree, idx);
+    gates_text_metrics_t m = text->metrics(text->ctx, font);
     gates_rect_t r = s->layout_rect;
     gates_color_token_t bg = inert     ? GATES_COLOR_CONTROL_BG
                              : pressed ? GATES_COLOR_CONTROL_PRESSED_BG
@@ -434,9 +437,9 @@ static gates_err_t paint_choice(const gates_tree_t *tree, gates_u32 idx, gates_d
     gates_i32 inset_x = GATES_TEXTBOX_PAD_X + GATES_TEXTBOX_BORDER;
     const gates_i_option_t *o = gates_i_option_find(st, st->opt_sel);
     if (gates_is_ok(err) && o != nullptr && o->label_len > 0) {
-        gates_size_t ls = text->measure(text->ctx, 0, label_of(o));
+        gates_size_t ls = text->measure(text->ctx, font, label_of(o));
         err = gates_draw_text(dl, (gates_rect_t){ r.x + inset_x, r.y + (r.h - ls.h) / 2, ls.w, ls.h },
-                              label_of(o), 0, fg);
+                              label_of(o), font, fg);
     }
     /* Down arrow: a small triangle of shrinking rows at the right. */
     gates_i32 aw = GATES_CHOICE_ARROW_CELLS * m.advance;

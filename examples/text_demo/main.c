@@ -1,15 +1,15 @@
-/* text_demo — Phase 3A: real glyphs plus a working textbox.
+/* text_demo - real glyphs in both fonts plus a working textbox.
  *
- * Shows the point of RFC-0002: the same layout, measured in cells, rendered
- * by the platform's own font. Hangul and Latin sit on the same cell grid
- * (wide characters take two cells) — the library never asks the font where
- * the next character goes.
+ * Shows RFC-0002 and RFC-0004: layout measures every character's advance,
+ * the platform's own fonts draw them where layout put them. The UI font is
+ * proportional (the system's); a panel set to the mono font keeps a ruler and
+ * mixed Hangul/Latin lines column-aligned.
  *
- * Manual checklist (T017):
- *   - Hangul, Latin and CJK render as real glyphs (not boxes);
- *   - the ruler line and the sample lines stay column-aligned;
+ * Manual checklist (T017, T044):
+ *   - Hangul, Latin and CJK render as real glyphs (not boxes) in both fonts;
+ *   - in the mono panel the ruler and the sample lines stay column-aligned;
  *   - clicking the textbox focuses it (border turns to the focus colour) and
- *     places the caret at the clicked cell;
+ *     places the caret between the characters nearest the click;
  *   - typing, Backspace/Delete, Home/End, Shift+arrows and Ctrl+A work;
  *   - dragging inside the textbox selects a range;
  *   - the mirror label under the box follows what you type;
@@ -71,17 +71,27 @@ static void build_ui(demo_t *d) {
     (void)gates_layout_set_padding(t, root, 12);
     (void)gates_layout_set_gap(t, root, 6);
 
-    gates_node_t title = GATES_NODE_NULL;
-    (void)gates_label_create(t, root, GATES_STR("gates text_demo — RFC-0002"), &title);
+    gates_node_t title = GATES_NODE_NULL, n = GATES_NODE_NULL;
+    (void)gates_label_create(t, root, GATES_STR("gates text_demo - RFC-0002, RFC-0004"), &title);
 
-    /* A ruler plus samples: every line must stay column-aligned because the
-     * library places cells itself. */
-    gates_node_t ruler = GATES_NODE_NULL, l1 = GATES_NODE_NULL, l2 = GATES_NODE_NULL,
-                 l3 = GATES_NODE_NULL;
-    (void)gates_label_create(t, root, GATES_STR("0123456789012345678901234567"), &ruler);
-    (void)gates_label_create(t, root, GATES_STR("ABCD한글EFGH가나다ABCD"), &l1);
-    (void)gates_label_create(t, root, GATES_STR("....한국어 텍스트 렌더링...."), &l2);
-    (void)gates_label_create(t, root, GATES_STR("漢字 かな ABC 123 !@#"), &l3);
+    /* The UI font (proportional, the default): the samples as the platform sets them. */
+    (void)gates_label_create(t, root, GATES_STR("UI font (proportional):"), &n);
+    (void)gates_label_create(t, root, GATES_STR("ABCD\xed\x95\x9c\xea\xb8\x80" "EFGH iiii mmmm"), &n);
+    (void)gates_label_create(t, root, GATES_STR("....\xed\x95\x9c\xea\xb5\xad\xec\x96\xb4 "
+                                                "\xed\x85\x8d\xec\x8a\xa4\xed\x8a\xb8...."), &n);
+
+    /* The mono font on a panel (its labels inherit it): a ruler plus samples,
+     * every line column-aligned because each character has the same advance. */
+    gates_node_t mono = GATES_NODE_NULL;
+    (void)gates_panel_create(t, root, &mono);
+    (void)gates_layout_set(t, mono, GATES_LAYOUT_KIND_COLUMN);
+    (void)gates_layout_set_gap(t, mono, 4);
+    (void)gates_node_set_font(t, mono, GATES_FONT_MONO);
+    (void)gates_label_create(t, mono, GATES_STR("Mono font (fixed pitch):"), &n);
+    (void)gates_label_create(t, mono, GATES_STR("0123456789012345678901234567"), &n);
+    (void)gates_label_create(t, mono, GATES_STR("ABCD\xed\x95\x9c\xea\xb8\x80" "EFGH"
+                                                "\xea\xb0\x80\xeb\x82\x98\xeb\x8b\xa4" "ABCD"), &n);
+    (void)gates_label_create(t, mono, GATES_STR("\xe6\xbc\xa2\xe5\xad\x97 \xe3\x81\x8b\xe3\x81\xaa ABC 123 !@#"), &n);
 
     gates_node_t hint = GATES_NODE_NULL;
     (void)gates_label_create(t, root, GATES_STR("edit below (click to focus):"), &hint);

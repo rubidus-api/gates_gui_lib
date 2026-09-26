@@ -203,6 +203,7 @@ static gates_err_t build_ui(app_t *a) {
     TRY(gates_layout_set_gap(t, a->root, 8));
     gates_log_desc_t d = { .max_lines = 2000, .max_bytes = 64 * 1024 };
     TRY(gates_log_create(t, a->root, &d, &a->log));
+    TRY(gates_node_set_font(t, a->log, GATES_FONT_MONO)); /* log lines read best aligned */
     TRY(gates_node_set_access_name(t, a->log, GATES_STR("Log")));
     TRY(gates_layout_set_child_grow(t, a->log, 1));
     TRY(gates_widget_set_handler(t, a->log, on_log, a));

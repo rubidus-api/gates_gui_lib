@@ -135,7 +135,7 @@ static gates_size_t widget_intrinsic(const gates_tree_t *tree, const gates_node_
                                      const gates_text_backend_t *text) {
     const gates_widget_state_t *st = gates_i_state(tree, s->state_index);
     gates_str_t txt = st != nullptr ? gates_i_widget_label(tree, st) : (gates_str_t){0};
-    gates_i32 fsz = st != nullptr ? st->font_size : 0;
+    gates_i32 fsz = gates_i_slot_font(tree, s);
     gates_size_t ts = text->measure(text->ctx, fsz, txt);
     gates_text_metrics_t m = text->metrics(text->ctx, fsz);
     if (txt.size == 0) {
@@ -608,7 +608,8 @@ gates_err_t gates_layout_run(gates_tree_t *tree, gates_size_t viewport,
     }
     gates_text_metrics_t root_metrics = text->metrics(text->ctx, 0);
     tree->line_height = root_metrics.line_height; /* wheel step unit */
-    tree->advance = root_metrics.advance;         /* cell math for hit testing */
+    tree->advance = root_metrics.advance;         /* average width: sizing hints */
+    tree->text_backend = text;                    /* for hit testing between layouts */
     measure_node(tree, tree->root, text);
     gates_i_slot(tree, tree->root)->layout_rect = (gates_rect_t){ 0, 0, viewport.w, viewport.h };
     arrange_node(tree, tree->root);

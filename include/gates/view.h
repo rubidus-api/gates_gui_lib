@@ -77,7 +77,7 @@ typedef struct gates_rows_model_t {
 typedef struct gates_column_desc_t {
     gates_column_id_t id;        /* nonzero, unique in the view */
     gates_str_t label;           /* copied; shown in the header */
-    gates_i32 width;             /* px; 0 -> 12 cells */
+    gates_i32 width;             /* logical units; 0 -> 12 average character widths */
     gates_i32 min_width;         /* px; 0 -> 3 cells */
 } gates_column_desc_t;
 

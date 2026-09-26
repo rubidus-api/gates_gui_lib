@@ -28,7 +28,7 @@ typedef enum gates_layout_t {
  * column as wide as the widest shown label; editors start after it plus
  * GATES_FORM_COLUMN_GAP and keep their preferred width unless their align is
  * STRETCH (then they take the rest). When the form is narrower than the label
- * column + gap + GATES_FORM_MIN_EDITOR_CELLS cells, every label goes above its
+ * column + gap + GATES_FORM_MIN_EDITOR_CELLS average character widths, every label goes above its
  * editor (GATES_FORM_STACK_GAP between). The measured size is the side-by-side
  * one; stacked rows are taller, so give a form that may become narrow room to
  * grow (for example a scroll container). Hidden rows take no space. */

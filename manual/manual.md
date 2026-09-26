@@ -1,4 +1,4 @@
-# gates Manual (v0.1.0)
+# gates Manual (v0.2.0)
 
 The manual of `gates`, a small retained GUI library in C23 for tool-style Windows programs:
 settings panels, inspectors, log viewers, build tools. Every chapter is one file under
@@ -28,8 +28,8 @@ and the text is a bug.
 
 ## Edition
 
-- Library and manual version: 0.1.0. Chapters note the headers they need; everything here is
-  in the 0.1.0 profile ("Windows Tool UI 1": Win32, one window per top-level surface, software
+- Library and manual version: 0.2.0. Chapters note the headers they need; everything here is
+  in the 0.2.0 profile ("Windows Tool UI 1": Win32, one window per top-level surface, software
   rendering).
 - Author: rubidus. License: MIT - Copyright (c) 2026 rubidus-api; the library and this manual
   are under the same license (`LICENSE` in the package).

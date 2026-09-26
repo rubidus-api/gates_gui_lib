@@ -476,30 +476,32 @@ gates_err_t gates_i_box_redo(gates_tree_t *tree, gates_u32 idx) {
     return GATES_OK;
 }
 
-/* -- display cells ------------------------------------------------------------ */
+/* -- geometry (RFC-0004) ------------------------------------------------------ */
 
-gates_u32 gates_i_box_cells_before(const gates_widget_state_t *st, gates_u32 offset) {
-    if (!st->password) {
-        return gates_text_edit_cells_before(st->edit, offset);
-    }
-    gates_str_t t = gates_text_edit_text(st->edit);
-    gates_u32 n = 0;
-    for (gates_u32 at = 0; at < offset && at < t.size; at += gates_text_decode(t, at, nullptr)) {
-        n++;
-    }
-    return n;
+static gates_i32 star_width(const gates_text_backend_t *be, gates_i32 font) {
+    return be != nullptr && be->glyph_advance != nullptr ? be->glyph_advance(be->ctx, font, '*') : 0;
 }
 
-gates_u32 gates_i_box_offset_at_cell(const gates_widget_state_t *st, gates_u32 cell) {
-    if (!st->password) {
-        return gates_text_edit_offset_at_cell(st->edit, cell);
-    }
+gates_i32 gates_i_box_x(const gates_text_backend_t *be, gates_i32 font, const gates_widget_state_t *st,
+                        gates_u32 offset) {
     gates_str_t t = gates_text_edit_text(st->edit);
+    if (offset > t.size) offset = (gates_u32)t.size;
+    if (!st->password) return gates_text_width(be, font, (gates_str_t){ .ptr = t.ptr, .size = offset });
+    gates_i32 n = 0; /* one star per code point */
+    for (gates_u32 at = 0; at < offset; at += gates_text_decode(t, at, nullptr)) n++;
+    return n * star_width(be, font);
+}
+
+gates_u32 gates_i_box_offset_at_x(const gates_text_backend_t *be, gates_i32 font, const gates_widget_state_t *st,
+                                  gates_i32 x) {
+    gates_str_t t = gates_text_edit_text(st->edit);
+    if (!st->password) return gates_text_offset_at_x(be, font, t, x);
+    gates_i32 w = star_width(be, font);
     gates_u32 at = 0;
-    for (gates_u32 i = 0; i < cell && at < t.size; i++) {
+    for (gates_i32 left = 0; at < t.size && w > 0 && (x - left) * 2 >= w; left += w) {
         at += gates_text_decode(t, at, nullptr);
     }
-    return at < t.size ? at : (gates_u32)t.size;
+    return at;
 }
 
 /* -- public API --------------------------------------------------------------- */

@@ -157,11 +157,11 @@ gates_err_t gates_render_soft_scaled(const gates_draw_list_t *dl, gates_pixels_t
             }
             if (text_backend->draw_scaled != nullptr && dpi != 0 && dpi != GATES_DPI_BASE) {
                 text_backend->draw_scaled(text_backend->ctx, target, gates_rect_px(cmd->rect, dpi),
-                                          ctx.clip, cmd->font_size, gates_draw_cmd_text(dl, cmd),
+                                          ctx.clip, cmd->font, gates_draw_cmd_text(dl, cmd),
                                           cmd->color, dpi);
             } else {
                 text_backend->draw(text_backend->ctx, target, gates_rect_px(cmd->rect, dpi), ctx.clip,
-                                   cmd->font_size, gates_draw_cmd_text(dl, cmd), cmd->color);
+                                   cmd->font, gates_draw_cmd_text(dl, cmd), cmd->color);
             }
             break;
         case GATES_DRAW_IMAGE:

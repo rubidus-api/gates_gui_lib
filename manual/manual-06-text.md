@@ -79,15 +79,20 @@ A read-only or password box turns the IME off while it has focus. For a program 
 text itself - tests, automation - `gates_input_commit` delivers text as an IME would, and
 `gates_input_preedit` shows a composition.
 
-## Unicode limits in 0.1.0
+## Unicode limits in 0.2.0
 
 - Text is UTF-8 everywhere; invalid input is refused, never repaired silently.
+- Every character has its own advance, taken from the font: text is proportional in the UI
+  font and fixed-pitch in the mono font (chapter 8). A string is exactly as wide as the sum of
+  its characters, so the caret, a selection and a click always land between characters.
+- There is no kerning, no ligatures and no shaping: scripts that need shaping (Arabic, the
+  Indic scripts, Thai) show their characters one by one, and right-to-left text is not
+  reordered.
 - Editing moves by code point, not by grapheme cluster: a base letter and a combining mark are
   two steps.
-- Layout counts cells: most characters take one cell, Hangul, CJK and fullwidth characters two.
-  Text is monospace in 0.1.0.
-- The Win32 backend draws real system glyphs; the builtin backend (tests, headless) draws ASCII
-  and a box of the right width for everything else.
+- The Win32 backend draws real system glyphs, taking characters its face lacks (Hangul in
+  Segoe UI) from the system's fallback fonts; the builtin backend (tests, headless) is
+  fixed-pitch and draws ASCII, with a box of the right width for everything else.
 - One line per text box; there is no multi-line editor yet.
 
 ## The clipboard

@@ -19,7 +19,7 @@
  * hides it; Save with the proxy on and no address complains about it only;
  * editing a field clears its message; Escape restores the last saved values;
  * the progress bar grows as required fields are filled; the window's close
- * button exits. A window narrower than the label column plus 12 cells puts
+ * button exits. A window narrower than the label column plus 12 average characters puts
  * each label above its field. */
 #include <gates/app.h>
 #include <gates/window.h>

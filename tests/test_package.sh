@@ -35,7 +35,7 @@ maj=$(sed -n 's/^#define GATES_VERSION_MAJOR \([0-9]*\).*/\1/p' include/gates/ve
 min=$(sed -n 's/^#define GATES_VERSION_MINOR \([0-9]*\).*/\1/p' include/gates/version.h)
 pat=$(sed -n 's/^#define GATES_VERSION_PATCH \([0-9]*\).*/\1/p' include/gates/version.h)
 ver="$maj.$min.$pat"
-check "[ \"$ver\" = 0.1.0 ]" "version.h says $ver"
+check "echo \"$ver\" | grep -qE '^[0-9]+\\.[0-9]+\\.[0-9]+$'" "version.h says $ver"
 check "grep -q '#define GATES_VERSION_STRING \"$ver\"' include/gates/version.h" "GATES_VERSION_STRING differs from $ver"
 check "[ \"\$(grep -m1 '^## \\[' CHANGELOG.md)\" != '## [Unreleased]' ] && grep -m1 '^## \\[' CHANGELOG.md | grep -q \"\\[$ver\\]\"" \
       "the newest CHANGELOG section is not [$ver]"

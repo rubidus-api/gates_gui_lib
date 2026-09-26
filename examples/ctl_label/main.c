@@ -2,8 +2,8 @@
  *
  * Interaction: a label tells the person something; it takes no input. The
  * application says what the text is; the backend decides how it looks
- * (RFC-0001 section 1.0). Text is UTF-8 and laid out in cells, so Hangul and
- * other wide characters take two cells on every backend (RFC-0002).
+ * (RFC-0001 section 1.0). Text is UTF-8 and every character takes its own
+ * advance from the font, Hangul and other wide characters included (RFC-0004).
  *
  * Shows: plain, wide-character and disabled labels, and a label whose text
  * the program replaces when a button is activated (programmatic setters are

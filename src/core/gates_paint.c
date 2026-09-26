@@ -50,7 +50,7 @@ static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
     bool pressed = tree->pressed == idx;
     bool disabled = st != nullptr && gates_i_widget_inert(tree, st);
     bool has_focus = tree->focus == idx;
-    gates_i32 fsz = st != nullptr ? st->font_size : 0;
+    gates_i32 fsz = gates_i_font(tree, idx); /* RFC-0004: the node's effective font */
 
     switch (s->kind) {
     case GATES_NODE_PANEL:
@@ -184,46 +184,42 @@ static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
         gates_rect_t inner = gates_i_textbox_inner(tree, idx);
         gates_text_metrics_t m = ctx->text->metrics(ctx->text->ctx, fsz);
         gates_str_t txt = gates_text_edit_text(st->edit);
-        gates_u32 caret_cell = gates_i_box_cells_before(st,
-                                                            gates_text_edit_caret(st->edit));
+        /* RFC-0004: every x is a sum of the font's advances (gates_i_box_x). */
+        gates_i32 caret_x = gates_i_box_x(ctx->text, fsz, st, gates_text_edit_caret(st->edit));
+        gates_i32 text_w = gates_i_box_x(ctx->text, fsz, st, (gates_u32)txt.size);
 
         /* IME preedit (plan-0006): displayed at preedit_at, pushing the rest of
          * the committed text right; while composing the caret is the IME's
-         * cursor inside it. Cell math for committed text is otherwise unchanged. */
+         * cursor inside it. */
         gates_str_t pre = gates_text_edit_preedit(st->edit);
         gates_u32 pre_at = st->edit->preedit_at;
-        gates_u32 pre_cell = 0, pre_cells = 0;
+        gates_i32 pre_x0 = 0, pre_w = 0;
         if (pre.size > 0) {
-            pre_cell = gates_i_box_cells_before(st, pre_at);
-            pre_cells = gates_text_cells(pre);
+            pre_x0 = gates_i_box_x(ctx->text, fsz, st, pre_at);
+            pre_w = gates_text_width(ctx->text, fsz, pre);
             gates_u32 cur = st->ime_cursor <= pre.size ? st->ime_cursor : (gates_u32)pre.size;
-            caret_cell = pre_cell +
-                         gates_text_cells((gates_str_t){ .ptr = pre.ptr, .size = cur });
+            caret_x = pre_x0 + gates_text_width(ctx->text, fsz, (gates_str_t){ .ptr = pre.ptr, .size = cur });
+            text_w += pre_w;
         }
 
-        /* Keep the caret in view: this cache is the only paint-time mutation. */
-        gates_i32 visible = m.advance > 0 ? inner.w / m.advance : 0;
-        if (visible < 1) visible = 1;
-        if ((gates_i32)caret_cell < st->view_cells) {
-            st->view_cells = (gates_i32)caret_cell;
-        } else if ((gates_i32)caret_cell > st->view_cells + visible - 1) {
-            st->view_cells = (gates_i32)caret_cell - visible + 1;
+        /* Keep the caret in view, and no empty space after the text while
+         * scrolled: this cache is the only paint-time mutation. */
+        gates_i32 room = inner.w > 1 ? inner.w - 1 : 1; /* the caret takes one unit */
+        if (caret_x < st->view_x) {
+            st->view_x = caret_x;
+        } else if (caret_x > st->view_x + room) {
+            st->view_x = caret_x - room;
         }
-        if (st->view_cells < 0) st->view_cells = 0;
-        gates_i32 origin_x = inner.x - st->view_cells * m.advance;
+        if (st->view_x > 0 && text_w - st->view_x < room) st->view_x = text_w - room;
+        if (st->view_x < 0) st->view_x = 0;
+        gates_i32 origin_x = inner.x - st->view_x;
 
         gates_err_t pushed = gates_draw_clip_push(ctx->dl, inner);
         emit(ctx, pushed);
         if (gates_text_edit_has_selection(st->edit)) {
-            gates_u32 b = gates_i_box_cells_before(st,
-                                                       gates_text_edit_sel_begin(st->edit));
-            gates_u32 e = gates_i_box_cells_before(st,
-                                                       gates_text_edit_sel_end(st->edit));
-            emit(ctx, gates_draw_rect(ctx->dl,
-                                      (gates_rect_t){ origin_x + (gates_i32)b * m.advance,
-                                                      inner.y,
-                                                      (gates_i32)(e - b) * m.advance,
-                                                      m.line_height },
+            gates_i32 b = gates_i_box_x(ctx->text, fsz, st, gates_text_edit_sel_begin(st->edit));
+            gates_i32 e = gates_i_box_x(ctx->text, fsz, st, gates_text_edit_sel_end(st->edit));
+            emit(ctx, gates_draw_rect(ctx->dl, (gates_rect_t){ origin_x + b, inner.y, e - b, m.line_height },
                                       gates_theme_color(ctx->theme, GATES_COLOR_SELECTION_BG)));
         }
         gates_color_t fg = gates_theme_color(ctx->theme, disabled
@@ -232,61 +228,43 @@ static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
         if (pre.size == 0 && st->password) {
             /* One '*' per codepoint; the text itself is never drawn. */
             static const char stars[] = "****************************************************************";
-            gates_u32 count = gates_i_box_cells_before(st, (gates_u32)txt.size);
+            gates_u32 count = 0;
+            for (gates_u32 at = 0; at < txt.size; at += gates_text_decode(txt, at, nullptr)) count++;
+            gates_i32 star = ctx->text->glyph_advance != nullptr ? ctx->text->glyph_advance(ctx->text->ctx, fsz, '*') : 0;
             gates_i32 x = origin_x;
             while (count > 0) {
                 gates_u32 run = count < 64u ? count : 64u;
-                emit(ctx, gates_draw_text(ctx->dl,
-                                          (gates_rect_t){ x, inner.y, (gates_i32)run * m.advance,
-                                                          m.line_height },
-                                          (gates_str_t){ .ptr = (const gates_u8 *)stars,
-                                                         .size = run },
-                                          fsz, fg));
-                x += (gates_i32)run * m.advance;
+                emit(ctx, gates_draw_text(ctx->dl, (gates_rect_t){ x, inner.y, (gates_i32)run * star, m.line_height },
+                                          (gates_str_t){ .ptr = (const gates_u8 *)stars, .size = run }, fsz, fg));
+                x += (gates_i32)run * star;
                 count -= run;
             }
         } else if (pre.size == 0) {
             if (txt.size > 0) {
-                emit(ctx, gates_draw_text(ctx->dl,
-                                          (gates_rect_t){ origin_x, inner.y,
-                                                          (gates_i32)gates_text_cells(txt) *
-                                                              m.advance,
-                                                          m.line_height },
+                emit(ctx, gates_draw_text(ctx->dl, (gates_rect_t){ origin_x, inner.y, text_w, m.line_height },
                                           txt, fsz, fg));
             }
         } else {
             gates_str_t head = { .ptr = txt.ptr, .size = pre_at };
             gates_str_t tail = { .ptr = txt.ptr + pre_at, .size = txt.size - pre_at };
-            gates_i32 pre_x = origin_x + (gates_i32)pre_cell * m.advance;
-            gates_i32 pre_w = (gates_i32)pre_cells * m.advance;
+            gates_i32 pre_x = origin_x + pre_x0;
             if (head.size > 0) {
-                emit(ctx, gates_draw_text(ctx->dl,
-                                          (gates_rect_t){ origin_x, inner.y,
-                                                          (gates_i32)pre_cell * m.advance,
-                                                          m.line_height },
+                emit(ctx, gates_draw_text(ctx->dl, (gates_rect_t){ origin_x, inner.y, pre_x0, m.line_height },
                                           head, fsz, fg));
             }
-            emit(ctx, gates_draw_text(ctx->dl,
-                                      (gates_rect_t){ pre_x, inner.y, pre_w, m.line_height },
-                                      pre, fsz, fg));
+            emit(ctx, gates_draw_text(ctx->dl, (gates_rect_t){ pre_x, inner.y, pre_w, m.line_height }, pre, fsz, fg));
             /* Composition underline: one pixel on the last row of the line. */
-            emit(ctx, gates_draw_rect(ctx->dl,
-                                      (gates_rect_t){ pre_x, inner.y + m.line_height - 1,
-                                                      pre_w, 1 },
-                                      fg));
+            emit(ctx, gates_draw_rect(ctx->dl, (gates_rect_t){ pre_x, inner.y + m.line_height - 1, pre_w, 1 }, fg));
             if (tail.size > 0) {
                 emit(ctx, gates_draw_text(ctx->dl,
-                                          (gates_rect_t){ pre_x + pre_w, inner.y,
-                                                          (gates_i32)gates_text_cells(tail) *
-                                                              m.advance,
+                                          (gates_rect_t){ pre_x + pre_w, inner.y, gates_text_width(ctx->text, fsz, tail),
                                                           m.line_height },
                                           tail, fsz, fg));
             }
         }
         st->caret_valid = false;
         if (focused && !disabled && !st->read_only) { /* read-only: no caret */
-            gates_rect_t caret = { origin_x + (gates_i32)caret_cell * m.advance,
-                                   inner.y, 1, m.line_height };
+            gates_rect_t caret = { origin_x + caret_x, inner.y, 1, m.line_height };
             emit(ctx, gates_draw_rect(ctx->dl, caret,
                                       gates_theme_color(ctx->theme, GATES_COLOR_CONTROL_FG)));
             st->caret_rect = caret; /* for the IME window position */

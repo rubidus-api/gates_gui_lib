@@ -164,14 +164,13 @@ typedef struct gates_widget_state_t {
 
     gates_u8 *text;          /* owned copy (tree allocator) */
     gates_u32 text_len;
-    gates_i32 font_size;     /* 0 -> backend default */
     bool checked;
     bool disabled;
 
     /* Textbox only: edit core plus its single-line view state. */
     gates_text_edit_t *edit;
-    gates_u32 cols;          /* intrinsic width in cells */
-    gates_i32 view_cells;    /* horizontal scroll, in cells (paint keeps it) */
+    gates_u32 cols;          /* intrinsic width in average character widths */
+    gates_i32 view_x;        /* horizontal scroll, logical units (paint keeps it) */
     gates_u32 ime_cursor;    /* IME cursor, bytes into the preedit (plan-0006) */
     gates_rect_t caret_rect; /* last painted caret, window coordinates */
     bool caret_valid;        /* caret_rect is from a paint of the focused box */
@@ -242,6 +241,7 @@ typedef struct gates_node_slot_t {
     gates_u32 child_count;
 
     /* Layout (container props + child props + results). */
+    gates_i8 font;           /* a gates_font_t, or GATES_FONT_INHERIT (RFC-0004) */
     gates_u8 layout_kind;    /* gates_layout_kind_i */
     gates_u8 grow;           /* child main-axis weight (0 = fixed) */
     gates_u8 align;          /* gates_align_i, child cross-axis */
@@ -302,6 +302,9 @@ struct gates_tree {
      * cell arithmetic without a backend handle. */
     gates_i32 line_height;
     gates_i32 advance;
+    /* The backend of the last gates_layout_run (borrowed): hit testing and
+     * accessibility measure text with it between layouts (RFC-0004). */
+    const gates_text_backend_t *text_backend;
 
     gates_u32 dirty_bits;    /* aggregate of all marks since last clear */
 
@@ -399,9 +402,20 @@ gates_err_t gates_i_box_redo(gates_tree_t *tree, gates_u32 idx);
 void gates_i_box_forget(gates_tree_t *tree, gates_widget_state_t *st);
 /* Frees history and offer when the widget state is released. */
 void gates_i_box_free(gates_tree_t *tree, gates_widget_state_t *st);
-/* Display cells: password boxes show one cell per codepoint. */
-gates_u32 gates_i_box_cells_before(const gates_widget_state_t *st, gates_u32 offset);
-gates_u32 gates_i_box_offset_at_cell(const gates_widget_state_t *st, gates_u32 cell);
+/* The node's effective font: its own, else its nearest ancestor's, else
+ * GATES_FONT_UI (gates_tree.c, RFC-0004). */
+gates_i32 gates_i_font(const gates_tree_t *tree, gates_u32 idx);
+static inline gates_i32 gates_i_slot_font(const gates_tree_t *tree, const gates_node_slot_t *s) {
+    return gates_i_font(tree, (gates_u32)(s - tree->slots));
+}
+/* Text box geometry (RFC-0004): the x of a byte offset from the start of the
+ * box's text, and the offset nearest to an x, in the box's font - a password
+ * box by its stars. Everything that draws, hits or describes a text box uses
+ * these two, so they agree. */
+gates_i32 gates_i_box_x(const gates_text_backend_t *be, gates_i32 font, const gates_widget_state_t *st,
+                        gates_u32 offset);
+gates_u32 gates_i_box_offset_at_x(const gates_text_backend_t *be, gates_i32 font, const gates_widget_state_t *st,
+                                  gates_i32 x);
 /* Clipboard helpers (gates_clipboard.c). normalize: single-line paste policy
  * (CRLF/CR/LF/TAB -> one space, other controls dropped, invalid UTF-8 ->
  * U+FFFD) into a new block from `alloc`. */

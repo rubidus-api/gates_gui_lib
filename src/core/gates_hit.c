@@ -138,18 +138,16 @@ void gates_input_cancel_pointer(gates_tree_t *tree) {
 
 /* -- split handle / scroll thumb / text selection dragging ----------------- */
 
-/* Maps a pointer x to a caret offset using the cached cell advance. */
+/* Maps a pointer x to a caret offset: the nearest code-point boundary. */
 static void textbox_caret_at(gates_tree_t *tree, gates_u32 idx, gates_point_t p, bool extend) {
     gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
     if (st == nullptr || st->edit == nullptr) {
         return;
     }
     gates_rect_t inner = gates_i_textbox_inner(tree, idx);
-    gates_i32 advance = tree->advance > 0 ? tree->advance : 1;
-    gates_i32 rel = p.x - inner.x;
-    if (rel < 0) rel = 0;
-    gates_i32 cell = rel / advance + st->view_cells;
-    gates_u32 off = gates_i_box_offset_at_cell(st, (gates_u32)cell);
+    /* The nearest boundary by the font's advances (RFC-0004). */
+    gates_u32 off = gates_i_box_offset_at_x(tree->text_backend, gates_i_font(tree, idx), st,
+                                            p.x - inner.x + st->view_x);
     gates_text_edit_set_caret(st->edit, off, extend);
     gates_i_box_seal(st); /* a caret placed by the pointer ends a typing run */
     gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);

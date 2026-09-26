@@ -1,5 +1,5 @@
 /* gates_gui_lib — builtin reference text backend (RFC-0002 §5).
- * Embedded 8x16 monospace cells: vendored public-domain font8x8 glyphs
+ * Embedded 8x16 monospace cells (advances by the cell rule, RFC-0004): vendored public-domain font8x8 glyphs
  * (ASCII), each 8x8 row doubled to 16 px. Deterministic everywhere.
  * Platform-free. */
 #include <gates/text.h>
@@ -16,15 +16,21 @@
 
 /* -- backend --------------------------------------------------------------- */
 
-static gates_text_metrics_t builtin_metrics(void *ctx, gates_i32 font_size) {
-    (void)ctx; (void)font_size; /* one built-in size */
+static gates_text_metrics_t builtin_metrics(void *ctx, gates_font_t font) {
+    (void)ctx; (void)font; /* one built-in face and size */
     return (gates_text_metrics_t){
         .advance = CELL_W, .ascent = ASCENT, .descent = DESCENT, .line_height = CELL_H,
     };
 }
 
-static gates_size_t builtin_measure(void *ctx, gates_i32 font_size, gates_str_t text) {
-    (void)ctx; (void)font_size;
+/* RFC-0004: the reference backend keeps the cell rule for every font. */
+static gates_i32 builtin_advance(void *ctx, gates_font_t font, gates_u32 cp) {
+    (void)ctx; (void)font;
+    return (gates_i32)gates_text_cell_width(cp) * CELL_W;
+}
+
+static gates_size_t builtin_measure(void *ctx, gates_font_t font, gates_str_t text) {
+    (void)ctx; (void)font;
     return (gates_size_t){ (gates_i32)gates_text_cells(text) * CELL_W, CELL_H };
 }
 
@@ -65,9 +71,9 @@ static void blit_cell(gates_pixels_t *px, gates_rect_t clip, gates_i32 x0, gates
 }
 
 static void builtin_draw(void *ctx, gates_pixels_t target, gates_rect_t rect,
-                         gates_rect_t clip, gates_i32 font_size, gates_str_t text,
+                         gates_rect_t clip, gates_font_t font, gates_str_t text,
                          gates_color_t color) {
-    (void)ctx; (void)font_size;
+    (void)ctx; (void)font;
     if (target.ptr == nullptr || color.a == 0) {
         return;
     }
@@ -98,6 +104,7 @@ const gates_text_backend_t *gates_text_backend_builtin(void) {
         .metrics = builtin_metrics,
         .measure = builtin_measure,
         .draw = builtin_draw,
+        .glyph_advance = builtin_advance,
     };
     return &backend;
 }

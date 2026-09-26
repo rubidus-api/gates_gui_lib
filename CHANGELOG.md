@@ -4,6 +4,38 @@ All notable changes to this project will be documented in this file.
 
 This project follows Keep a Changelog.
 
+## [0.2.0] - 2026-09-27
+
+Proportional text (RFC-0004): the monospace restriction is lifted.
+
+### Changed (breaking for custom text backends)
+
+- The text backend contract: a backend reports the advance of every code point
+  (`glyph_advance`, required) and a string is exactly as wide as the sum of its code points'
+  advances - no kerning, ligatures or shaping, so the caret, selections and hit testing stay
+  exact. The `font_size` parameters of `metrics`, `measure`, `draw` and `draw_scaled` (and
+  `gates_draw_text`, `gates_draw_cmd_t.font_size`) become a font (`gates_font_t`, same integer
+  type; no public API could set a size). `gates_text_metrics_t.advance` is now the average
+  character width, a sizing hint (a text box's `cols`).
+- Windows: text uses the system UI font (Segoe UI, Malgun Gothic on Korean Windows) and is
+  proportional by default; characters the face lacks come from the system's fallback fonts.
+  Controls sized by their text become narrower.
+- A click in a text box puts the caret at the nearest character boundary (it used to take the
+  cell under the pointer).
+
+### Added
+
+- Fonts: `GATES_FONT_UI` (proportional, the default) and `GATES_FONT_MONO` (fixed pitch,
+  Consolas on Windows), chosen per node with `gates_node_set_font` and inherited like CSS
+  `font-family` (`GATES_FONT_INHERIT`, `gates_node_font`).
+- `gates_text_width` and `gates_text_offset_at_x`: widths and positions from the advances.
+- The log views of `ctl_log` and `app_logview` and a panel of `text_demo` use the mono font.
+
+### Unchanged
+
+- The builtin backend stays fixed-pitch (8 per narrow, 16 per wide character) for both fonts:
+  the deterministic reference for tests and pixel-exact output.
+
 ## [0.1.0] - 2026-09-27
 
 The first package (plan-0015): headers and static libraries a program builds against.

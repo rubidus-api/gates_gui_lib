@@ -21,8 +21,10 @@ functions it uses are part of Windows; newer ones are looked up at run time).
 ## Versions and compatibility
 
 `gates/version.h` gives `GATES_VERSION_STRING` and `GATES_VERSION_NUMBER`; `gates_version()`
-says what the linked library is. 0.1.x releases are source compatible with each other: a
-program that built against 0.1.0 builds against 0.1.1. They are not promised to be binary
+says what the linked library is. Releases with the same minor version are source compatible
+with each other: a program that built against 0.2.0 builds against 0.2.1. 0.2.0 changed the
+text backend contract (a custom backend adds `glyph_advance` and takes a font instead of a
+size); programs that use gates' own backends only rebuild. Releases are not promised to be binary
 compatible - public structs may change size - so rebuild the program with every update, and
 check at start-up:
 

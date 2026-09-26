@@ -1180,10 +1180,10 @@ bool gates_access_text_rect(gates_tree_t *tree, gates_node_t node, gates_u32 sta
     if (end > len) end = len;
     if (end < start) end = start;
     gates_rect_t inner = gates_i_textbox_inner(tree, node.index);
-    gates_i32 adv = tree->advance > 0 ? tree->advance : 8;
     gates_i32 lh = tree->line_height > 0 ? tree->line_height : 16;
-    gates_i32 x0 = inner.x + ((gates_i32)gates_i_box_cells_before(st, start) - st->view_cells) * adv;
-    gates_i32 x1 = inner.x + ((gates_i32)gates_i_box_cells_before(st, end) - st->view_cells) * adv;
+    gates_i32 font = gates_i_font(tree, node.index);
+    gates_i32 x0 = inner.x + gates_i_box_x(tree->text_backend, font, st, start) - st->view_x;
+    gates_i32 x1 = inner.x + gates_i_box_x(tree->text_backend, font, st, end) - st->view_x;
     gates_i32 y = inner.y + (inner.h - lh) / 2;
     if (x0 < inner.x) x0 = inner.x;
     if (x1 > inner.x + inner.w) x1 = inner.x + inner.w;
@@ -1196,11 +1196,9 @@ gates_u32 gates_access_text_offset_at(gates_tree_t *tree, gates_node_t node, gat
     const gates_widget_state_t *st = text_box(tree, node);
     if (st == nullptr) return 0;
     gates_rect_t inner = gates_i_textbox_inner(tree, node.index);
-    gates_i32 adv = tree->advance > 0 ? tree->advance : 8;
     gates_i32 rel = p.x - inner.x;
     if (rel < 0) rel = 0;
-    gates_i32 cell = (rel + adv / 2) / adv + st->view_cells; /* nearest boundary */
-    return gates_i_box_offset_at_cell(st, (gates_u32)cell);
+    return gates_i_box_offset_at_x(tree->text_backend, gates_i_font(tree, node.index), st, rel + st->view_x);
 }
 
 gates_err_t gates_access_select_text(gates_tree_t *tree, gates_node_t node, gates_u32 anchor, gates_u32 caret) {

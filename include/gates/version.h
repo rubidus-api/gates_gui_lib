@@ -1,6 +1,6 @@
 /* gates_gui_lib - version (plan-0015).
  *
- * Compatibility: source compatible within a minor version (0.1.x); rebuild the
+ * Compatibility: source compatible within a minor version (0.2.x); rebuild the
  * program on every update. No binary ABI is promised yet - public structs may
  * change size between versions. A program can check at run time that the
  * library it links is the one its headers describe:
@@ -11,9 +11,9 @@
 #include <gates/types.h>
 
 #define GATES_VERSION_MAJOR 0
-#define GATES_VERSION_MINOR 1
+#define GATES_VERSION_MINOR 2
 #define GATES_VERSION_PATCH 0
-#define GATES_VERSION_STRING "0.1.0"
+#define GATES_VERSION_STRING "0.2.0"
 /* major * 10000 + minor * 100 + patch */
 #define GATES_VERSION_NUMBER (GATES_VERSION_MAJOR * 10000 + GATES_VERSION_MINOR * 100 + GATES_VERSION_PATCH)
 

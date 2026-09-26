@@ -515,7 +515,7 @@ static gates_err_t paint_mark(gates_draw_list_t *dl, gates_i32 col_x, gates_i32 
 gates_size_t gates_i_view_measure(const gates_tree_t *tree, const gates_node_slot_t *s,
                                   const gates_text_backend_t *text) {
     const struct gates_i_view *v = gates_i_state(tree, s->state_index)->view;
-    gates_text_metrics_t m = text->metrics(text->ctx, 0);
+    gates_text_metrics_t m = text->metrics(text->ctx, gates_i_slot_font(tree, s));
     gates_i32 row_h = row_height(m.line_height);
     gates_i32 w = v->ncol > 0 ? content_width(v, 0) : 20 * m.advance;
     gates_i32 h = (v->header && v->ncol > 0 ? row_h : 0) + 8 * row_h;
@@ -529,7 +529,8 @@ gates_err_t gates_i_view_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
     struct gates_i_view *v = view_at(tree, idx);
     const gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
     gates_rect_t r = gates_i_slot(tree, idx)->layout_rect;
-    gates_text_metrics_t m = text->metrics(text->ctx, 0);
+    gates_i32 font = gates_i_font(tree, idx);
+    gates_text_metrics_t m = text->metrics(text->ctx, font);
     view_geom_t g;
     geom(tree, idx, v, model_count(v), m.line_height, &g); /* count(): once per frame */
     bool focused = tree->focus == idx;
@@ -550,7 +551,7 @@ gates_err_t gates_i_view_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
                                                              hc.w - 2 * VIEW_CELL_PAD, m.line_height },
                                          (gates_str_t){ .ptr = v->cols[c].label,
                                                         .size = v->cols[c].label_len },
-                                         0, gates_theme_color(theme, GATES_COLOR_PANEL_FG)));
+                                         font, gates_theme_color(theme, GATES_COLOR_PANEL_FG)));
             }
         }
         TRY_DRAW(gates_draw_clip_pop(dl));
@@ -600,7 +601,7 @@ gates_err_t gates_i_view_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
                                                          g.body.y + (gates_i32)k * g.row_h +
                                                              (g.row_h - m.line_height) / 2,
                                                          cr.w - 2 * VIEW_CELL_PAD, m.line_height },
-                                     cell.text, 0, gates_theme_color(theme, fg)));
+                                     cell.text, font, gates_theme_color(theme, fg)));
         }
         if (v->tree && c == 0) {
             for (gates_u32 k = 0; k < g.painted; k++) {

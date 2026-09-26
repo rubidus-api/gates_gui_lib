@@ -603,7 +603,8 @@ gates_err_t gates_i_menu_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
     const gates_node_slot_t *s = gates_i_slot(tree, idx);
     const gates_widget_state_t *st = gates_i_state(tree, s->state_index);
     gates_rect_t r = s->layout_rect;
-    gates_text_metrics_t m = text->metrics(text->ctx, 0);
+    gates_i32 font = gates_i_font(tree, idx);
+    gates_text_metrics_t m = text->metrics(text->ctx, font);
     gates_i32 row_h = m.line_height + MENU_ROW_EXTRA;
     if (row_h < GATES_ACCESS_MIN_TARGET) row_h = GATES_ACCESS_MIN_TARGET;
     gates_err_t err = gates_draw_rect(dl, r, gates_theme_color(theme, GATES_COLOR_CONTROL_BG));
@@ -636,17 +637,17 @@ gates_err_t gates_i_menu_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
         }
         if (gates_is_ok(err) && c.label.size > 0) {
             gates_str_t lab = c.label;
-            gates_size_t ls = text->measure(text->ctx, 0, lab);
-            err = gates_draw_text(dl, (gates_rect_t){ rr.x + 2 * m.advance, ty, ls.w, ls.h }, lab, 0,
+            gates_size_t ls = text->measure(text->ctx, font, lab);
+            err = gates_draw_text(dl, (gates_rect_t){ rr.x + 2 * m.advance, ty, ls.w, ls.h }, lab, font,
                                   gates_theme_color(theme, fg));
         }
         char buf[24];
         gates_usize_t n = c.shortcut != nullptr ? shortcut_text(c.shortcut, buf, sizeof buf) : 0;
         if (gates_is_ok(err) && n > 0) {
             gates_str_t ks = { .ptr = (const gates_u8 *)buf, .size = n };
-            gates_size_t sz = text->measure(text->ctx, 0, ks);
+            gates_size_t sz = text->measure(text->ctx, font, ks);
             err = gates_draw_text(dl, (gates_rect_t){ rr.x + rr.w - m.advance - sz.w, ty, sz.w, sz.h },
-                                  ks, 0, gates_theme_color(theme, fg));
+                                  ks, font, gates_theme_color(theme, fg));
         }
     }
     return err;

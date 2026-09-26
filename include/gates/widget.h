@@ -27,7 +27,7 @@ typedef void (*gates_toggle_fn)(gates_tree_t *tree, gates_node_t node, bool chec
                                                 gates_toggle_fn on_toggle, void *user,
                                                 gates_node_t *out_node);
 
-/* Single-line textbox. `cols` is the intrinsic width in cells (0 -> 16).
+/* Single-line textbox. `cols` is the intrinsic width in average character widths (0 -> 16).
  * Editing state lives in a gates_text_edit_t owned by the widget. */
 [[nodiscard]] gates_err_t gates_textbox_create(gates_tree_t *tree, gates_node_t parent,
                                                gates_str_t text, gates_u32 cols,

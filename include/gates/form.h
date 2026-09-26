@@ -3,7 +3,7 @@
  *
  * A form is a node with the FORM layout: every row is a label beside an
  * editor (the label column is as wide as the widest label); when the form is
- * narrower than that label column plus 12 cells, each label goes above its
+ * narrower than that label column plus 12 average character widths, each label goes above its
  * editor instead. Under each editor the row can show a help line and an error
  * line. Rows are addressed by the application's field ids, which stay stable
  * when rows are hidden or moved.
@@ -24,7 +24,7 @@ typedef struct gates_field_desc_t {
     gates_str_t help;            /* copied; optional line under the editor */
     bool required;               /* the label gets a " *" marker */
     bool read_only;              /* text: read-only box; other editors: disabled */
-    /* Text fields: initial text, width in cells (0 -> 24), maximum length in
+    /* Text fields: initial text, width in average characters (0 -> 24), maximum length in
      * bytes (0 = none), password. Checkbox fields: `text` is the box's caption. */
     gates_str_t text;
     gates_u32 cols;
