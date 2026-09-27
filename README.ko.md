@@ -1,4 +1,4 @@
-# gates
+# Gates GUI Library
 
 한국어 | **[English README](README.md)** (기준 문서는 영어판입니다)
 
