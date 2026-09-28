@@ -1,6 +1,6 @@
-# Gates GUI Library
+[한국어](README.ko.md) | **English** — **Gates GUI Library v0.2.0** — [ZIP(examples Windows x64)](https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.2.0/gates-0.2.0-examples-win64.zip) · [ZIP(SDK)](https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.2.0/gates-0.2.0-sdk.zip) · [ZIP(source)](https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.2.0/gates-0.2.0-src.zip)
 
-**[한국어 README](README.ko.md)** | English
+# Gates GUI Library
 
 A small retained-mode GUI library in C23 for tool-style Windows programs - settings panels,
 inspectors, log viewers, file browsers, build tools. Version **0.2.0**.
