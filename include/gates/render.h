@@ -21,8 +21,8 @@ typedef struct gates_text_backend_t gates_text_backend_t;
 
 /* Blending is straight-alpha src-over with integer rounding:
  *   out = (src * a + dst * (255 - a) + 127) / 255
- * IMAGE commands return PROVEN_ERR_UNSUPPORTED (Phase 2/3); TEXT requires a
- * text backend. An unbalanced draw list returns PROVEN_ERR_INVALID_STATE. */
+ * IMAGE commands draw the image scaled into their rect (bilinear over the image's
+ * pixel centres, edges clamped, straight-alpha src-over); TEXT requires a text backend. An unbalanced draw list returns PROVEN_ERR_INVALID_STATE. */
 [[nodiscard]] gates_err_t gates_render_soft(const gates_draw_list_t *dl,
                                             gates_pixels_t target,
                                             const gates_text_backend_t *text_backend);

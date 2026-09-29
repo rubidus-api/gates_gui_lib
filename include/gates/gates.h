@@ -15,6 +15,7 @@
 #include <gates/form.h>
 #include <gates/frame.h>
 #include <gates/geometry.h>
+#include <gates/image.h>
 #include <gates/input.h>
 #include <gates/inputs.h>
 #include <gates/layout.h>

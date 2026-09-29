@@ -423,6 +423,9 @@ static gates_role_t role_of(const gates_tree_t *tree, gates_u32 idx) {
     case GATES_NODE_TABSTRIP: return GATES_ROLE_TAB;
     case GATES_NODE_SPIN: return GATES_ROLE_SPINNER;
     case GATES_NODE_GROUP: return GATES_ROLE_GROUP;
+    case GATES_NODE_IMAGE: /* named: an Image; unnamed: decoration (plan-0020) */
+        return find_prop(tree, idx) != nullptr && find_prop(tree, idx)->name_len > 0 ? GATES_ROLE_IMAGE
+                                                                                   : GATES_ROLE_NONE;
     case GATES_NODE_SLIDER: return GATES_ROLE_SLIDER;
     case GATES_NODE_VIEW: {
         gates_u32 k = gates_i_view_kind(tree, idx);

@@ -90,12 +90,21 @@ static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
                                                       has_focus ? GATES_COLOR_FOCUS_RING
                                                                 : GATES_COLOR_CONTROL_BORDER)));
         gates_str_t text = node_text(tree, s);
+        bool icon = st != nullptr && gates_tree_image(tree, st->icon) != nullptr; /* plan-0020 */
+        gates_i32 w = text.size > 0 ? gates_i_text_w(tree, idx, ctx->text, fsz, text) : 0;
+        gates_i32 whole = w + (icon ? GATES_ICON_SIZE + (text.size > 0 ? 4 : 0) : 0);
+        gates_i32 x = r.x + (r.w - whole) / 2;
+        if (icon) {
+            emit(ctx, gates_i_draw_image_fit(tree, ctx->dl, st->icon,
+                                             (gates_rect_t){ x, r.y + (r.h - GATES_ICON_SIZE) / 2, GATES_ICON_SIZE,
+                                                             GATES_ICON_SIZE }));
+            x += GATES_ICON_SIZE + 4;
+        }
         if (text.size > 0) {
             gates_color_token_t fg = disabled ? GATES_COLOR_CONTROL_DISABLED_FG
                                               : GATES_COLOR_CONTROL_FG;
             gates_rect_t tr = centered_text_rect(ctx, r, text, fsz);
-            gates_i32 w = gates_i_text_w(tree, idx, ctx->text, fsz, text);
-            tr.x = r.x + (r.w - w) / 2;
+            tr.x = x;
             tr.w = w;
             node_text_draw(ctx, idx, tr, text, fsz, gates_theme_color(ctx->theme, fg));
         }
@@ -143,6 +152,9 @@ static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
         break;
     case GATES_NODE_TOOLBAR:
         emit(ctx, gates_i_toolbar_paint(tree, idx, ctx->dl, ctx->theme, ctx->text));
+        break;
+    case GATES_NODE_IMAGE:
+        if (st != nullptr) emit(ctx, gates_i_draw_image_fit(tree, ctx->dl, st->image, r));
         break;
     case GATES_NODE_GROUP:
         emit(ctx, gates_i_group_paint(tree, idx, ctx->dl, ctx->theme));

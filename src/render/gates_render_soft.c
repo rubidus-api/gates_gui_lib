@@ -2,6 +2,7 @@
  * Reference implementation: correctness and determinism over speed. */
 #include <gates/render.h>
 #include <gates/text.h>
+#include "gates_image_internal.h"
 
 #define GATES_CLIP_STACK_MAX 64
 
@@ -51,6 +52,51 @@ static void fill_rect(soft_ctx_t *ctx, gates_rect_t rect, gates_color_t color) {
             for (gates_i32 x = r.x; x < r.x + r.w; x++) {
                 row[x] = blend_px(row[x], color);
             }
+        }
+    }
+}
+
+/* One source channel at (sx, sy) in 1/256ths, bilinear, edges clamped. */
+static gates_color_t sample(const struct gates_image *im, gates_i32 fx, gates_i32 fy) {
+    gates_i32 x0 = fx >> 8, y0 = fy >> 8, ax = fx & 255, ay = fy & 255;
+    gates_i32 x1 = x0 + 1, y1 = y0 + 1;
+    if (x0 < 0) { x0 = 0; ax = 0; }
+    if (y0 < 0) { y0 = 0; ay = 0; }
+    if (x0 >= im->w - 1) { x0 = im->w - 1; ax = 0; }
+    if (y0 >= im->h - 1) { y0 = im->h - 1; ay = 0; }
+    if (x1 > im->w - 1) x1 = im->w - 1;
+    if (y1 > im->h - 1) y1 = im->h - 1;
+    gates_color_t p00 = gates_pixel_unpack(im->px[y0 * im->w + x0]), p10 = gates_pixel_unpack(im->px[y0 * im->w + x1]);
+    gates_color_t p01 = gates_pixel_unpack(im->px[y1 * im->w + x0]), p11 = gates_pixel_unpack(im->px[y1 * im->w + x1]);
+    gates_i32 w00 = (256 - ax) * (256 - ay), w10 = ax * (256 - ay), w01 = (256 - ax) * ay, w11 = ax * ay;
+    /* Weight colours by alpha so transparent neighbours do not darken the edge. */
+    gates_i32 a = p00.a * w00 + p10.a * w10 + p01.a * w01 + p11.a * w11;
+    gates_color_t out = { .a = (gates_u8)((a + 32768) >> 16) };
+    if (a > 0) {
+        out.r = (gates_u8)(((gates_i64)p00.r * p00.a * w00 + (gates_i64)p10.r * p10.a * w10 +
+                            (gates_i64)p01.r * p01.a * w01 + (gates_i64)p11.r * p11.a * w11 + a / 2) / a);
+        out.g = (gates_u8)(((gates_i64)p00.g * p00.a * w00 + (gates_i64)p10.g * p10.a * w10 +
+                            (gates_i64)p01.g * p01.a * w01 + (gates_i64)p11.g * p11.a * w11 + a / 2) / a);
+        out.b = (gates_u8)(((gates_i64)p00.b * p00.a * w00 + (gates_i64)p10.b * p10.a * w10 +
+                            (gates_i64)p01.b * p01.a * w01 + (gates_i64)p11.b * p11.a * w11 + a / 2) / a);
+    }
+    return out;
+}
+
+/* The image scaled into `dst` (device pixels): pixel centres map onto pixel
+ * centres, so a 1:1 draw is exact. */
+static void draw_image(soft_ctx_t *ctx, gates_rect_t dst, const struct gates_image *im) {
+    gates_rect_t r = gates_rect_intersect(dst, ctx->clip);
+    if (im == nullptr || im->w <= 0 || im->h <= 0 || gates_rect_is_empty(r) || dst.w <= 0 || dst.h <= 0) {
+        return;
+    }
+    for (gates_i32 y = r.y; y < r.y + r.h; y++) {
+        gates_u32 *row = row_at(&ctx->px, y);
+        /* source y in 1/256ths: ((y - dst.y) + 0.5) * h / dst.h - 0.5 */
+        gates_i32 fy = (gates_i32)(((gates_i64)(2 * (y - dst.y) + 1) * im->h * 256) / (2 * dst.h)) - 128;
+        for (gates_i32 x = r.x; x < r.x + r.w; x++) {
+            gates_i32 fx = (gates_i32)(((gates_i64)(2 * (x - dst.x) + 1) * im->w * 256) / (2 * dst.w)) - 128;
+            row[x] = blend_px(row[x], sample(im, fx, fy));
         }
     }
 }
@@ -165,7 +211,8 @@ gates_err_t gates_render_soft_scaled(const gates_draw_list_t *dl, gates_pixels_t
             }
             break;
         case GATES_DRAW_IMAGE:
-            return PROVEN_ERR_UNSUPPORTED; /* Phase 2/3 */
+            draw_image(&ctx, gates_rect_px(cmd->rect, dpi), cmd->image);
+            break;
         default:
             return PROVEN_ERR_INVALID_ARG;
         }

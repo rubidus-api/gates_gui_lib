@@ -69,6 +69,7 @@ typedef enum gates_role_t {
     GATES_ROLE_TAB_ITEM,
     GATES_ROLE_SPINNER,          /* spin box (RangeValue); its text box is an EDIT inside it */
     GATES_ROLE_SLIDER,           /* slider (RangeValue) */
+    GATES_ROLE_IMAGE,            /* a named image (plan-0020); unnamed ones are not exposed */
 } gates_role_t;
 
 /* State bits. */

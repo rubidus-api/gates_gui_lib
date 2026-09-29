@@ -19,6 +19,7 @@
 #include <gates/access.h>
 #include <gates/input.h>
 #include <gates/layout.h>
+#include <gates/image.h>
 
 /* One queued notification: kind/origin plus the source's handle. The payload
  * is read from the widget when the event is delivered (latest state). */
@@ -99,6 +100,7 @@ typedef struct gates_i_command_t {
     bool checked;
     gates_command_fn invoke;
     void *user;
+    gates_u32 icon;              /* plan-0020: 0 = none */
 } gates_i_command_t;
 
 #define GATES_NONE UINT32_MAX
@@ -231,6 +233,10 @@ typedef struct gates_widget_state_t {
     struct gates_i_range *rng;
     /* Group box (plan-0019): collapsible (checked = expanded). */
     bool group_fold;
+    /* Images (plan-0020): an image node's image and set size; a button's icon. */
+    gates_u32 image;
+    gates_size_t image_size;
+    gates_u32 icon;
     /* Form (plan-0010 stage 2): its field table. */
     struct gates_i_field *fields;
     gates_u32 field_count;
@@ -401,6 +407,13 @@ struct gates_tree {
     bool cues_always;            /* the platform always underlines access keys */
     bool eat_char;               /* a menu took the last key: drop the character it makes */
     gates_u32 tb_hover;          /* toolbar under the pointer (its hover entry), GATES_NONE */
+    /* Images (plan-0020): the store and the platform's decoder. */
+    struct gates_i_image_slot *images;
+    gates_u32 image_count;
+    gates_u32 image_cap;
+    gates_u32 next_image_id;
+    gates_image_decoder_t decoder;
+    bool has_decoder;
     /* GRID column grow weights (plan-0019), per grid node. */
     struct gates_i_grid_grow *grid_grows;
     gates_u32 grid_grow_count;
@@ -433,6 +446,16 @@ struct gates_tree {
 #define GATES_I_MB_OFF 0u
 #define GATES_I_MB_HIGHLIGHT 1u
 #define GATES_I_MB_OPEN 2u
+
+/* Images (gates_image.c, plan-0020). */
+typedef struct gates_i_image_slot {
+    gates_u32 id;                /* 0 = free */
+    struct gates_image *image;
+} gates_i_image_slot;
+void gates_i_images_free(gates_tree_t *tree);
+/* Draws image `id` fitted into `r` keeping its aspect ratio, centred (nothing for 0 or a removed id). */
+gates_err_t gates_i_draw_image_fit(const gates_tree_t *tree, gates_draw_list_t *dl, gates_u32 id, gates_rect_t r);
+gates_size_t gates_i_image_measure(const gates_tree_t *tree, const gates_node_slot_t *s);
 
 /* GRID grow weights (gates_layout.c, plan-0019). */
 typedef struct gates_i_grid_grow {
@@ -760,6 +783,7 @@ typedef struct gates_i_toolbar {
     gates_i32 sel;               /* keyboard stop: entry index, count = ">>", -1 = none */
     gates_i32 press;             /* entry pressed by the pointer, count = ">>", -1 = none */
     gates_i32 hover;             /* entry under the pointer, -1 = none */
+    bool icons_only;             /* plan-0020: buttons with an icon show only it */
 } gates_i_toolbar;
 void gates_i_toolbar_free(gates_tree_t *tree, gates_widget_state_t *st);
 bool gates_i_toolbar_any_enabled(const gates_tree_t *tree, const gates_widget_state_t *st);

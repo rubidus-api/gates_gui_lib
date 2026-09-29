@@ -156,6 +156,10 @@ static gates_i32 entry_w(const gates_tree_t *tree, const gates_text_backend_t *b
     }
     const gates_i_command_t *c = gates_i_command_find(tree, tb->scope_index, tb->scope_generation, tb->ids[k]);
     gates_str_t label = c != nullptr ? (gates_str_t){ .ptr = c->label, .size = c->label_len } : (gates_str_t){0};
+    if (c != nullptr && gates_tree_image(tree, c->icon) != nullptr) { /* plan-0020 */
+        return tb->icons_only ? GATES_ICON_SIZE + 2 * TB_PAD_X
+                              : GATES_ICON_SIZE + 4 + gates_i_mn_width(be, font, label) + 2 * TB_PAD_X;
+    }
     return gates_i_mn_width(be, font, label) + 2 * TB_PAD_X;
 }
 
@@ -281,8 +285,15 @@ gates_err_t gates_i_toolbar_paint(const gates_tree_t *tree, gates_u32 idx, gates
         gates_str_t label = more ? MORE : c != nullptr ? (gates_str_t){ .ptr = c->label, .size = c->label_len }
                                                        : (gates_str_t){0};
         gates_color_t fg = gates_theme_color(theme, enabled ? GATES_COLOR_CONTROL_FG : GATES_COLOR_CONTROL_DISABLED_FG);
-        if (gates_is_ok(err)) {
-            gates_rect_t tr = { er.x + TB_PAD_X, er.y + (er.h - m.line_height) / 2, 0, m.line_height };
+        bool icon = !more && c != nullptr && gates_tree_image(tree, c->icon) != nullptr;
+        gates_rect_t tr = { er.x + TB_PAD_X, er.y + (er.h - m.line_height) / 2, 0, m.line_height };
+        if (gates_is_ok(err) && icon) {
+            err = gates_i_draw_image_fit(tree, dl, c->icon,
+                                         (gates_rect_t){ tr.x, er.y + (er.h - GATES_ICON_SIZE) / 2, GATES_ICON_SIZE,
+                                                         GATES_ICON_SIZE });
+            tr.x += GATES_ICON_SIZE + 4;
+        }
+        if (gates_is_ok(err) && !(icon && tb->icons_only)) {
             err = more ? gates_draw_text(dl, (gates_rect_t){ tr.x, tr.y, er.w - 2 * TB_PAD_X, m.line_height },
                                          label, font, fg)
                        : gates_i_mn_draw(dl, text, tr, label, font, fg, false);

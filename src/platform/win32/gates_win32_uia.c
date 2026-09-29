@@ -357,6 +357,7 @@ static int control_type(gates_role_t role) {
     case GATES_ROLE_TAB_ITEM:     return UIA_TabItemControlTypeId;
     case GATES_ROLE_SPINNER:      return UIA_SpinnerControlTypeId;
     case GATES_ROLE_SLIDER:       return UIA_SliderControlTypeId;
+    case GATES_ROLE_IMAGE:        return UIA_ImageControlTypeId;
     default:                      return UIA_PaneControlTypeId;
     }
 }

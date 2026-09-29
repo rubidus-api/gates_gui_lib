@@ -35,6 +35,7 @@ typedef enum gates_node_kind_t {
     GATES_NODE_SLIDER,       /* slider (gates/inputs.h) */
     GATES_NODE_GROUP,        /* group box: a header and a content panel (gates/widget.h) */
     GATES_NODE_GROUPHEAD,    /* a group box's title (a Tab stop when collapsible) */
+    GATES_NODE_IMAGE,        /* an image (gates/image.h) */
     /* Semantic widgets arrive in Phase 4. */
 } gates_node_kind_t;
 

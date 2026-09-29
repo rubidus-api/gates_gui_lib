@@ -217,6 +217,7 @@ void gates_i_overlay_node_destroyed(gates_tree_t *tree, gates_u32 idx) {
 typedef struct menu_row_t {
     bool present;                /* false: separator, or command/option gone */
     bool markup;                 /* command labels carry mnemonic markup; options do not */
+    gates_u32 icon;              /* the command's icon (plan-0020), 0 = none */
     bool enabled;
     bool checked;
     gates_str_t label;
@@ -254,7 +255,7 @@ static menu_row_t menu_row(const gates_tree_t *tree, const gates_widget_state_t 
     const gates_i_command_t *c = gates_i_command_find(tree, st->menu_scope_index,
                                                       st->menu_scope_generation, st->menu_ids[r]);
     if (c != nullptr) {
-        row = (menu_row_t){ .present = true, .markup = true, .enabled = c->enabled, .checked = c->checked,
+        row = (menu_row_t){ .present = true, .markup = true, .icon = c->icon, .enabled = c->enabled, .checked = c->checked,
                             .label = { .ptr = c->label, .size = c->label_len },
                             .shortcut = &c->shortcut };
     }
@@ -603,7 +604,8 @@ gates_size_t gates_i_menu_measure(const gates_tree_t *tree, const gates_widget_s
             if (ks.w > key_w) key_w = ks.w;
         }
     }
-    gates_i32 w = 2 * MENU_PAD + 2 * m.advance + label_w + (key_w > 0 ? 3 * m.advance + key_w : 0) +
+    gates_i32 gut = 2 * m.advance > GATES_ICON_SIZE + 4 ? 2 * m.advance : GATES_ICON_SIZE + 4; /* check or icon */
+    gates_i32 w = 2 * MENU_PAD + gut + label_w + (key_w > 0 ? 3 * m.advance + key_w : 0) +
                   m.advance;
     gates_i32 h = 2 * MENU_PAD + (gates_i32)st->menu_count * row_h;
     if (w < st->menu_min_w) {
@@ -643,20 +645,26 @@ gates_err_t gates_i_menu_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
             err = gates_draw_rect(dl, rr, gates_theme_color(theme, GATES_COLOR_SELECTION_BG));
         }
         gates_i32 ty = rr.y + (row_h - m.line_height) / 2;
+        gates_i32 gut = 2 * m.advance > GATES_ICON_SIZE + 4 ? 2 * m.advance : GATES_ICON_SIZE + 4;
         if (gates_is_ok(err) && c.checked) {
             gates_i32 box = m.line_height / 2;
-            err = gates_draw_rect(dl, (gates_rect_t){ rr.x + (m.advance * 2 - box) / 2,
+            err = gates_draw_rect(dl, (gates_rect_t){ rr.x + (gut - box) / 2,
                                                       ty + (m.line_height - box) / 2, box, box },
                                   gates_theme_color(theme, fg));
+        } else if (gates_is_ok(err) && c.icon != 0) {
+            err = gates_i_draw_image_fit(tree, dl, c.icon,
+                                         (gates_rect_t){ rr.x + (gut - GATES_ICON_SIZE) / 2,
+                                                         rr.y + (row_h - GATES_ICON_SIZE) / 2, GATES_ICON_SIZE,
+                                                         GATES_ICON_SIZE });
         }
         if (gates_is_ok(err) && c.label.size > 0) {
             gates_str_t lab = c.label;
             if (c.markup) {
-                err = gates_i_mn_draw(dl, text, (gates_rect_t){ rr.x + 2 * m.advance, ty, 0, m.line_height },
+                err = gates_i_mn_draw(dl, text, (gates_rect_t){ rr.x + gut, ty, 0, m.line_height },
                                       lab, font, gates_theme_color(theme, fg), gates_i_cues(tree));
             } else {
                 gates_size_t ls = text->measure(text->ctx, font, lab);
-                err = gates_draw_text(dl, (gates_rect_t){ rr.x + 2 * m.advance, ty, ls.w, ls.h }, lab, font,
+                err = gates_draw_text(dl, (gates_rect_t){ rr.x + gut, ty, ls.w, ls.h }, lab, font,
                                       gates_theme_color(theme, fg));
             }
         }
