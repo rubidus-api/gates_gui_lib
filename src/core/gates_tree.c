@@ -787,10 +787,14 @@ void gates_tree_set_focus(gates_tree_t *tree, gates_node_t node) {
     if (tree->focus != GATES_NONE) {
         gates_i_access_log(tree, GATES_ACCESS_FOCUS_LOST, tree->focus, 0);
     }
+    gates_u32 left = tree->focus;
     tree->focus = idx;
     gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
     if (idx != GATES_NONE) {
         gates_i_access_log(tree, GATES_ACCESS_FOCUS_GAINED, idx, 0);
+    }
+    if (left != GATES_NONE) {
+        gates_i_view_editor_left(tree, left); /* plan-0021: leaving a cell editor commits */
     }
 }
 

@@ -857,6 +857,9 @@ static void arrange_node(gates_tree_t *tree, gates_u32 idx) {
         }
         break;
     }
+    if (s->kind == GATES_NODE_VIEW) {
+        gates_i_view_place_editor(tree, idx); /* over the edited cell (plan-0021) */
+    }
 
     for (gates_u32 c = s->first_child; c != GATES_NONE; c = gates_i_slot(tree, c)->next_sibling) {
         arrange_node(tree, c);

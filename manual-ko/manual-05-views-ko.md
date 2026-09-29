@@ -111,8 +111,146 @@ int main(void) {
 - 로그(`gates_log_create`)는 줄을 스스로 갖는다. 글을 덧붙이고, 줄 수와 바이트 한도를 지키고,
   가장 오래된 줄부터 버리고, 사람이 스크롤해 떠나지 않은 동안 끝을 따라간다.
 
+## 사람이 바꿀 수 있는 칸
+
+열은 글 말고도 보여 줄 수 있다(`gates_column_desc_t.kind`). `GATES_CELL_CHECK` 는 `cell.checked` 로
+체크 상자를, `GATES_CELL_PROGRESS` 는 `cell.permille`(0~1000)로 막대를, `GATES_CELL_ICON_TEXT` 는 글
+앞에 16 x 16 아이콘(`cell.icon`, 13장)을 그린다. `paint` 함수를 준 열은 칸마다 그 칸 안에서 스스로
+그린다.
+
+`editable` 로 표시한 열은 사람이 선택한 줄의 칸을 바꿀 수 있게 하고, 모델은 `set_cell` 함수로 받아들일지
+정한다. F2 나 두 번 누르기는 칸 위에 모델의 글을 선택한 채로 글 상자를 연다. Enter 는 확정하고, Escape 는
+취소하고, 포커스가 떠나면 확정한다. 체크 열은 Space 나 상자를 누르면 바뀐다. `set_cell` 이 오류를 돌려주면
+편집기는 열린 채 잘못됨으로 표시된다(포커스가 이미 떠났다면 그 편집은 버린다). 바뀐 뒤 뷰는 모델을 다시
+읽고 줄(`ev->item`)과 열(`ev->result`)을 담아 CELL_EDITED 를 보낸다. 프로그램은
+`gates_view_edit` 와 `gates_view_end_edit` 로 같은 일을 할 수 있다.
+
+<!-- example: manual/examples/ex_05_cells.c -->
+```c
+/* manual example (host): a shopping list edited in place - a text column and a check column.
+ * expect: item 2 is now Bread (column 1), done: yes (column 2); refused empty name: editor still open */
+#include <gates/gates.h>
+
+#include <stdio.h>
+#include <string.h>
+
+enum { COL_NAME = 1, COL_DONE = 2 };
+
+typedef struct item_t {
+    gates_item_id_t id;
+    char name[32];
+    bool done;
+} item_t;
+
+typedef struct list_t {
+    item_t items[4];
+    gates_u64 n;
+} list_t;
+
+static gates_u64 l_count(void *u) { return ((list_t *)u)->n; }
+static gates_item_id_t l_id_at(void *u, gates_u64 row) { return ((list_t *)u)->items[row].id; }
+static bool l_index_of(void *u, gates_item_id_t id, gates_u64 *row) {
+    list_t *l = u;
+    for (gates_u64 i = 0; i < l->n; i++) {
+        if (l->items[i].id == id) { *row = i; return true; }
+    }
+    return false;
+}
+static gates_err_t l_cell(void *u, gates_item_id_t id, gates_column_id_t col, gates_cell_t *out) {
+    gates_u64 row;
+    if (!l_index_of(u, id, &row)) return PROVEN_ERR_INVALID_ARG;
+    item_t *it = &((list_t *)u)->items[row];
+    if (col == COL_DONE) {
+        out->checked = it->done;
+    } else {
+        out->text = (gates_str_t){ .ptr = (const gates_u8 *)it->name, .size = strlen(it->name) };
+    }
+    return GATES_OK;
+}
+/* A person changed a cell: the model decides. An empty name is refused. */
+static gates_err_t l_set_cell(void *u, gates_item_id_t id, gates_column_id_t col, const gates_cell_t *value) {
+    gates_u64 row;
+    if (!l_index_of(u, id, &row)) return PROVEN_ERR_INVALID_ARG;
+    item_t *it = &((list_t *)u)->items[row];
+    if (col == COL_DONE) {
+        it->done = value->checked;
+        return GATES_OK;
+    }
+    if (value->text.size == 0 || value->text.size >= sizeof it->name) return PROVEN_ERR_INVALID_ARG;
+    memcpy(it->name, value->text.ptr, value->text.size);
+    it->name[value->text.size] = 0;
+    return GATES_OK;
+}
+
+static list_t list = { .items = { { 1, "Milk", false }, { 2, "Bred", false }, { 3, "Eggs", true } }, .n = 3 };
+
+static void on_view(gates_tree_t *tree, const gates_event_t *ev, void *user) {
+    (void)tree;
+    (void)user;
+    if (ev->kind != GATES_EVENT_CELL_EDITED) return;
+    gates_u64 row;
+    if (!l_index_of(&list, ev->item, &row)) return;
+    if (ev->result == COL_NAME) {
+        printf("item %llu is now %s (column %u), ", (unsigned long long)ev->item, list.items[row].name, ev->result);
+    } else {
+        printf("done: %s (column %u); ", list.items[row].done ? "yes" : "no", ev->result);
+    }
+}
+
+static void press(gates_tree_t *t, gates_key_t key) {
+    gates_key_event_t ev = { .key = key, .down = true };
+    (void)gates_input_key(t, &ev);
+    ev.down = false;
+    (void)gates_input_key(t, &ev);
+}
+
+static void type(gates_tree_t *t, const char *s) {
+    for (; *s != 0; s++) (void)gates_input_char(t, (gates_u32)(unsigned char)*s);
+}
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&(gates_tree_desc_t){0}, &t))) return 1;
+    const gates_column_desc_t cols[] = {
+        { .id = COL_NAME, .label = GATES_STR_INIT("Item"), .width = 120, .editable = true },
+        { .id = COL_DONE, .label = GATES_STR_INIT("Done"), .width = 60, .kind = GATES_CELL_CHECK, .editable = true },
+    };
+    gates_rows_model_t model = { .user = &list, .count = l_count, .id_at = l_id_at, .index_of = l_index_of,
+                                 .cell = l_cell, .set_cell = l_set_cell };
+    gates_node_t table;
+    if (!gates_is_ok(gates_view_create(t, gates_tree_root(t),
+                                       &(gates_view_desc_t){ .columns = cols, .column_count = 2, .header = true },
+                                       &table)) ||
+        !gates_is_ok(gates_view_set_model(t, table, &model)) ||
+        !gates_is_ok(gates_widget_set_handler(t, table, on_view, nullptr)) ||
+        !gates_is_ok(gates_layout_run(t, (gates_size_t){ 240, 160 }, gates_text_backend_builtin()))) {
+        return 1;
+    }
+    /* A person selects the second row, presses F2, retypes the name and presses Enter. */
+    gates_tree_set_focus(t, table);
+    press(t, GATES_KEY_DOWN);
+    press(t, GATES_KEY_DOWN);
+    press(t, GATES_KEY_F2);
+    type(t, "Bread");
+    press(t, GATES_KEY_ENTER);
+    /* Space toggles the row's check column. */
+    press(t, GATES_KEY_SPACE);
+    (void)gates_tree_dispatch_events(t, 0);
+
+    /* An empty name is refused: the editor stays open, marked invalid, until Escape. */
+    press(t, GATES_KEY_F2);
+    press(t, GATES_KEY_DELETE);
+    press(t, GATES_KEY_ENTER);
+    printf("refused empty name: editor %s\n", gates_view_editing(t, table, nullptr, nullptr) ? "still open" : "closed");
+    press(t, GATES_KEY_ESCAPE);
+    gates_tree_destroy(t);
+    return 0;
+}
+```
+
 ## 모델의 규칙
 
 모델 콜백은 UI 스레드에서 돌고, 이벤트 전달 중이나 다른 콜백 안에서는 돌지 않으며,
 `gates_view_set_model(view, nullptr)` 이 돌아온 뒤에는 불리지 않는다. 칸의 글은 모델을 다음에 부를
 때까지 빌린 것이다. 모델은 `gates_view_model_changed` 로 알리지 않고 그 사이에 바뀌어서는 안 된다.
+`set_cell` 만은 모델을 바꿔도 되는 콜백이다(뷰가 그 뒤에 다시 읽는다).

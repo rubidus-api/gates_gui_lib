@@ -25,12 +25,27 @@
  * GATES_EVENT_SELECTION_CHANGED (ev->item = the selected id; a change
  * made by gates_view_model_changed because the selected item went away is
  * announced with origin PROGRAM), GATES_EVENT_ACTIVATED (ev->item = the row's
- * id), GATES_EVENT_SORT_REQUESTED (ev->result = the column id). Platform-free. */
+ * id), GATES_EVENT_SORT_REQUESTED (ev->result = the column id),
+ * GATES_EVENT_CELL_EDITED (ev->item = the row, ev->result = the column).
+ *
+ * Cells (plan-0021): a column shows text, a check box, a progress bar or an
+ * icon and text, or paints itself. An editable column lets a person change
+ * the selected row's cell: F2 edits the first editable text column, a double
+ * click edits the text cell under it; a text box opens over the cell with the
+ * model's text selected. Enter commits, Escape cancels, focus leaving commits.
+ * Space toggles the first editable check column, a click on the box toggles
+ * it. A commit calls the model's set_cell; an error keeps the editor open and
+ * marks it invalid (when focus left, the edit is dropped instead). After a
+ * commit the view re-reads the model (as gates_view_model_changed) and reports
+ * CELL_EDITED. Scrolling or resizing a column first commits an open edit; the
+ * view does not move while the model refuses it. Platform-free. */
 #ifndef GATES_VIEW_H
 #define GATES_VIEW_H
 
 #include <gates/tree.h>
 #include <gates/geometry.h>
+#include <gates/theme.h>
+#include <gates/image.h>
 
 typedef gates_u64 gates_item_id_t;      /* stable, nonzero; 0 = none */
 typedef gates_u32 gates_column_id_t;
@@ -44,7 +59,33 @@ typedef gates_u32 gates_column_id_t;
 
 typedef struct gates_cell_t {
     gates_str_t text;            /* borrowed until the next model callback */
+    bool checked;                /* CHECK columns */
+    gates_u32 permille;          /* PROGRESS columns: 0..1000 (larger shows full) */
+    gates_image_id_t icon;       /* ICON_TEXT columns: 0 = none (the text stays aligned) */
 } gates_cell_t;
+
+typedef enum gates_cell_kind_t {
+    GATES_CELL_TEXT = 0,
+    GATES_CELL_CHECK,            /* a check box from cell.checked, then any text */
+    GATES_CELL_PROGRESS,         /* a bar from cell.permille, the text over it */
+    GATES_CELL_ICON_TEXT,        /* a 16 x 16 icon from cell.icon, then the text */
+} gates_cell_kind_t;
+
+/* A column's own painting: called for each painted cell of the column, with
+ * the draw list clipped to the cell. The cell is the model's (borrowed for the
+ * call). Draw nothing outside `rect`; return a draw error as is. */
+typedef struct gates_cell_paint_t {
+    gates_draw_list_t *dl;
+    gates_rect_t rect;           /* the whole cell, window coordinates */
+    const gates_theme_t *theme;
+    gates_i32 font;
+    gates_item_id_t id;
+    gates_column_id_t column;
+    const gates_cell_t *cell;
+    bool selected;               /* draw with GATES_COLOR_SELECTION_FG */
+    bool disabled;               /* draw with GATES_COLOR_CONTROL_DISABLED_FG */
+} gates_cell_paint_t;
+typedef gates_err_t (*gates_cell_paint_fn)(void *user, const gates_cell_paint_t *p);
 
 /* Trees (stage 2): the model is the flattened sequence of visible rows; each
  * row says how deep it is and whether it can open. */
@@ -72,6 +113,12 @@ typedef struct gates_rows_model_t {
                         gates_cell_t *out);
     /* Required for a tree view, ignored otherwise. */
     gates_err_t (*row_info)(void *user, gates_item_id_t id, gates_row_info_t *out);
+    /* Optional (plan-0021): a person changed a cell of an editable column -
+     * value->text for a text or icon column (borrowed for the call), or
+     * value->checked for a check column. The model may change here (it is the
+     * one callback that may); any error refuses the change. Null = read-only. */
+    gates_err_t (*set_cell)(void *user, gates_item_id_t id, gates_column_id_t column,
+                            const gates_cell_t *value);
 } gates_rows_model_t;
 
 typedef struct gates_column_desc_t {
@@ -79,6 +126,10 @@ typedef struct gates_column_desc_t {
     gates_str_t label;           /* copied; shown in the header */
     gates_i32 width;             /* logical units; 0 -> 12 average character widths */
     gates_i32 min_width;         /* px; 0 -> 3 cells */
+    gates_cell_kind_t kind;      /* TEXT by default */
+    bool editable;               /* TEXT, ICON_TEXT and CHECK columns (needs set_cell) */
+    gates_cell_paint_fn paint;   /* optional: replaces the kind's drawing */
+    void *paint_user;            /* borrowed while the view lives */
 } gates_column_desc_t;
 
 typedef struct gates_view_desc_t {
@@ -124,6 +175,26 @@ gates_i32 gates_view_column_width(const gates_tree_t *tree, gates_node_t view,
                                   gates_column_id_t column);
 [[nodiscard]] gates_err_t gates_view_set_column_width(gates_tree_t *tree, gates_node_t view,
                                                       gates_column_id_t column, gates_i32 width);
+
+/* -- editing cells (plan-0021) -------------------------------------------------------
+ *
+ * gates_view_edit opens the editor on a cell as F2 would (selecting the row,
+ * scrolling it into view, focusing the editor): INVALID_ARG when the column is
+ * not an editable text or icon column, the model has no set_cell or the item
+ * is not in the model; an open edit is committed first (its error is
+ * returned and nothing else happens). gates_view_end_edit commits (true) or
+ * cancels (false) an open edit and gives focus back to the view when the
+ * editor had it; a refused commit returns the model's error and keeps the
+ * editor open. OK when nothing was open. */
+[[nodiscard]] gates_err_t gates_view_edit(gates_tree_t *tree, gates_node_t view, gates_item_id_t id,
+                                          gates_column_id_t column);
+[[nodiscard]] gates_err_t gates_view_end_edit(gates_tree_t *tree, gates_node_t view, bool commit);
+/* true while an edit is open; the row and column through the pointers (may be null). */
+bool gates_view_editing(const gates_tree_t *tree, gates_node_t view, gates_item_id_t *id,
+                        gates_column_id_t *column);
+/* The editor text box (GATES_NODE_NULL for a view without editable text
+ * columns): for its text, a maximum length or validation while it is open. */
+gates_node_t gates_view_editor(const gates_tree_t *tree, gates_node_t view);
 
 /* Where parts of the view are now (window coordinates, valid after layout;
  * empty when the part is not shown): ROW = row `index` if it is visible,

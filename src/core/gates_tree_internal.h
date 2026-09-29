@@ -672,6 +672,14 @@ bool gates_i_view_pointer_down(gates_tree_t *tree, gates_u32 idx, gates_point_t 
 void gates_i_view_pointer_up(gates_tree_t *tree, gates_u32 idx, gates_point_t p);
 void gates_i_view_drag(gates_tree_t *tree, gates_point_t p);
 bool gates_i_view_wheel(gates_tree_t *tree, gates_u32 idx, gates_vec2_t wheel);
+/* In-place editing (plan-0021): the editor child is placed by the view's arrange;
+ * the view owning editor text box `box` (or GATES_NONE); focus left the editor;
+ * Enter/Escape in the editor; cancel any open edit (a view being disabled). */
+void gates_i_view_place_editor(gates_tree_t *tree, gates_u32 idx);
+gates_u32 gates_i_view_of_editor(const gates_tree_t *tree, gates_u32 box);
+void gates_i_view_editor_left(gates_tree_t *tree, gates_u32 box);
+bool gates_i_view_editor_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t *ev);
+void gates_i_view_cancel_edit(gates_tree_t *tree, gates_u32 idx);
 
 /* Posting and timers: freed with the tree (gates_post.c / gates_timer.c). */
 void gates_i_post_tree_free(gates_tree_t *tree);

@@ -325,6 +325,11 @@ static bool input_key(gates_tree_t *tree, const gates_key_event_t *ev) {
     if (gates_i_tabs_ctrl_key(tree, ev)) {
         return true;
     }
+    /* A view's cell editor: Enter commits, Escape cancels (plan-0021). */
+    gates_u32 edit_view = gates_i_view_of_editor(tree, tree->focus);
+    if (edit_view != GATES_NONE && gates_i_view_editor_key(tree, edit_view, ev)) {
+        return true;
+    }
     /* A spin box's text box: steps and Enter belong to the spin box (plan-0019). */
     gates_u32 spin = gates_i_spin_of_box(tree, tree->focus);
     if (spin != GATES_NONE && focused_box(tree) != nullptr && gates_i_spin_key(tree, spin, ev)) {

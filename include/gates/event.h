@@ -39,6 +39,8 @@ typedef enum gates_event_kind_t {
     GATES_EVENT_SORT_REQUESTED,
     /* tree view: open (ev->result = 1) or close (0) the row ev->item (the model decides) */
     GATES_EVENT_EXPAND_REQUESTED,
+    /* view (plan-0021): a person changed a cell; ev->item = the row, ev->result = the column id */
+    GATES_EVENT_CELL_EDITED,
 } gates_event_kind_t;
 
 typedef enum gates_event_origin_t {
@@ -60,10 +62,11 @@ typedef struct gates_event_t {
     gates_u32 limit;             /* LIMIT_EXCEEDED: the box's maximum, in UTF-8 bytes */
     gates_u32 fit_bytes;         /* LIMIT_EXCEEDED: bytes of the input that would fit */
     /* DIALOG_CLOSED: dialog result; MENU_CLOSED: command id or 0;
-     * VALUE_CHANGED of a radio group or choice: the selected option id (0 = none). */
+     * VALUE_CHANGED of a radio group or choice: the selected option id (0 = none);
+     * SORT_REQUESTED and CELL_EDITED: the column id. */
     gates_u32 result;
-    /* SELECTION_CHANGED: the selected item id; ACTIVATED from a view and
-     * EXPAND_REQUESTED: the row's id. */
+    /* SELECTION_CHANGED: the selected item id; ACTIVATED from a view,
+     * EXPAND_REQUESTED and CELL_EDITED: the row's id. */
     gates_u64 item;
     /* VALUE_CHANGED of a spin box or slider: the value (plan-0019). */
     gates_i64 value;

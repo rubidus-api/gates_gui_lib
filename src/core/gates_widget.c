@@ -232,6 +232,9 @@ gates_err_t gates_widget_set_disabled(gates_tree_t *tree, gates_node_t node, boo
             gates_i_mark_dirty(tree, box.index, GATES_DIRTY_PAINT);
         }
     }
+    if (disabled && gates_i_slot(tree, node.index)->kind == GATES_NODE_VIEW) {
+        gates_i_view_cancel_edit(tree, node.index); /* plan-0021 */
+    }
     if (st->disabled != disabled) {
         st->disabled = disabled;
         gates_i_mark_dirty(tree, node.index, GATES_DIRTY_PAINT);

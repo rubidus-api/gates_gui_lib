@@ -86,6 +86,7 @@ bool gates_i_handler(const gates_tree_t *tree, gates_u32 idx, gates_event_fn *fn
         return true;
     }
     if (tree->bubble_count == 0) return false;
+    if (gates_i_view_of_editor(tree, idx) != GATES_NONE) return false; /* the view's own part (plan-0021) */
     for (gates_u32 a = gates_i_slot(tree, idx)->parent; a != GATES_NONE; a = gates_i_slot(tree, a)->parent) {
         const gates_i_bubble *b = bubble_of(tree, a);
         if (b != nullptr) {
@@ -400,8 +401,8 @@ gates_u32 gates_tree_dispatch_events(gates_tree_t *tree, gates_u32 max_events) {
             .checked = st->checked,
             .result = e.kind == GATES_EVENT_VALUE_CHANGED
                           ? (st->tabs != nullptr ? gates_i_tabs_selected(tree, node.index) : st->opt_sel)
-                      : (e.kind == GATES_EVENT_SORT_REQUESTED ||
-                         e.kind == GATES_EVENT_EXPAND_REQUESTED) ? e.aux
+                      : (e.kind == GATES_EVENT_SORT_REQUESTED || e.kind == GATES_EVENT_EXPAND_REQUESTED ||
+                         e.kind == GATES_EVENT_CELL_EDITED) ? e.aux
                                                                : 0,
             /* A selection is read at delivery (latest); an activation keeps its row. */
             .item = e.kind == GATES_EVENT_SELECTION_CHANGED ? gates_i_view_selected(st) : e.item,
