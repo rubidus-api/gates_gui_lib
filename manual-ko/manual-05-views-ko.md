@@ -251,6 +251,67 @@ int main(void) {
 }
 ```
 
+## 한 레코드의 필드: 속성 격자
+
+한 레코드에 형식 있는 필드가 많을 때(문서 설정, 검사기에서 고른 개체) `gates_propgrid_create`
+(gates/propgrid.h)는 이름과 편집기를 한 줄씩 늘어놓는다. `gates_propgrid_add_text`, `_bool`,
+`_choice`, `_number` 는 글 상자, 체크 상자, 선택, 스핀 상자를 만든다. 속성은 분류별로 묶이고 분류마다
+접을 수 있는 그룹 상자가 되며, 분류 없는 속성이 맨 앞에 온다. 속성마다 바뀌지 않는 id 가 있다.
+`gates_propgrid_editor` 는 그 편집기를 주어 편집기 자신의 함수로 값을 쓰고 읽게 하고, 처리기 하나
+(`gates_propgrid_set_handler`)가 사람이 바꾼 것을 모두 VALUE_CHANGED 로 듣는다. 속성 id 는
+`ev->result` 에, 값은 `ev->text`, `ev->checked`, `ev->value` 에 담긴다.
+
+<!-- example: manual/examples/ex_05_props.c -->
+```c
+/* manual example (host): a property grid over a document's settings.
+ * expect: 4 properties in 2 categories; property 2 (Pages) is now 13; property 3 (Draft) is now off */
+#include <gates/gates.h>
+
+#include <stdio.h>
+
+enum { P_TITLE = 1, P_PAGES, P_DRAFT, P_PAPER };
+
+/* One handler hears every change, by property id. */
+static void on_property(gates_tree_t *tree, const gates_event_t *ev, void *user) {
+    (void)tree;
+    (void)user;
+    if (ev->result == P_PAGES) printf("property %u (Pages) is now %lld; ", ev->result, (long long)ev->value);
+    if (ev->result == P_DRAFT) printf("property %u (Draft) is now %s\n", ev->result, ev->checked ? "on" : "off");
+}
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&(gates_tree_desc_t){0}, &t))) return 1;
+    gates_node_t grid;
+    const gates_option_t papers[] = { { .id = 1, .label = GATES_STR_INIT("A4") }, { .id = 2, .label = GATES_STR_INIT("Letter") } };
+    gates_range_t pages = { .min = 1, .max = 999, .value = 12 };
+    if (!gates_is_ok(gates_propgrid_create(t, gates_tree_root(t), &grid)) ||
+        !gates_is_ok(gates_propgrid_add_text(t, grid, GATES_STR("Document"), P_TITLE, GATES_STR("Title"), GATES_STR("Notes"))) ||
+        !gates_is_ok(gates_propgrid_add_number(t, grid, GATES_STR("Document"), P_PAGES, GATES_STR("Pages"), &pages)) ||
+        !gates_is_ok(gates_propgrid_add_bool(t, grid, GATES_STR("Print"), P_DRAFT, GATES_STR("Draft"), true)) ||
+        !gates_is_ok(gates_propgrid_add_choice(t, grid, GATES_STR("Print"), P_PAPER, GATES_STR("Paper"), papers, 2, 1)) ||
+        !gates_is_ok(gates_propgrid_set_handler(t, grid, on_property, nullptr)) ||
+        !gates_is_ok(gates_layout_run(t, (gates_size_t){ 320, 320 }, gates_text_backend_builtin()))) {
+        return 1;
+    }
+    printf("%u properties in %d categories; ", gates_propgrid_count(t, grid),
+           !gates_node_eq(gates_propgrid_category(t, grid, GATES_STR("Print")), GATES_NODE_NULL) ? 2 : 1);
+
+    /* A person steps Pages up in its spin box, then turns Draft off with Space. */
+    gates_tree_set_focus(t, gates_node_first_child(t, gates_propgrid_editor(t, grid, P_PAGES)));
+    gates_key_event_t up = { .key = GATES_KEY_UP, .down = true };
+    (void)gates_input_key(t, &up);
+    gates_tree_set_focus(t, gates_propgrid_editor(t, grid, P_DRAFT));
+    gates_key_event_t space = { .key = GATES_KEY_SPACE, .down = true };
+    (void)gates_input_key(t, &space);
+    space.down = false;
+    (void)gates_input_key(t, &space);
+    (void)gates_tree_dispatch_events(t, 0);
+    gates_tree_destroy(t);
+    return 0;
+}
+```
+
 ## 모델의 규칙
 
 모델 콜백은 UI 스레드에서 돌고, 이벤트 전달 중이나 다른 콜백 안에서는 돌지 않으며,

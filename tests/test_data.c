@@ -11,6 +11,8 @@
 #include <gates/overlay.h>
 #include <gates/state.h>
 #include <gates/command.h>
+#include <gates/propgrid.h>
+#include <gates/inputs.h>
 #include "gates_test.h"
 #include <proven/heap.h>
 
@@ -1092,6 +1094,222 @@ static void test_column_state(void) {
     free_app(&a);
 }
 
+/* -- property grid (stage 2b) --------------------------------------------------------------- */
+
+typedef struct prec_t {
+    int n;
+    gates_node_t source[16];
+    gates_u32 id[16];
+    char text[16][16];
+    bool checked[16];
+    gates_i64 value[16];
+    gates_event_kind_t kind[16];
+} prec_t;
+
+static void prop_record(gates_tree_t *tree, const gates_event_t *ev, void *user) {
+    (void)tree;
+    prec_t *r = user;
+    if (r->n >= 16) return;
+    r->source[r->n] = ev->source;
+    r->id[r->n] = ev->result;
+    size_t n = ev->text.size < 15 ? ev->text.size : 15;
+    memcpy(r->text[r->n], ev->text.ptr != nullptr ? (const char *)ev->text.ptr : "", n);
+    r->text[r->n][n] = 0;
+    r->checked[r->n] = ev->checked;
+    r->value[r->n] = ev->value;
+    r->kind[r->n] = ev->kind;
+    r->n++;
+}
+
+static const gates_option_t sizes[] = { { .id = 1, .label = GATES_STR_INIT("Small") },
+                                        { .id = 2, .label = GATES_STR_INIT("Large") } };
+
+static void build_props(gates_tree_t *t, gates_node_t pg) {
+    GT_ASSERT_OK(gates_propgrid_add_text(t, pg, GATES_STR("General"), 1, GATES_STR("Title"), GATES_STR("Report")));
+    GT_ASSERT_OK(gates_propgrid_add_bool(t, pg, GATES_STR("General"), 2, GATES_STR("Visible"), true));
+    GT_ASSERT_OK(gates_propgrid_add_choice(t, pg, GATES_STR("Layout"), 3, GATES_STR("Size"), sizes, 2, 1));
+    gates_range_t r = { .min = 0, .max = 100, .value = 10 };
+    GT_ASSERT_OK(gates_propgrid_add_number(t, pg, GATES_STR("Layout"), 4, GATES_STR("Margin"), &r));
+    GT_ASSERT_OK(gates_propgrid_add_text(t, pg, GATES_STR(""), 5, GATES_STR("Name"), GATES_STR("")));
+}
+
+static gates_node_t child_at(gates_tree_t *t, gates_node_t n, gates_u32 k) {
+    gates_node_t c = gates_node_first_child(t, n);
+    while (k-- > 0) c = gates_node_next_sibling(t, c);
+    return c;
+}
+
+static void test_propgrid(void) {
+    gates_tree_t *t = nullptr;
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &t));
+    gates_node_t root = gates_tree_root(t), pg;
+    GT_ASSERT_OK(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN));
+    GT_ASSERT(gates_propgrid_create(t, root, nullptr) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT_OK(gates_propgrid_create(t, root, &pg));
+    build_props(t, pg);
+    GT_ASSERT(gates_propgrid_count(t, pg) == 5);
+    /* Refusals leave nothing behind: id 0, a repeated id, a bad option list, a bad range. */
+    gates_u32 kids = gates_node_child_count(t, pg);
+    GT_ASSERT(gates_propgrid_add_text(t, pg, GATES_STR(""), 0, GATES_STR("x"), GATES_STR("")) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_propgrid_add_bool(t, pg, GATES_STR("New"), 2, GATES_STR("x"), false) == PROVEN_ERR_INVALID_ARG);
+    gates_option_t dup[] = { { .id = 1, .label = GATES_STR_INIT("a") }, { .id = 1, .label = GATES_STR_INIT("b") } };
+    GT_ASSERT(gates_propgrid_add_choice(t, pg, GATES_STR("New"), 9, GATES_STR("x"), dup, 2, 0) == PROVEN_ERR_INVALID_ARG);
+    gates_range_t bad = { .min = 5, .max = 1 };
+    GT_ASSERT(gates_propgrid_add_number(t, pg, GATES_STR("New"), 9, GATES_STR("x"), &bad) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_propgrid_add_number(t, pg, GATES_STR("New"), 9, GATES_STR("x"), nullptr) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_propgrid_add_bool(t, root, GATES_STR(""), 9, GATES_STR("x"), false) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_node_child_count(t, pg) == kids);
+    GT_ASSERT(gates_node_eq(gates_propgrid_category(t, pg, GATES_STR("New")), GATES_NODE_NULL));
+    GT_ASSERT(gates_propgrid_count(t, pg) == 5);
+    GT_ASSERT(gates_node_eq(gates_propgrid_editor(t, pg, 9), GATES_NODE_NULL));
+    /* Structure: the uncategorized grid first, then General and Layout in order. */
+    GT_ASSERT(kids == 3);
+    gates_node_t general = gates_propgrid_category(t, pg, GATES_STR("General"));
+    gates_node_t lay = gates_propgrid_category(t, pg, GATES_STR("Layout"));
+    GT_ASSERT(gates_node_kind(t, general) == GATES_NODE_GROUP && gates_node_kind(t, lay) == GATES_NODE_GROUP);
+    GT_ASSERT(gates_node_eq(child_at(t, pg, 1), general) && gates_node_eq(child_at(t, pg, 2), lay));
+    /* A category of the same length is another category. */
+    GT_ASSERT_OK(gates_propgrid_add_bool(t, pg, GATES_STR("Details"), 6, GATES_STR("Extra"), false));
+    gates_node_t details = gates_propgrid_category(t, pg, GATES_STR("Details"));
+    GT_ASSERT(!gates_node_eq(details, general) && gates_node_eq(child_at(t, pg, 3), details));
+    GT_ASSERT(gates_node_eq(gates_node_parent(t, gates_node_parent(t, gates_propgrid_editor(t, pg, 6))), details));
+    GT_ASSERT(gates_node_kind(t, gates_propgrid_editor(t, pg, 1)) == GATES_NODE_TEXTBOX);
+    GT_ASSERT(gates_node_kind(t, gates_propgrid_editor(t, pg, 2)) == GATES_NODE_CHECKBOX);
+    GT_ASSERT(gates_node_kind(t, gates_propgrid_editor(t, pg, 3)) == GATES_NODE_CHOICE);
+    GT_ASSERT(gates_node_kind(t, gates_propgrid_editor(t, pg, 4)) == GATES_NODE_SPIN);
+    gates_node_t name_ed = gates_propgrid_editor(t, pg, 5);
+    GT_ASSERT(gates_node_eq(gates_node_parent(t, name_ed), child_at(t, pg, 0)));
+    GT_ASSERT(str_is(gates_textbox_text(t, gates_propgrid_editor(t, pg, 1)), "Report"));
+    GT_ASSERT(gates_checkbox_checked(t, gates_propgrid_editor(t, pg, 2)));
+    GT_ASSERT(gates_range_value(t, gates_propgrid_editor(t, pg, 4)) == 10);
+    /* Each editor is named by its label; the whole grid passes the audit. */
+    GT_ASSERT_OK(gates_layout_run(t, (gates_size_t){ 400, 400 }, be));
+    gates_access_info_t info;
+    GT_ASSERT_OK(gates_access_info(t, gates_propgrid_editor(t, pg, 2), 0, &info));
+    GT_ASSERT(str_is(info.name, "Visible"));
+    GT_ASSERT_OK(gates_access_info(t, gates_propgrid_editor(t, pg, 4), 0, &info));
+    GT_ASSERT(str_is(info.name, "Margin"));
+    gates_access_issue_t issues[8];
+    GT_ASSERT(gates_access_audit(t, theme, issues, 8) == 0);
+    /* A person's changes reach the grid's handler by property id; program changes are silent. */
+    prec_t rec = {0};
+    GT_ASSERT(gates_propgrid_set_handler(t, root, prop_record, &rec) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT_OK(gates_propgrid_set_handler(t, pg, prop_record, &rec));
+    GT_ASSERT_OK(gates_textbox_set_text(t, gates_propgrid_editor(t, pg, 1), GATES_STR("Quiet")));
+    (void)gates_tree_dispatch_events(t, 0);
+    GT_ASSERT(rec.n == 0);
+    gates_tree_set_focus(t, gates_propgrid_editor(t, pg, 1));
+    type(t, "!");
+    gates_tree_set_focus(t, gates_propgrid_editor(t, pg, 2));
+    GT_ASSERT(key(t, GATES_KEY_SPACE));
+    GT_ASSERT_OK(gates_access_select(t, gates_propgrid_editor(t, pg, 3), 2));
+    gates_tree_set_focus(t, gates_node_first_child(t, gates_propgrid_editor(t, pg, 4))); /* the spin box's text */
+    GT_ASSERT(key(t, GATES_KEY_UP));
+    (void)gates_tree_dispatch_events(t, 0);
+    GT_ASSERT(rec.n == 4);
+    for (int i = 0; i < rec.n; i++) {
+        GT_ASSERT(gates_node_eq(rec.source[i], pg) && rec.kind[i] == GATES_EVENT_VALUE_CHANGED);
+    }
+    GT_ASSERT(rec.id[0] == 1 && strcmp(rec.text[0], "Quiet!") == 0);
+    GT_ASSERT(rec.id[1] == 2 && !rec.checked[1]);
+    GT_ASSERT(rec.id[2] == 3 && rec.value[2] == 2);
+    GT_ASSERT(rec.id[3] == 4 && rec.value[3] == 11);
+    /* A composition is not a change. */
+    gates_tree_set_focus(t, gates_propgrid_editor(t, pg, 1));
+    (void)gates_input_preedit(t, GATES_STR("ka"), 2);
+    (void)gates_input_preedit_cancel(t);
+    (void)gates_tree_dispatch_events(t, 0);
+    GT_ASSERT(rec.n == 4);
+    /* The editors take the spare width. */
+    gates_rect_t gr = gates_node_layout_rect(t, child_at(t, pg, 0));
+    gates_rect_t nr = gates_node_layout_rect(t, name_ed);
+    GT_ASSERT(nr.x + nr.w == gr.x + gr.w);
+    /* Folding a category hides its editors from the keyboard; its title is a Tab stop. */
+    GT_ASSERT_OK(gates_group_set_expanded(t, lay, false));
+    GT_ASSERT(!gates_node_eq(gates_tree_focus(t), gates_propgrid_editor(t, pg, 4)));
+    /* Removing the handler: changes are heard no more. */
+    GT_ASSERT_OK(gates_propgrid_set_handler(t, pg, nullptr, &rec));
+    gates_tree_set_focus(t, gates_propgrid_editor(t, pg, 1));
+    type(t, "?");
+    (void)gates_tree_dispatch_events(t, 0);
+    GT_ASSERT(rec.n == 4);
+    gates_tree_destroy(t);
+}
+
+static void test_propgrid_failures(void) {
+    bool done = false;
+    for (int k = 0; k < 400 && !done; k++) {
+        fail_alloc_t f = { .inner = proven_heap_allocator(), .left = -1 };
+        gates_allocator_t al = { .ctx = &f, .alloc_fn = fa_alloc, .realloc_fn = fa_realloc, .free_fn = fa_free };
+        gates_tree_t *t = nullptr;
+        GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){ .allocator = al }, &t));
+        gates_node_t pg = GATES_NODE_NULL;
+        f.left = k;
+        gates_err_t err = gates_propgrid_create(t, gates_tree_root(t), &pg);
+        gates_range_t r = { .min = 0, .max = 9 };
+        gates_u32 added = 0;
+        if (gates_is_ok(err)) {
+            gates_err_t e[5] = {
+                gates_propgrid_add_text(t, pg, GATES_STR("A"), 1, GATES_STR("t"), GATES_STR("v")),
+                gates_propgrid_add_bool(t, pg, GATES_STR("A"), 2, GATES_STR("b"), true),
+                gates_propgrid_add_choice(t, pg, GATES_STR("B"), 3, GATES_STR("c"), sizes, 2, 1),
+                gates_propgrid_add_number(t, pg, GATES_STR(""), 4, GATES_STR("n"), &r),
+                gates_propgrid_add_text(t, pg, GATES_STR("C"), 5, GATES_STR("t2"), GATES_STR("")),
+            };
+            for (int i = 0; i < 5; i++) {
+                GT_ASSERT(gates_is_ok(e[i]) || e[i] == PROVEN_ERR_NOMEM);
+                if (gates_is_ok(e[i])) {
+                    added++;
+                    GT_ASSERT(!gates_node_eq(gates_propgrid_editor(t, pg, (gates_prop_id_t)(i + 1)), GATES_NODE_NULL));
+                } else {
+                    GT_ASSERT(gates_node_eq(gates_propgrid_editor(t, pg, (gates_prop_id_t)(i + 1)), GATES_NODE_NULL));
+                }
+            }
+            GT_ASSERT(gates_propgrid_count(t, pg) == added);
+            /* No stray label or empty category: every grid holds label/editor pairs. */
+            for (gates_node_t c = gates_node_first_child(t, pg); !gates_node_eq(c, GATES_NODE_NULL);
+                 c = gates_node_next_sibling(t, c)) {
+                gates_node_t content = gates_node_kind(t, c) == GATES_NODE_GROUP ? child_at(t, c, 1) : c;
+                gates_u32 n = gates_node_child_count(t, content);
+                GT_ASSERT(n % 2 == 0);
+                if (gates_node_kind(t, c) == GATES_NODE_GROUP) GT_ASSERT(n > 0);
+            }
+            done = added == 5;
+        } else {
+            GT_ASSERT(err == PROVEN_ERR_NOMEM && gates_node_child_count(t, gates_tree_root(t)) == 0);
+        }
+        f.left = -1;
+        GT_ASSERT_OK(gates_tree_flush_destroys(t));
+        gates_tree_destroy(t); /* ASan: nothing leaked at any failure point */
+    }
+    GT_ASSERT(done);
+}
+
+/* Constructors that fail for memory leave nothing in the tree (a label once
+ * stayed attached when its own rollback could not allocate). */
+static void test_constructor_rollback(void) {
+    for (int kind = 0; kind < 4; kind++) {
+        bool made = false;
+        for (int k = 0; k < 32 && !made; k++) {
+            fail_alloc_t f = { .inner = proven_heap_allocator(), .left = -1 };
+            gates_allocator_t al = { .ctx = &f, .alloc_fn = fa_alloc, .realloc_fn = fa_realloc, .free_fn = fa_free };
+            gates_tree_t *t = nullptr;
+            GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){ .allocator = al }, &t));
+            gates_node_t root = gates_tree_root(t), n = GATES_NODE_NULL;
+            f.left = k;
+            gates_err_t err = kind == 0 ? gates_label_create(t, root, GATES_STR("name"), &n)
+                              : kind == 1 ? gates_checkbox_create(t, root, GATES_STR("x"), false, nullptr, nullptr, &n)
+                              : kind == 2 ? gates_textbox_create(t, root, GATES_STR("text"), 8, &n)
+                                          : gates_button_create(t, root, GATES_STR("go"), nullptr, nullptr, &n);
+            f.left = -1;
+            made = gates_is_ok(err);
+            GT_ASSERT(gates_node_child_count(t, root) == (made ? 1u : 0u));
+            gates_tree_destroy(t);
+        }
+        GT_ASSERT(made);
+    }
+}
+
 int main(void) {
     be = gates_text_backend_builtin();
     theme = gates_theme_light();
@@ -1108,5 +1326,8 @@ int main(void) {
     test_tree_first_column();
     test_column_menu();
     test_column_state();
+    test_propgrid();
+    test_propgrid_failures();
+    test_constructor_rollback();
     return gt_report("test_data");
 }

@@ -227,6 +227,8 @@ typedef struct gates_widget_state_t {
     struct gates_i_menubar *mbar;
     /* Toolbar (plan-0018): its entries (command ids, 0 = separator). */
     struct gates_i_toolbar *tbar;
+    /* Property grid (plan-0021): its properties and categories. */
+    struct gates_i_propgrid *pgrid;
     /* Tabs (plan-0018): the titles; the pages are the stack's children. */
     struct gates_i_tabs *tabs;
     /* Spin box and slider (plan-0019): the range. */
@@ -871,6 +873,8 @@ typedef struct gates_i_range {
     bool vertical;               /* slider */
 } gates_i_range;
 void gates_i_range_free(gates_tree_t *tree, gates_widget_state_t *st);
+void gates_i_propgrid_free(gates_tree_t *tree, gates_widget_state_t *st);
+void gates_i_node_undo(gates_tree_t *tree, gates_node_t node);
 gates_i64 gates_i_range_value(const gates_tree_t *tree, gates_u32 idx);
 bool gates_i_range_info(const gates_tree_t *tree, gates_u32 idx, gates_i64 *min, gates_i64 *max, gates_i64 *value);
 /* A person's change (accessibility, keys): reserved report, clamped, VALUE_CHANGED. */

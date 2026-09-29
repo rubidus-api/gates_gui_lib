@@ -56,8 +56,7 @@ gates_err_t gates_menubar_create(gates_tree_t *tree, gates_node_t parent, gates_
     if (gates_is_ok(err)) {
         err = gates_i_state_acquire(tree, &state);
         if (!gates_is_ok(err)) {
-            (void)gates_node_destroy(tree, bar); /* as widget creation does */
-            (void)gates_tree_flush_destroys(tree);
+            gates_i_node_undo(tree, bar); /* as widget creation does */
         }
     }
     if (!gates_is_ok(err)) {

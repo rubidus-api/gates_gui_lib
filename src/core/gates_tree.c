@@ -146,6 +146,7 @@ void gates_i_state_release(gates_tree_t *tree, gates_u32 state_index) {
     gates_i_toolbar_free(tree, st);
     gates_i_tabs_free(tree, st);
     gates_i_range_free(tree, st);
+    gates_i_propgrid_free(tree, st);
     memset(st, 0, sizeof *st);
     st->next_free = tree->state_first_free;
     tree->state_first_free = state_index;
@@ -266,6 +267,16 @@ static void discard_subtree(gates_tree_t *tree, gates_u32 idx) {
         tree->live_count--;
     }
     pool_free_slot(tree, idx);
+}
+
+static void link_unlink(gates_tree_t *tree, gates_u32 child);
+
+/* Undoes a node a constructor made before it failed: detached and freed at
+ * once, never allocating and never flushing other pending destroys. */
+void gates_i_node_undo(gates_tree_t *tree, gates_node_t node) {
+    if (!gates_i_valid(tree, node) || node.index == tree->root) return;
+    if (gates_i_slot(tree, node.index)->parent != GATES_NONE) link_unlink(tree, node.index);
+    discard_subtree(tree, node.index);
 }
 
 void gates_i_discard_detached(gates_tree_t *tree, gates_node_t node) {
@@ -518,6 +529,7 @@ void gates_tree_destroy(gates_tree_t *tree) {
             gates_i_toolbar_free(tree, &tree->states[i]);
             gates_i_tabs_free(tree, &tree->states[i]);
             gates_i_range_free(tree, &tree->states[i]);
+            gates_i_propgrid_free(tree, &tree->states[i]);
         }
         alloc.free_fn(alloc.ctx, tree->states);
     }

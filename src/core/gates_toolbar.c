@@ -41,8 +41,7 @@ static gates_err_t make_node(gates_tree_t *tree, gates_node_t parent, gates_node
     gates_u32 state = GATES_NONE;
     err = gates_i_state_acquire(tree, &state);
     if (!gates_is_ok(err)) {
-        (void)gates_node_destroy(tree, *out);
-        (void)gates_tree_flush_destroys(tree);
+        gates_i_node_undo(tree, *out);
         *out = GATES_NODE_NULL;
         return err;
     }
@@ -452,8 +451,7 @@ gates_err_t gates_statusbar_create(gates_tree_t *tree, gates_node_t parent, gate
     if (gates_is_ok(err)) err = gates_layout_set_gap(tree, bar, 1 + 2 * SB_SEP_SPACE);
     if (!gates_is_ok(err)) {
         if (gates_i_valid(tree, bar)) {
-            (void)gates_node_destroy(tree, bar);
-            (void)gates_tree_flush_destroys(tree);
+            gates_i_node_undo(tree, bar);
         }
         return err;
     }

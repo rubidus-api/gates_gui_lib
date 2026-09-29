@@ -21,6 +21,7 @@
 #include <gates/layout.h>
 #include <gates/overlay.h>
 #include <gates/post.h>
+#include <gates/propgrid.h>
 #include <gates/render.h>
 #include <gates/state.h>
 #include <gates/text.h>

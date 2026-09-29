@@ -19,16 +19,14 @@ static gates_err_t widget_create(gates_tree_t *tree, gates_node_t parent,
     gates_u32 state_index = GATES_NONE;
     err = gates_i_state_acquire(tree, &state_index);
     if (!gates_is_ok(err)) {
-        (void)gates_node_destroy(tree, node);
-        (void)gates_tree_flush_destroys(tree);
+        gates_i_node_undo(tree, node);
         return err;
     }
     gates_i_slot(tree, node.index)->state_index = state_index;
     if (text.size > 0) {
         err = gates_widget_set_text(tree, node, text);
         if (!gates_is_ok(err)) {
-            (void)gates_node_destroy(tree, node);
-            (void)gates_tree_flush_destroys(tree);
+            gates_i_node_undo(tree, node);
             return err;
         }
     }
@@ -93,8 +91,7 @@ gates_err_t gates_textbox_create(gates_tree_t *tree, gates_node_t parent, gates_
                                                        sizeof(gates_text_edit_t),
                                                        alignof(gates_text_edit_t));
     if (!proven_is_ok(res.err)) {
-        (void)gates_node_destroy(tree, *out_node);
-        (void)gates_tree_flush_destroys(tree);
+        gates_i_node_undo(tree, *out_node);
         *out_node = GATES_NODE_NULL;
         return res.err;
     }
@@ -103,8 +100,7 @@ gates_err_t gates_textbox_create(gates_tree_t *tree, gates_node_t parent, gates_
     if (!gates_is_ok(err)) {
         tree->alloc.free_fn(tree->alloc.ctx, st->edit);
         st->edit = nullptr;
-        (void)gates_node_destroy(tree, *out_node);
-        (void)gates_tree_flush_destroys(tree);
+        gates_i_node_undo(tree, *out_node);
         *out_node = GATES_NODE_NULL;
         return err;
     }
