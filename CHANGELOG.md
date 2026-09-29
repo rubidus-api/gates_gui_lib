@@ -4,6 +4,68 @@ All notable changes to this project will be documented in this file.
 
 This project follows Keep a Changelog.
 
+## [0.3.0] - 2026-09-29
+
+The application frame (plan-0018, RFC-0005): menu bar, toolbar, status bar, tabs, tooltips,
+mnemonics, a keymap and saved UI arrangement.
+
+### Added
+
+- `gates/frame.h`. Mnemonics: `&x` in button, check box, command, menu bar and tab texts
+  (labels given a target with `gates_label_set_target`) marks an Alt+x access key, underlined
+  while keyboard cues are visible; duplicates cycle the focus. `gates_input_mnemonic`,
+  `gates_input_menu_key`, `gates_input_show_cues` and `gates_tree_set_cues_always` for
+  platform code.
+- Menu bar (`gates_menubar_create`, `gates_menubar_add`): command menus with menu mode (F10 or
+  Alt alone, arrows, letters, Escape back to the title), the existing menu overlays.
+- Toolbar (`gates_toolbar_create`, `gates_toolbar_add`): command buttons, checked commands
+  shown pressed, one Tab stop, clicks that keep the focus where it was, a `>>` overflow menu.
+- Status bar (`gates_statusbar_create`, `gates_statusbar_add`): label segments with
+  separators.
+- Tooltips (`gates_node_set_tooltip`): after 500 ms of hover or keyboard focus, hidden by
+  presses, keys, leaving and time; toolbar buttons show their command's label and shortcut.
+  Read by screen readers as help text. No timer runs while nothing with a tooltip is hovered.
+- Tabs (`gates_tabs_create`, `gates_tabs_add`, ...): a strip over pages, arrows,
+  Ctrl+Tab / Ctrl+PgUp / Ctrl+PgDn, mnemonics, the focus following into the new page,
+  VALUE_CHANGED with the new index.
+- Keymap in `gates/command.h`: `gates_command_set_shortcut` (with conflict report),
+  `gates_command_shortcut`, `gates_command_count` / `gates_command_at`,
+  `gates_shortcut_format` and `gates_shortcut_parse`.
+- `gates/state.h`: `gates_state_save` / `gates_state_load` keep split ratios, selected tabs,
+  column widths and scroll offsets of nodes with automation ids as tolerant text. Windows:
+  `gates_window_placement` / `gates_window_set_placement`.
+- Accessibility: MenuBar, ToolBar, StatusBar, Tab and TabItem roles; `access_key` ("Alt+F")
+  and `accelerator` ("Ctrl+N") in `gates_access_info_t`, exposed as UIA AccessKey and
+  AcceleratorKey.
+- Example `gallery` (every control and the frame, theme and zoom commands, saved arrangement);
+  manual chapter 11 in English and Korean.
+- `make bench` (plan-0017): a core benchmark (tests/bench_core.c) - cold start, layout, paint walk,
+  software rendering at 96, 144 and 288 dpi, keystroke and scroll to frame, memory split into
+  UI-owned, model-owned and frame scratch bytes, model calls per frame for a 100 000-row table,
+  and latency of a 200 000-message post flood. It measures; it does not assert.
+- Windows: `GATES_PERF=<file>` in the environment appends one line per frame (input to
+  present, layout, paint, render and present times, size, dpi, command count), per wake
+  (timer, dispatch, post) and the first frame's time since process start. Off (and free)
+  without the variable.
+
+### Changed
+
+- In button, check box and command labels `&` before a letter or digit is now a mnemonic and is
+  not shown (write `&&` for a literal one); any other `&` is shown as before.
+- After a menu takes a key, the character that key makes is no longer typed into the control
+  below it (choosing an entry with Space used to type a space).
+- Windows: Alt+letter reaches gates through WM_SYSCHAR only when it matches a mnemonic; Alt
+  alone and F10 enter menu mode when the window has a menu bar. The pointer leaving the window
+  now ends hover.
+
+### Fixed
+
+- Text boxes, choices and very short buttons are at least 24 units in each direction again: with
+  the Windows UI font (a 15-unit line, since 0.2.0) they were 23 high, below the WCAG 2.5.8
+  target that `gates_access_audit` enforces.
+- `make win` rebuilds the Windows programs when a header changes (the version number did not
+  reach them before).
+
 ## [0.2.0] - 2026-09-27
 
 Proportional text (RFC-0004): the monospace restriction is lifted.

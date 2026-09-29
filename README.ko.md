@@ -3,7 +3,7 @@
 # Gates GUI Library
 
 도구형 Windows 프로그램(설정 창, 기록 살펴보기, 로그 보기, 파일 탐색, 빌드 도구)을 위한 C23 의
-작은 유지형(retained) GUI 라이브러리입니다. 판은 **0.2.0** 입니다.
+작은 유지형(retained) GUI 라이브러리입니다. 판은 **0.3.0** 입니다(최신 릴리스는 0.2.0).
 
 | | |
 |---|---|
@@ -11,6 +11,10 @@
 | `app_todo` - 할 일 목록 | `app_files` - 작업 스레드가 채우는 폴더 탐색기 |
 | ![단위 변환기](screenshots/app_converter.png) | ![계산기](screenshots/app_calculator.png) |
 | `app_converter` - 입력하는 대로 바꾸는 폼 | `app_calculator` - 버튼과 키보드 |
+
+![갤러리](screenshots/gallery.png)
+
+`gallery` - 응용 프로그램 틀: 접근 키가 있는 메뉴 막대, 도구 막대, 탭, 분할 안의 표, 시계가 있는 상태 줄.
 
 스크린샷은 `examples/` 의 예제 응용을 Windows 11 에서 실행한 모습입니다.
 
@@ -43,7 +47,7 @@ HTML 과 CSS 를 떠올리시면 됩니다. 문서는 무엇이 무엇인지를 
   자동화 도구가 모든 컨트롤을 읽고 쓸 수 있습니다; 강제 규칙(이름, 24 x 24 목표, 키보드 도달,
   대비, 포커스 표시)의 감사.
 
-브라우저 엔진도, 게임 UI 도, 픽셀까지 똑같이 그리는 도구도 아닙니다. 0.2.0 의 백엔드는
+브라우저 엔진도, 게임 UI 도, 픽셀까지 똑같이 그리는 도구도 아닙니다. 0.3.0 의 백엔드는
 소프트웨어 그리기를 쓰는 Win32 하나이고, 코어는 플랫폼에 묶이지 않은 C23 이라 어디서나
 시험이 돕니다.
 
@@ -64,7 +68,7 @@ HTML 과 CSS 를 떠올리시면 됩니다. 문서는 무엇이 무엇인지를 
 다음과 같습니다.
 
 ```sh
-x86_64-w64-mingw32-gcc -std=c23 -O2 -Igates-0.2.0/include hello.c -Lgates-0.2.0/lib/win64 \
+x86_64-w64-mingw32-gcc -std=c23 -O2 -Igates-0.3.0/include hello.c -Lgates-0.3.0/lib/win64 \
     -lgates -lproven -lgdi32 -luser32 -limm32 -ldwmapi -ladvapi32 -luiautomationcore \
     -lole32 -loleaut32 -luuid -mwindows -o hello.exe
 ```
@@ -100,6 +104,8 @@ gates 와 기반 라이브러리 proven 은 따로 된 정적 라이브러리입
 
 ## 상태
 
+0.3.0 은 응용 프로그램 틀을 더했습니다. 메뉴 막대, 도구 막대, 상태 줄, 탭, 툴팁, Alt+글자 접근 키,
+프로그램이 다시 묶을 수 있는 키맵, 배치 저장(분할, 탭, 열, 창 위치)이며 `gallery` 예제가 모두 보여 줍니다.
 0.2.0 은 고정폭 제한을 풀었습니다. 글은 시스템의 비례폭 UI 글꼴로 쓰이고, 로그와 코드처럼
 열을 맞춰야 하는 곳은 노드마다 고정폭 글꼴을 고를 수 있습니다. 코어 시험(약 1만 개 검사)이 GCC 와 Clang, AddressSanitizer 와
 UndefinedBehaviorSanitizer 아래에서 통과하고, 모든 예제가 mingw-w64 로 경고 없이 빌드됩니다.

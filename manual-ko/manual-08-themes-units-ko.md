@@ -59,7 +59,7 @@ int main(void) {
 정하지 않은 모든 것에도 적용된다. `GATES_FONT_INHERIT` 는 부모의 것으로 돌아가고,
 `gates_node_font` 는 실제로 쓰이는 글꼴을 읽는다. 패널에 정하면 한 구역 전체가 바뀌고, 뷰 하나에
 정하면 로그 하나가 바뀐다. 대화상자와 메뉴는 창의 루트 아래에 있지 않으므로, 따로 정하지 않으면
-UI 글꼴에서 시작한다. 크기는 시스템을 따르며, 0.2.0 에서는 노드마다 고르지 않는다.
+UI 글꼴에서 시작한다. 크기는 시스템을 따르며, 0.3.0 에서는 노드마다 고르지 않는다.
 
 ```c
 (void)gates_node_set_font(tree, log_view, GATES_FONT_MONO); /* aligned log lines */

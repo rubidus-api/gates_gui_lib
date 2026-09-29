@@ -366,8 +366,9 @@ gates_size_t gates_i_options_measure(const gates_tree_t *tree, const gates_node_
     }
     gates_i32 inset_x = GATES_TEXTBOX_PAD_X + GATES_TEXTBOX_BORDER;
     gates_i32 inset_y = GATES_TEXTBOX_PAD_Y + GATES_TEXTBOX_BORDER;
+    gates_i32 h = m.line_height + 2 * inset_y;
     return (gates_size_t){ label_w + GATES_CHOICE_ARROW_CELLS * m.advance + 2 * inset_x,
-                           m.line_height + 2 * inset_y };
+                           h < GATES_ACCESS_MIN_TARGET ? GATES_ACCESS_MIN_TARGET : h }; /* WCAG 2.5.8 */
 }
 
 static gates_err_t paint_radio(const gates_tree_t *tree, gates_u32 idx, gates_draw_list_t *dl,

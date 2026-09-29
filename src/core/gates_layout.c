@@ -155,11 +155,12 @@ static gates_size_t widget_intrinsic(const gates_tree_t *tree, const gates_node_
         return gates_i_toolbar_measure(tree, s, text);
     case GATES_NODE_TABSTRIP:
         return gates_i_tabstrip_measure(tree, s, text);
-    case GATES_NODE_BUTTON:
-        return (gates_size_t){
-            ts.w + 2 * (GATES_BUTTON_PAD_X + GATES_BUTTON_BORDER),
-            ts.h + 2 * (GATES_BUTTON_PAD_Y + GATES_BUTTON_BORDER),
-        };
+    case GATES_NODE_BUTTON: {
+        gates_i32 h = ts.h + 2 * (GATES_BUTTON_PAD_Y + GATES_BUTTON_BORDER);
+        gates_i32 w = ts.w + 2 * (GATES_BUTTON_PAD_X + GATES_BUTTON_BORDER);
+        return (gates_size_t){ w < GATES_ACCESS_MIN_TARGET ? GATES_ACCESS_MIN_TARGET : w,
+                               h < GATES_ACCESS_MIN_TARGET ? GATES_ACCESS_MIN_TARGET : h };
+    }
     case GATES_NODE_CHECKBOX: {
         gates_i32 h = ts.h > GATES_CHECK_BOX ? ts.h : GATES_CHECK_BOX;
         if (h < GATES_ACCESS_MIN_TARGET) h = GATES_ACCESS_MIN_TARGET; /* WCAG 2.5.8 target */
@@ -181,9 +182,10 @@ static gates_size_t widget_intrinsic(const gates_tree_t *tree, const gates_node_
     }
     case GATES_NODE_TEXTBOX: {
         gates_i32 cols = (gates_i32)(st != nullptr && st->cols != 0 ? st->cols : 16u);
+        gates_i32 h = m.line_height + 2 * (GATES_TEXTBOX_PAD_Y + GATES_TEXTBOX_BORDER);
         return (gates_size_t){
             cols * m.advance + 2 * (GATES_TEXTBOX_PAD_X + GATES_TEXTBOX_BORDER),
-            m.line_height + 2 * (GATES_TEXTBOX_PAD_Y + GATES_TEXTBOX_BORDER),
+            h < GATES_ACCESS_MIN_TARGET ? GATES_ACCESS_MIN_TARGET : h, /* WCAG 2.5.8 */
         };
     }
     default:

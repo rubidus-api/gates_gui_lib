@@ -3,7 +3,7 @@
 # Gates GUI Library
 
 A small retained-mode GUI library in C23 for tool-style Windows programs - settings panels,
-inspectors, log viewers, file browsers, build tools. Version **0.2.0**.
+inspectors, log viewers, file browsers, build tools. Version **0.3.0** (the latest release is 0.2.0).
 
 | | |
 |---|---|
@@ -11,6 +11,11 @@ inspectors, log viewers, file browsers, build tools. Version **0.2.0**.
 | `app_todo` - a to-do list | `app_files` - a folder browser fed by a worker thread |
 | ![Unit converter](screenshots/app_converter.png) | ![Calculator](screenshots/app_calculator.png) |
 | `app_converter` - a form that converts as you type | `app_calculator` - buttons and keyboard |
+
+![Gallery](screenshots/gallery.png)
+
+`gallery` - the application frame: a menu bar with access keys, a toolbar, tabs, a table in a
+split, a status bar with a clock.
 
 The screenshots are the sample applications in `examples/`, running on Windows 11.
 
@@ -44,7 +49,7 @@ What you get:
   Automation provider, so Narrator and automation tools can read and use every control; an
   audit of enforced rules (names, 24 x 24 targets, keyboard reach, contrast, focus cues).
 
-It is not a browser engine, a game UI or a pixel-exact drawing kit. Version 0.2.0 has one
+It is not a browser engine, a game UI or a pixel-exact drawing kit. Version 0.3.0 has one
 backend: Win32 with a software renderer. The core is platform-free C23 and runs its tests
 anywhere.
 
@@ -90,7 +95,7 @@ int main(void) {
 Build it with mingw-w64 against the SDK:
 
 ```sh
-x86_64-w64-mingw32-gcc -std=c23 -O2 -Igates-0.2.0/include hello.c -Lgates-0.2.0/lib/win64 \
+x86_64-w64-mingw32-gcc -std=c23 -O2 -Igates-0.3.0/include hello.c -Lgates-0.3.0/lib/win64 \
     -lgates -lproven -lgdi32 -luser32 -limm32 -ldwmapi -ladvapi32 -luiautomationcore \
     -lole32 -loleaut32 -luuid -mwindows -o hello.exe
 ```
@@ -128,7 +133,9 @@ headless use on any system.
 
 ## Status
 
-0.2.0 lifts the monospace restriction: text is set in the system's proportional UI font, with
+0.3.0 adds the application frame: a menu bar, a toolbar, a status bar, tabs, tooltips,
+Alt-letter access keys, a keymap programs can rebind, and saved UI arrangement (splits, tabs,
+columns, window placement); the `gallery` example shows it all. 0.2.0 lifted the monospace restriction: text is set in the system's proportional UI font, with
 a fixed-pitch font for logs and code chosen per node. The core suites (nearly 10,000 checks) pass on GCC and Clang and
 under AddressSanitizer and UndefinedBehaviorSanitizer; every example builds warning-free with
 mingw-w64; the interactive behaviour - input, the Korean IME, themes and scaling, UI

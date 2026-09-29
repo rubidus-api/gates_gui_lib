@@ -127,8 +127,11 @@ WIN32_SRC := \
   src/platform/win32/gates_win32_uia.c \
   src/platform/win32/gates_win32_perf.c
 
+# Headers the Windows programs are built from: a change rebuilds them.
+WIN_HDRS := $(wildcard include/gates/*.h) $(wildcard src/core/*.h) $(wildcard src/platform/win32/*.h)
+
 # Sample applications (0.1.0 release): small complete programs.
-SAMPLE_APPS := app_todo app_calculator app_converter app_files
+SAMPLE_APPS := app_todo app_calculator app_converter app_files gallery
 
 CONTROL_EXAMPLES := ctl_label ctl_button ctl_checkbox ctl_textbox ctl_panel \
                     ctl_stack ctl_split ctl_scroll ctl_keyboard ctl_commands ctl_dialog \
@@ -251,14 +254,14 @@ manual-check: dist
 package-check:
 	CC=$(CC) CC_WIN=$(CC_WIN) sh tests/test_package.sh
 
-$(WIN_BUILD)/text_conformance.exe: examples/text_conformance/main.c $(CORE_SRC) $(WIN32_SRC) $(PROVEN_SRC)
+$(WIN_BUILD)/text_conformance.exe: examples/text_conformance/main.c $(CORE_SRC) $(WIN32_SRC) $(PROVEN_SRC) $(WIN_HDRS)
 	@mkdir -p $(WIN_BUILD)
 	$(CC_WIN) $(CPPFLAGS) -Itests $(WINFLAGS) $< \
 		$(CORE_SRC) $(WIN32_SRC) $(PROVEN_SRC) \
 		-lgdi32 -luser32 -limm32 -ldwmapi -ladvapi32 \
 		-luiautomationcore -lole32 -loleaut32 -luuid -o $@
 
-$(WIN_BUILD)/%.exe: examples/%/main.c $(CORE_SRC) $(WIN32_SRC) $(PROVEN_SRC)
+$(WIN_BUILD)/%.exe: examples/%/main.c $(CORE_SRC) $(WIN32_SRC) $(PROVEN_SRC) $(WIN_HDRS)
 	@mkdir -p $(WIN_BUILD)
 	$(CC_WIN) $(CPPFLAGS) $(WINFLAGS) $< \
 		$(CORE_SRC) $(WIN32_SRC) $(PROVEN_SRC) \

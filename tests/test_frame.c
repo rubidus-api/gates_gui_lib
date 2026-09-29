@@ -249,6 +249,42 @@ static void test_underline_inside_line(void) {
     gates_draw_list_deinit(&dl);
 }
 
+static gates_text_metrics_t short_metrics(void *ctx, gates_i32 font) {
+    gates_text_metrics_t m = be->metrics(ctx, font);
+    m.line_height = 15;   /* the Windows UI font at 96 dpi */
+    m.ascent = 12;
+    m.descent = 3;
+    return m;
+}
+
+/* 0.2.0 regression found in the T048 field run: with a 15-unit line, text boxes
+ * and choices were 23 high, below the 24-unit target the audit enforces. */
+static void test_targets_with_short_lines(void) {
+    gates_text_backend_t sb = *be;
+    sb.metrics = short_metrics;
+    gates_tree_t *t;
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &t));
+    gates_node_t root = gates_tree_root(t), n[6];
+    GT_ASSERT_OK(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN));
+    static const gates_option_t o[] = { { .id = 1, .label = GATES_STR_INIT("a") }, { .id = 2, .label = GATES_STR_INIT("b") } };
+    GT_ASSERT_OK(gates_textbox_create(t, root, GATES_STR(""), 5, &n[0]));
+    GT_ASSERT_OK(gates_choice_create(t, root, o, 2, 1, &n[1]));
+    GT_ASSERT_OK(gates_button_create(t, root, GATES_STR("i"), nullptr, nullptr, &n[2]));
+    GT_ASSERT_OK(gates_checkbox_create(t, root, GATES_STR("c"), false, nullptr, nullptr, &n[3]));
+    GT_ASSERT_OK(gates_radio_create(t, root, o, 2, 1, &n[4]));
+    GT_ASSERT_OK(gates_tabs_create(t, root, &n[5]));
+    GT_ASSERT_OK(gates_tabs_add(t, n[5], GATES_STR("t"), nullptr));
+    for (int i = 0; i < 6; i++) GT_ASSERT_OK(gates_node_set_access_name(t, n[i], GATES_STR("x")));
+    GT_ASSERT_OK(gates_layout_run(t, (gates_size_t){ VW, VH }, &sb));
+    for (int i = 0; i < 5; i++) {
+        gates_size_t ps = gates_node_preferred_size(t, n[i]);
+        GT_ASSERT(ps.h >= 24 && ps.w >= 24);
+    }
+    gates_access_issue_t issues[8];
+    GT_ASSERT(gates_access_audit(t, theme, issues, 8) == 0);
+    gates_tree_destroy(t);
+}
+
 static void test_mnemonic_activation(void) {
     mapp_t a;
     make_mapp(&a);
@@ -1525,6 +1561,7 @@ int main(void) {
     test_mnemonic_parse();
     test_mnemonic_geometry_and_paint();
     test_underline_inside_line();
+    test_targets_with_short_lines();
     test_mnemonic_activation();
     test_mnemonic_in_dialog();
     test_keymap();

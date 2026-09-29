@@ -4,7 +4,7 @@
 
 ## 컨트롤 표
 
-컨트롤은 저마다 노드 하나다. 아래 표가 0.2.0 의 유한한 컨트롤 전부다. 사람이 그것으로 하는 일,
+컨트롤은 저마다 노드 하나다. 아래 표가 0.3.0 의 유한한 컨트롤 전부다. 사람이 그것으로 하는 일,
 키, 프로그램이 받는 이벤트, 화면 읽기 프로그램이 듣는 것(9장)을 적었다.
 
 | 컨트롤 | 만들기 | 사람은 | 키 | 이벤트 | 접근성으로는 |
@@ -21,6 +21,10 @@
 | 뷰 | `gates_view_create`, `gates_log_create` | 목록·표·트리·로그에서 고른다 | 화살표, PageUp/PageDown, Home, End, Enter; 트리는 Left/Right | SELECTION_CHANGED, ACTIVATED, SORT_REQUESTED, EXPAND_REQUESTED | 목록, 표, 트리(5장) |
 | 폼 | `gates_form_create` | 이름표 달린 필드를 채운다 | - | 편집기들의 이벤트 | 필드의 그룹(3장) |
 | 대화상자, 메뉴 | `gates_dialog_open`, `gates_menu_open` | 한 번 답한다, 명령을 고른다 | Enter, Escape, 화살표 | DIALOG_CLOSED, MENU_CLOSED | 창, 메뉴(4장) |
+| 메뉴 막대 | `gates_menubar_create` | 메뉴에서 명령을 고른다 | F10 또는 Alt, 화살표, 글자, Escape | MENU_CLOSED, 명령 | 메뉴 막대(11장) |
+| 도구 막대 | `gates_toolbar_create` | 한 번 클릭으로 명령을 실행한다 | 화살표, Space, Enter | 명령 | 도구 막대(11장) |
+| 상태 줄 | `gates_statusbar_create` | 프로그램의 상태를 읽는다 | - | - | 상태 줄(11장) |
+| 탭 | `gates_tabs_create` | 페이지 사이를 오간다 | 화살표, Ctrl+Tab, Ctrl+PgUp/PgDn | VALUE_CHANGED(result = 번호) | 탭(Selection)(11장) |
 
 Tab 과 Shift+Tab 은 켜져 있고 보이는 컨트롤을 트리 차례대로 오간다.
 `gates_widget_set_focusable` 로 차례에서 뺄 수 있다. 끈 컨트롤(`gates_widget_set_disabled`)은 흐리게
