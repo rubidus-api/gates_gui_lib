@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 This project follows Keep a Changelog.
 
+## [0.4.0] - 2026-09-29
+
+Input controls and plumbing (plan-0019, RFC-0005 group 3).
+
+### Added
+
+- Event bubbling: `gates_node_set_bubble_handler` on any node hears the events of descendants
+  without a handler of their own (the nearest such ancestor; never across an overlay root).
+- Deferred calls: `gates_tree_defer` / `gates_tree_cancel_defer` run a function once at the next
+  safe point (after the queued events), one call per key.
+- Spin box and slider (`gates/inputs.h`): an integer range with step, page and a decimal scale;
+  VALUE_CHANGED with `ev->value` (new field); `gates_range_format` / `gates_range_parse`;
+  `gates_access_set_range_value`; UIA Spinner and Slider with a settable RangeValue.
+- Manual chapter 12 (numbers, groups and layouts).
+- Group box (`gates_group_create`, collapsible with VALUE_CHANGED), GRID layout (columns, grow
+  weights, spans) and WRAP layout (a second layout pass when a wrap container's width changes).
+- Examples: the gallery has an Inputs page (spin boxes, a slider, a collapsible group in a grid,
+  wrapped chips, a total recomputed once per turn); the calculator uses one bubble handler for
+  its twenty keys.
+
+### Changed
+
+- `gates_event_t` has a new field `value` (a spin box's or slider's value).
+
 ## [0.3.0] - 2026-09-29
 
 The application frame (plan-0018, RFC-0005): menu bar, toolbar, status bar, tabs, tooltips,

@@ -221,6 +221,8 @@ static gates_err_t build(app_t *a) {
     TRY(gates_layout_set_child_grow(t, grid, 1));
     TRY(gates_layout_set(t, grid, GATES_LAYOUT_KIND_COLUMN));
     TRY(gates_layout_set_gap(t, grid, 6));
+    /* One handler for all twenty keys (0.4.0 bubbling): ev->source says which. */
+    TRY(gates_node_set_bubble_handler(t, grid, on_key_button, a));
     for (int r = 0; r < 5; r++) {
         gates_node_t row;
         TRY(gates_panel_create(t, grid, &row));
@@ -237,7 +239,6 @@ static gates_err_t build(app_t *a) {
                 TRY(gates_node_set_access_name(t, b, (gates_str_t){ .ptr = (const gates_u8 *)k->spoken,
                                                                     .size = strlen(k->spoken) }));
             }
-            TRY(gates_widget_set_handler(t, b, on_key_button, a));
             key_nodes[r][c] = b;
         }
     }

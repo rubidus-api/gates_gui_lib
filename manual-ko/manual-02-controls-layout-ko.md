@@ -4,7 +4,7 @@
 
 ## 컨트롤 표
 
-컨트롤은 저마다 노드 하나다. 아래 표가 0.3.0 의 유한한 컨트롤 전부다. 사람이 그것으로 하는 일,
+컨트롤은 저마다 노드 하나다. 아래 표가 0.4.0 의 유한한 컨트롤 전부다. 사람이 그것으로 하는 일,
 키, 프로그램이 받는 이벤트, 화면 읽기 프로그램이 듣는 것(9장)을 적었다.
 
 | 컨트롤 | 만들기 | 사람은 | 키 | 이벤트 | 접근성으로는 |
@@ -24,6 +24,9 @@
 | 메뉴 막대 | `gates_menubar_create` | 메뉴에서 명령을 고른다 | F10 또는 Alt, 화살표, 글자, Escape | MENU_CLOSED, 명령 | 메뉴 막대(11장) |
 | 도구 막대 | `gates_toolbar_create` | 한 번 클릭으로 명령을 실행한다 | 화살표, Space, Enter | 명령 | 도구 막대(11장) |
 | 상태 줄 | `gates_statusbar_create` | 프로그램의 상태를 읽는다 | - | - | 상태 줄(11장) |
+| 스핀 상자 | `gates_spin_create` | 숫자를 입력하거나 한 칸씩 바꾼다 | Up/Down, PgUp/PgDn, Enter | VALUE_CHANGED(value) | 스피너(RangeValue)(12장) |
+| 슬라이더 | `gates_slider_create` | 트랙을 따라 숫자를 끈다 | 화살표, PgUp/PgDn, Home, End | VALUE_CHANGED(value) | 슬라이더(RangeValue)(12장) |
+| 그룹 상자 | `gates_group_create` | 컨트롤 묶음을 보고 접는다 | 제목에서 Space, Enter | VALUE_CHANGED(checked = 펼침) | 그룹(ExpandCollapse)(12장) |
 | 탭 | `gates_tabs_create` | 페이지 사이를 오간다 | 화살표, Ctrl+Tab, Ctrl+PgUp/PgDn | VALUE_CHANGED(result = 번호) | 탭(Selection)(11장) |
 
 Tab 과 Shift+Tab 은 켜져 있고 보이는 컨트롤을 트리 차례대로 오간다.

@@ -5,7 +5,8 @@
  * status bar with a clock, tooltips everywhere - and the controls on the pages:
  * buttons and check boxes, text boxes with labels that carry access keys,
  * radio groups and a choice, a table in a split, progress and separators, a
- * dialog. The theme (system, light, dark) and the zoom are commands. The
+ * dialog, and (0.4.0) spin boxes, a slider, a collapsible group in a grid,
+ * wrapped chips and a total recomputed once per turn. The theme (system, light, dark) and the zoom are commands. The
  * arrangement - selected tab, split, table columns, window placement - is kept
  * in %LOCALAPPDATA%\gates-gallery.ini and comes back at the next start.
  *
@@ -37,6 +38,7 @@ typedef struct app_t {
     gates_window_t *win;
     gates_tree_t *tree;
     gates_node_t root, tabs, split, table, clock, zoom_seg, status, progress, about;
+    gates_node_t qty, price, volume, total;
     char path[512];
     char cell[64];
 } app_t;
@@ -262,6 +264,67 @@ static gates_err_t page_views(app_t *a, gates_node_t page) {
     return GATES_OK;
 }
 
+/* Inputs (0.4.0): one bubble handler hears every control of the page; the total
+ * is recomputed once after however many changes a turn brings. */
+static void recompute(gates_tree_t *tree, gates_u32 key, void *user) {
+    (void)key;
+    app_t *a = user;
+    char p[32], tot[32], line[96];
+    gates_i64 q = gates_range_value(tree, a->qty), pr = gates_range_value(tree, a->price);
+    (void)gates_range_format(pr, 100, p, sizeof p);
+    (void)gates_range_format(q * pr, 100, tot, sizeof tot);
+    snprintf(line, sizeof line, "%lld x %s = %s (volume %lld)", (long long)q, p, tot,
+             (long long)gates_range_value(tree, a->volume));
+    (void)gates_widget_set_text(tree, a->total, cs(line));
+}
+
+static void on_inputs(gates_tree_t *tree, const gates_event_t *ev, void *user) {
+    if (ev->kind == GATES_EVENT_VALUE_CHANGED) (void)gates_tree_defer(tree, 1, recompute, user);
+}
+
+static gates_err_t page_inputs(app_t *a, gates_node_t page) {
+    gates_tree_t *t = a->tree;
+    gates_node_t grid, l, group, content, adv, chips, chip;
+    TRY(gates_node_set_bubble_handler(t, page, on_inputs, a));
+    TRY(gates_panel_create(t, page, &grid));
+    TRY(gates_layout_set(t, grid, GATES_LAYOUT_KIND_GRID));
+    TRY(gates_layout_set_gap(t, grid, 8));
+    TRY(gates_layout_set_grid_column_grow(t, grid, 1, 1));
+    TRY(gates_label_create(t, grid, cs("&Quantity"), &l));
+    TRY(gates_spin_create(t, grid, &(gates_range_t){ .min = 1, .max = 999, .value = 3 }, &a->qty));
+    TRY(gates_label_set_target(t, l, a->qty));
+    TRY(gates_node_set_labelled_by(t, a->qty, l));
+    TRY(gates_layout_set_child_align(t, a->qty, GATES_ALIGN_START_V));
+    TRY(gates_label_create(t, grid, cs("P&rice"), &l));
+    TRY(gates_spin_create(t, grid, &(gates_range_t){ .min = 0, .max = 100000, .step = 5, .page = 100, .value = 1250,
+                                                     .scale = 100 }, &a->price));
+    TRY(gates_label_set_target(t, l, a->price));
+    TRY(gates_node_set_labelled_by(t, a->price, l));
+    TRY(gates_layout_set_child_align(t, a->price, GATES_ALIGN_START_V));
+    TRY(gates_label_create(t, grid, cs("Vo&lume"), &l));
+    TRY(gates_slider_create(t, grid, &(gates_range_t){ .min = 0, .max = 100, .step = 5, .page = 20, .value = 40 },
+                            false, &a->volume));
+    TRY(gates_slider_set_ticks(t, a->volume, 2));
+    TRY(gates_label_set_target(t, l, a->volume));
+    TRY(gates_node_set_labelled_by(t, a->volume, l));
+    TRY(tip(a, a->volume, "A slider: arrows step, PgUp/PgDn page, drag the thumb"));
+    TRY(gates_label_create(t, page, cs(""), &a->total));
+    TRY(gates_node_set_live(t, a->total, GATES_LIVE_POLITE));
+    TRY(gates_group_create(t, page, cs("&More settings"), true, &group, &content));
+    TRY(gates_checkbox_create(t, content, cs("Round to whole units"), false, nullptr, nullptr, &adv));
+    TRY(gates_checkbox_create(t, content, cs("Keep a log"), true, nullptr, nullptr, &adv));
+    TRY(gates_label_create(t, page, cs("Tags (a wrap layout: narrow the window)"), &l));
+    TRY(gates_panel_create(t, page, &chips));
+    TRY(gates_layout_set(t, chips, GATES_LAYOUT_KIND_WRAP));
+    TRY(gates_layout_set_gap(t, chips, 6));
+    static const char *tags[] = { "red", "green", "blue", "urgent", "later", "someday", "home", "work", "travel" };
+    for (size_t i = 0; i < sizeof tags / sizeof tags[0]; i++) {
+        TRY(gates_button_create(t, chips, cs(tags[i]), nullptr, nullptr, &chip));
+    }
+    recompute(t, 1, a);
+    return GATES_OK;
+}
+
 static gates_err_t page_progress(app_t *a, gates_node_t page) {
     gates_tree_t *t = a->tree;
     gates_node_t l, sep;
@@ -323,6 +386,8 @@ static gates_err_t build(app_t *a) {
     TRY(page_views(a, page));
     TRY(gates_tabs_add(t, a->tabs, cs("Pro&gress"), &page));
     TRY(page_progress(a, page));
+    TRY(gates_tabs_add(t, a->tabs, cs("&Inputs"), &page));
+    TRY(page_inputs(a, page));
 
     TRY(gates_statusbar_create(t, root, &sb));
     TRY(gates_statusbar_add(t, sb, cs("Ready - Alt shows the access keys"), 1, &a->status));
