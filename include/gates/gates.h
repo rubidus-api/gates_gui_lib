@@ -31,6 +31,7 @@
 #include <gates/tree.h>
 #include <gates/types.h>
 #include <gates/ui.h>
+#include <gates/undo.h>
 #include <gates/version.h>
 #include <gates/view.h>
 #include <gates/widget.h>

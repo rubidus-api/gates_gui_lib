@@ -86,3 +86,93 @@ DIALOG_CLOSED 이벤트 한 번(`ev->result`: ACCEPTED 또는 CANCELED)으로 �
 온다. 항목을 고르면 단축키와 같은, 대기열을 거치고 다시 확인하는 길로 명령을 부른다. 화살표가
 옮기고, Enter 가 고르고, Escape 나 바깥 누름은 닫기만 한다(바깥을 누른 것이 그 아래 것을 함께
 누르는 일은 없다).
+
+## 실행 취소와 다시 실행
+
+글 상자는 자기 입력을 스스로 되돌린다. 프로그램 자신의 데이터(이름을 바꾼 항목, 옮긴 줄, 바꾼 설정)에는
+`gates_undo_create`(gates/undo.h)가 스택을 준다. 바꾼 뒤 이름표와 두 함수(되돌리기, 다시 하기)를 담은
+항목을 넣는다. 같은 합치기 키로 이어진 항목은 하나가 되고(한 칸에 글 치기), 스택은 정해진 개수만 갖고,
+`gates_undo_mark_clean` / `gates_undo_is_clean` 은 데이터가 저장한 그대로인지 알려 준다.
+`gates_undo_bind` 는 명령 둘을 맞춰 둔다. 되돌리거나 다시 할 것이 있을 때만 켜지고, 이름은
+"Undo Rename" / "Redo Rename" 처럼 된다(낱말은 프로그램의 언어로 줄 수 있다).
+
+<!-- example: manual/examples/ex_04_undo.c -->
+```c
+/* manual example (host): Undo and Redo commands over the program's own data.
+ * expect: menu shows "Undo Rename"; after Undo: name Draft, menu shows "Redo Rename"; clean again: yes */
+#include <gates/gates.h>
+
+#include <stdio.h>
+#include <string.h>
+
+enum { CMD_UNDO = 1, CMD_REDO = 2 };
+
+static char name[32] = "Draft";
+
+/* One entry remembers the name before and after the change. */
+typedef struct rename_t {
+    char before[32], after[32];
+} rename_t;
+
+static gates_err_t undo_rename(void *data) {
+    memcpy(name, ((rename_t *)data)->before, sizeof name);
+    return GATES_OK;
+}
+static gates_err_t redo_rename(void *data) {
+    memcpy(name, ((rename_t *)data)->after, sizeof name);
+    return GATES_OK;
+}
+
+static void on_command(gates_tree_t *tree, gates_command_id_t id, void *user) {
+    (void)tree;
+    gates_undo_t *undo = user;
+    (void)(id == CMD_UNDO ? gates_undo_undo(undo) : gates_undo_redo(undo));
+}
+
+static void print_label(gates_tree_t *t, gates_command_id_t id) {
+    gates_str_t l = gates_command_label(t, gates_tree_root(t), id);
+    printf("\"%.*s\"", (int)l.size, (const char *)l.ptr);
+}
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    gates_undo_t *undo = nullptr;
+    if (!gates_is_ok(gates_tree_create(&(gates_tree_desc_t){0}, &t)) ||
+        !gates_is_ok(gates_undo_create((gates_allocator_t){0}, 0, &undo))) {
+        return 1;
+    }
+    gates_node_t root = gates_tree_root(t);
+    gates_command_desc_t cmds[] = {
+        { .id = CMD_UNDO, .label = GATES_STR_INIT("Undo"), .shortcut = { .key = GATES_KEY_Z, .ctrl = true },
+          .enabled = true, .invoke = on_command, .user = undo },
+        { .id = CMD_REDO, .label = GATES_STR_INIT("Redo"), .shortcut = { .key = GATES_KEY_Y, .ctrl = true },
+          .enabled = true, .invoke = on_command, .user = undo },
+    };
+    if (!gates_is_ok(gates_command_register(t, root, &cmds[0])) || !gates_is_ok(gates_command_register(t, root, &cmds[1])) ||
+        !gates_is_ok(gates_undo_bind(undo, t, root, CMD_UNDO, CMD_REDO, GATES_STR("Undo"), GATES_STR("Redo")))) {
+        return 1;
+    }
+    gates_undo_mark_clean(undo); /* the name as saved */
+
+    /* The program renames, then records how to take it back. */
+    static rename_t change = { "Draft", "Final" };
+    memcpy(name, change.after, sizeof name);
+    gates_undo_entry_t entry = { .label = GATES_STR_INIT("Rename"), .undo = undo_rename, .undo_data = &change,
+                                 .redo = redo_rename, .redo_data = &change };
+    if (!gates_is_ok(gates_undo_push(undo, &entry))) return 1;
+    printf("menu shows ");
+    print_label(t, CMD_UNDO);
+
+    /* A person presses Ctrl+Z. */
+    gates_key_event_t ctrl_z = { .key = GATES_KEY_Z, .ctrl = true, .down = true };
+    (void)gates_input_key(t, &ctrl_z);
+    (void)gates_tree_dispatch_events(t, 0);
+    printf("; after Undo: name %s, menu shows ", name);
+    print_label(t, CMD_REDO);
+    printf("; clean again: %s\n", gates_undo_is_clean(undo) ? "yes" : "no");
+
+    gates_undo_destroy(undo);
+    gates_tree_destroy(t);
+    return 0;
+}
+```
