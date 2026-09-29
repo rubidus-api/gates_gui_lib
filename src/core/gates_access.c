@@ -399,7 +399,7 @@ static gates_str_t label_text(const gates_tree_t *tree, gates_node_t n) {
 static bool is_interactive(gates_node_kind_t k) {
     return k == GATES_NODE_BUTTON || k == GATES_NODE_CHECKBOX || k == GATES_NODE_TEXTBOX ||
            k == GATES_NODE_RADIO || k == GATES_NODE_CHOICE || k == GATES_NODE_VIEW ||
-           k == GATES_NODE_TOOLBAR || k == GATES_NODE_TABSTRIP;
+           k == GATES_NODE_TOOLBAR || k == GATES_NODE_TABSTRIP || k == GATES_NODE_SLIDER;
 }
 
 static gates_role_t role_of(const gates_tree_t *tree, gates_u32 idx) {
@@ -421,6 +421,8 @@ static gates_role_t role_of(const gates_tree_t *tree, gates_u32 idx) {
     case GATES_NODE_TOOLBAR: return GATES_ROLE_TOOL_BAR;
     case GATES_NODE_STATUSBAR: return GATES_ROLE_STATUS_BAR;
     case GATES_NODE_TABSTRIP: return GATES_ROLE_TAB;
+    case GATES_NODE_SPIN: return GATES_ROLE_SPINNER;
+    case GATES_NODE_SLIDER: return GATES_ROLE_SLIDER;
     case GATES_NODE_VIEW: {
         gates_u32 k = gates_i_view_kind(tree, idx);
         return k == GATES_I_VIEW_TREE ? GATES_ROLE_TREE : k == GATES_I_VIEW_TABLE ? GATES_ROLE_TABLE : GATES_ROLE_LIST;
@@ -897,19 +899,26 @@ gates_err_t gates_access_info(gates_tree_t *tree, gates_node_t node, gates_u64 i
     out->item_count = gates_access_item_count(tree, node);
 
     /* Name: explicit > form label > own text > dialog title. */
+    /* A spin box's text box takes the spin box's name (plan-0019). */
+    gates_u32 nidx = idx;
+    gates_u32 box_spin = gates_i_spin_of_box(tree, idx);
+    if (box_spin != GATES_NONE && (p == nullptr || (p->name_len == 0 && !gates_i_valid(tree, p->labelled_by)))) {
+        nidx = box_spin;
+    }
+    const gates_i_access_prop_t *np = nidx == idx ? p : find_prop(tree, nidx);
     gates_i_field_info_t field;
-    bool is_field = gates_i_form_field_info(tree, idx, &field);
+    bool is_field = gates_i_form_field_info(tree, nidx, &field);
     bool required = false;
     gates_str_t name = {0};
     bool markup = false;          /* the name is mnemonic markup (plan-0018) */
     gates_node_t key_label = GATES_NODE_NULL;
-    if (p != nullptr && p->name_len > 0) {
-        name = (gates_str_t){ .ptr = p->name, .size = p->name_len };
-    } else if (p != nullptr && gates_i_valid(tree, p->labelled_by)) {
-        name = label_text(tree, p->labelled_by);
-        out->labelled_by = p->labelled_by;
-        key_label = p->labelled_by;
-        markup = gates_i_mn_markup(tree, p->labelled_by.index);
+    if (np != nullptr && np->name_len > 0) {
+        name = (gates_str_t){ .ptr = np->name, .size = np->name_len };
+    } else if (np != nullptr && gates_i_valid(tree, np->labelled_by)) {
+        name = label_text(tree, np->labelled_by);
+        out->labelled_by = np->labelled_by;
+        key_label = np->labelled_by;
+        markup = gates_i_mn_markup(tree, np->labelled_by.index);
     } else if (is_field) {
         name = strip_required(label_text(tree, field.label), &required);
         out->labelled_by = field.label;
@@ -1027,6 +1036,23 @@ gates_err_t gates_access_info(gates_tree_t *tree, gates_node_t node, gates_u64 i
         out->range_max = 1000;
         out->range_value = st != nullptr ? st->value : 0;
         break;
+    case GATES_NODE_SPIN:
+    case GATES_NODE_SLIDER: {
+        gates_i64 lo, hi, v; /* plan-0019; the info's range is 32-bit: clamped into it */
+        if (gates_i_range_info(tree, idx, &lo, &hi, &v)) {
+            out->has_range = true;
+            out->range_min = lo < INT32_MIN ? INT32_MIN : lo > INT32_MAX ? INT32_MAX : (gates_i32)lo;
+            out->range_max = hi < INT32_MIN ? INT32_MIN : hi > INT32_MAX ? INT32_MAX : (gates_i32)hi;
+            out->range_value = v < INT32_MIN ? INT32_MIN : v > INT32_MAX ? INT32_MAX : (gates_i32)v;
+            if (!inert) actions |= GATES_ACCESS_SET_VALUE;
+            if (s->kind == GATES_NODE_SPIN) {
+                gates_str_t t = gates_textbox_text(tree, gates_i_handle(tree, s->first_child));
+                gates_u32 v0 = put(&b, t);
+                bind(&b, &out->value, v0, t.size);
+            }
+        }
+        break;
+    }
     case GATES_NODE_DIALOG:
         states |= GATES_ACCESS_MODAL;
         break;
@@ -1146,6 +1172,15 @@ gates_err_t gates_access_expand(gates_tree_t *tree, gates_node_t node, gates_u64
     }
     gates_i_choice_lists_check(tree, node.index);
     return GATES_OK;
+}
+
+gates_err_t gates_access_set_range_value(gates_tree_t *tree, gates_node_t node, gates_i64 value) {
+    gates_widget_state_t *st = nullptr;
+    gates_err_t err = usable(tree, node, &st);
+    if (!gates_is_ok(err)) return err;
+    gates_node_kind_t k = gates_i_slot(tree, node.index)->kind;
+    if (k != GATES_NODE_SPIN && k != GATES_NODE_SLIDER) return PROVEN_ERR_INVALID_ARG;
+    return gates_i_range_user_set(tree, node.index, value);
 }
 
 gates_err_t gates_access_set_value(gates_tree_t *tree, gates_node_t node, gates_str_t text) {

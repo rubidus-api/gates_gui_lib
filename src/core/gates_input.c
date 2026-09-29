@@ -325,6 +325,11 @@ static bool input_key(gates_tree_t *tree, const gates_key_event_t *ev) {
     if (gates_i_tabs_ctrl_key(tree, ev)) {
         return true;
     }
+    /* A spin box's text box: steps and Enter belong to the spin box (plan-0019). */
+    gates_u32 spin = gates_i_spin_of_box(tree, tree->focus);
+    if (spin != GATES_NONE && focused_box(tree) != nullptr && gates_i_spin_key(tree, spin, ev)) {
+        return true;
+    }
     /* The focused control first. */
     gates_widget_state_t *box = focused_box(tree);
     if (box != nullptr && textbox_key(tree, box, ev)) {
@@ -333,6 +338,9 @@ static bool input_key(gates_tree_t *tree, const gates_key_event_t *ev) {
     gates_u32 f = tree->focus;
     bool focus_ok = f != GATES_NONE && gates_i_focus_eligible(tree, f);
     if (focus_ok && is_kind(tree, f, GATES_NODE_RADIO) && gates_i_radio_key(tree, f, ev)) {
+        return true;
+    }
+    if (focus_ok && is_kind(tree, f, GATES_NODE_SLIDER) && gates_i_slider_key(tree, f, ev)) {
         return true;
     }
     if (focus_ok && is_kind(tree, f, GATES_NODE_TABSTRIP) && gates_i_tabstrip_key(tree, f, ev)) {

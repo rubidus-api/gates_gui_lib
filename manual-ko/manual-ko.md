@@ -19,6 +19,7 @@
 - [9장 - 접근성](manual-09-accessibility-ko.md): 모델, 규칙, UI Automation
 - [10장 - 배포와 문제 해결](manual-10-deployment-ko.md)
 - [11장 - 응용 프로그램 틀](manual-11-application-frame-ko.md): 니모닉, 메뉴 막대, 키맵, 도구 막대, 상태 줄, 툴팁, 탭, 상태 저장
+- [12장 - 숫자, 묶음, 배치](manual-12-numbers-layouts-ko.md): 버블링, 미룬 호출, 스핀 상자, 슬라이더
 
 ## 읽는 법
 

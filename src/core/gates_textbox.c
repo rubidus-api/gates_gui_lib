@@ -378,6 +378,8 @@ gates_err_t gates_i_box_edit(gates_tree_t *tree, gates_u32 idx, gates_u32 b, gat
     gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
     if (user) {
         gates_i_event_push(tree, idx, GATES_EVENT_TEXT_CHANGED, GATES_ORIGIN_USER);
+        gates_u32 spin = gates_i_spin_of_box(tree, idx);
+        if (spin != GATES_NONE) gates_i_spin_typed(tree, spin); /* plan-0019: invalid until a number */
     }
     return GATES_OK;
 }

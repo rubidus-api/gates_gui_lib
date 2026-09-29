@@ -355,6 +355,8 @@ static int control_type(gates_role_t role) {
     case GATES_ROLE_STATUS_BAR:   return UIA_StatusBarControlTypeId;
     case GATES_ROLE_TAB:          return UIA_TabControlTypeId;
     case GATES_ROLE_TAB_ITEM:     return UIA_TabItemControlTypeId;
+    case GATES_ROLE_SPINNER:      return UIA_SpinnerControlTypeId;
+    case GATES_ROLE_SLIDER:       return UIA_SliderControlTypeId;
     default:                      return UIA_PaneControlTypeId;
     }
 }
@@ -755,6 +757,16 @@ static HRESULT range_get(IRangeValueProvider *This, double *out, int which) {
     HRESULT hr = el_info(e, &i);
     if (FAILED(hr)) return hr;
     double k = range_scale(&i);
+    if (i.role == GATES_ROLE_SPINNER || i.role == GATES_ROLE_SLIDER) {
+        /* plan-0019: the model's own numbers (a scaled spin box reads 125 for 1.25;
+         * its Value text says 1.25). */
+        switch (which) {
+        case 0:  *out = (double)i.range_value; return S_OK;
+        case 1:  *out = (double)i.range_min; return S_OK;
+        case 2:  *out = (double)i.range_max; return S_OK;
+        default: break;
+        }
+    }
     switch (which) {
     case 0:  *out = (double)(i.range_value - i.range_min) * k; break;
     case 1:  *out = 0.0; break;
@@ -766,9 +778,16 @@ static HRESULT range_get(IRangeValueProvider *This, double *out, int which) {
 }
 
 static HRESULT STDMETHODCALLTYPE range_set(IRangeValueProvider *This, double v) {
-    (void)This;
-    (void)v;
-    return UIA_E_INVALIDOPERATION; /* progress is shown, not set */
+    uia_el_t *e = EL_OF(This, range);
+    gates_access_info_t i;
+    HRESULT hr = el_info(e, &i);
+    if (FAILED(hr)) return hr;
+    if ((i.actions & GATES_ACCESS_SET_VALUE) == 0) {
+        return (i.states & GATES_ACCESS_DISABLED) ? UIA_E_ELEMENTNOTENABLED : UIA_E_INVALIDOPERATION;
+    }
+    if (!(v == v) || v > 9.2e18 || v < -9.2e18) return E_INVALIDARG; /* NaN or beyond 64 bits */
+    gates_i64 n = (gates_i64)(v < 0 ? v - 0.5 : v + 0.5);
+    return acted(e, gates_access_set_range_value(e->win->tree, e->ref.node, n));
 }
 
 static HRESULT STDMETHODCALLTYPE range_value(IRangeValueProvider *This, double *out) { return range_get(This, out, 0); }
@@ -783,7 +802,7 @@ static HRESULT STDMETHODCALLTYPE range_read_only(IRangeValueProvider *This, WINB
     gates_access_info_t i;
     HRESULT hr = el_info(e, &i);
     if (FAILED(hr)) return hr;
-    *out = TRUE;
+    *out = (i.actions & GATES_ACCESS_SET_VALUE) == 0; /* progress bars; disabled controls */
     return S_OK;
 }
 

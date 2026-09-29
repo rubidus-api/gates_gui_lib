@@ -65,6 +65,8 @@ typedef struct gates_event_t {
     /* SELECTION_CHANGED: the selected item id; ACTIVATED from a view and
      * EXPAND_REQUESTED: the row's id. */
     gates_u64 item;
+    /* VALUE_CHANGED of a spin box or slider: the value (plan-0019). */
+    gates_i64 value;
 } gates_event_t;
 
 typedef void (*gates_event_fn)(gates_tree_t *tree, const gates_event_t *ev, void *user);

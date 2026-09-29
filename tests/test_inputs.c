@@ -7,6 +7,8 @@
 #include <gates/overlay.h>
 #include <gates/frame.h>
 #include <gates/access.h>
+#include <gates/inputs.h>
+#include <gates/form.h>
 #include "gates_test.h"
 #include <proven/heap.h>
 
@@ -20,6 +22,18 @@ static const gates_theme_t *theme;
 static void layout(gates_tree_t *t) {
     GT_ASSERT_OK(gates_layout_run(t, (gates_size_t){ VW, VH }, be));
 }
+static bool keyx(gates_tree_t *t, gates_key_t k, bool ctrl) {
+    gates_key_event_t e = { .key = k, .down = true, .ctrl = ctrl };
+    return gates_input_key(t, &e);
+}
+static bool key(gates_tree_t *t, gates_key_t k) { return keyx(t, k, false); }
+static void type(gates_tree_t *t, const char *s) {
+    for (; *s; s++) GT_ASSERT(gates_input_char(t, (gates_u8)*s) == GATES_INPUT_CONSUMED);
+}
+static bool seq(gates_str_t a, const char *b) {
+    return a.size == strlen(b) && (a.size == 0 || memcmp(a.ptr, b, a.size) == 0);
+}
+
 static void pointer(gates_tree_t *t, gates_pointer_action_t a, gates_point_t p) {
     gates_pointer_event_t e = { .action = a, .button = GATES_BUTTON_LEFT, .pos = p };
     (void)gates_input_pointer(t, &e);
@@ -38,6 +52,7 @@ typedef struct rec_t {
     gates_event_kind_t kind[32];
     gates_node_t source[32];
     gates_u32 result[32];
+    gates_i64 value[32];
     bool checked[32];
     char text[32][16];
     int n;
@@ -51,6 +66,7 @@ static void record(gates_tree_t *tree, const gates_event_t *ev, void *user) {
         r->kind[r->n] = ev->kind;
         r->source[r->n] = ev->source;
         r->result[r->n] = ev->result;
+        r->value[r->n] = ev->value;
         r->checked[r->n] = ev->checked;
         gates_usize_t k = ev->text.size < 15 ? ev->text.size : 15;
         memcpy(r->text[r->n], ev->text.ptr != nullptr ? (const char *)ev->text.ptr : "", k);
@@ -260,10 +276,278 @@ static void test_defer(void) {
     gates_tree_destroy(t);
 }
 
+
+/* -- number formatting ---------------------------------------------------------------- */
+
+static void test_range_text(void) {
+    char b[32];
+    GT_ASSERT(gates_range_format(125, 100, b, sizeof b) == 4 && strcmp(b, "1.25") == 0);
+    gates_range_format(-5, 100, b, sizeof b);
+    GT_ASSERT(strcmp(b, "-0.05") == 0);
+    gates_range_format(7, 0, b, sizeof b);
+    GT_ASSERT(strcmp(b, "7") == 0);
+    gates_range_format(-1200, 10, b, sizeof b);
+    GT_ASSERT(strcmp(b, "-120.0") == 0);
+    gates_range_format(INT64_MIN, 1, b, sizeof b);
+    GT_ASSERT(strcmp(b, "-9223372036854775808") == 0);
+    GT_ASSERT(gates_range_format(125, 100, b, 3) == 4 && strcmp(b, "1.") == 0);
+    gates_i64 v = 0;
+    GT_ASSERT(gates_range_parse(GATES_STR("1.25"), 100, &v) && v == 125);
+    GT_ASSERT(gates_range_parse(GATES_STR("1,5"), 100, &v) && v == 150);
+    GT_ASSERT(gates_range_parse(GATES_STR("-3"), 1000, &v) && v == -3000);
+    GT_ASSERT(gates_range_parse(GATES_STR("+42"), 0, &v) && v == 42);
+    GT_ASSERT(gates_range_parse(GATES_STR(" 8 "), 0, &v) && v == 8);
+    GT_ASSERT(gates_range_parse(GATES_STR(".5"), 10, &v) && v == 5);
+    GT_ASSERT(!gates_range_parse(GATES_STR("1.234"), 100, &v));
+    GT_ASSERT(!gates_range_parse(GATES_STR("1.5"), 1, &v));
+    GT_ASSERT(!gates_range_parse(GATES_STR("12a"), 0, &v));
+    GT_ASSERT(!gates_range_parse(GATES_STR(""), 0, &v));
+    GT_ASSERT(!gates_range_parse(GATES_STR("-"), 0, &v));
+    GT_ASSERT(!gates_range_parse(GATES_STR("."), 10, &v));
+    GT_ASSERT(!gates_range_parse(GATES_STR("99999999999999999999"), 0, &v));
+    GT_ASSERT(!gates_range_parse(GATES_STR("9223372036854775808"), 0, &v));
+    GT_ASSERT(gates_range_parse(GATES_STR("-9223372036854775808"), 0, &v) && v == INT64_MIN);
+    GT_ASSERT(!gates_range_parse(GATES_STR("1 2"), 0, &v));
+}
+
+/* -- spin box --------------------------------------------------------------------------- */
+
+static void test_spin(void) {
+    gates_tree_t *t;
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &t));
+    gates_node_t root = gates_tree_root(t), spin, other;
+    GT_ASSERT_OK(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN));
+    gates_range_t r = { .min = 0, .max = 1000, .step = 25, .page = 100, .value = 150, .scale = 100 };
+    GT_ASSERT_OK(gates_spin_create(t, root, &r, &spin));
+    GT_ASSERT_OK(gates_button_create(t, root, GATES_STR("other"), nullptr, nullptr, &other));
+    GT_ASSERT(gates_spin_create(t, root, &(gates_range_t){ .min = 5, .max = 1 }, &other) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_spin_create(t, root, &(gates_range_t){ .max = 1, .scale = 7 }, &other) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_spin_create(t, root, &(gates_range_t){ .max = 1, .step = -1 }, &other) == PROVEN_ERR_INVALID_ARG);
+    rec_t rec = {0};
+    GT_ASSERT_OK(gates_widget_set_handler(t, spin, record, &rec));
+    layout(t);
+    gates_node_t box = gates_spin_box(t, spin);
+    GT_ASSERT(gates_node_kind(t, spin) == GATES_NODE_SPIN && gates_node_kind(t, box) == GATES_NODE_TEXTBOX);
+    GT_ASSERT(seq(gates_textbox_text(t, box), "1.50"));
+    GT_ASSERT(gates_range_value(t, spin) == 150);
+    gates_rect_t sr = gates_node_layout_rect(t, spin);
+    GT_ASSERT(sr.h >= 24);
+    /* Keys step and page; the text follows; clamped at the ends. */
+    gates_tree_set_focus(t, box);
+    GT_ASSERT(key(t, GATES_KEY_UP));
+    GT_ASSERT(gates_range_value(t, spin) == 175 && seq(gates_textbox_text(t, box), "1.75"));
+    GT_ASSERT(key(t, GATES_KEY_PAGE_UP));
+    GT_ASSERT(gates_range_value(t, spin) == 275);
+    GT_ASSERT(key(t, GATES_KEY_DOWN));
+    GT_ASSERT(key(t, GATES_KEY_PAGE_DOWN));
+    GT_ASSERT(gates_range_value(t, spin) == 150);
+    dispatch(t);
+    GT_ASSERT(rec.n == 1 && rec.kind[0] == GATES_EVENT_VALUE_CHANGED && rec.value[0] == 150); /* coalesced */
+    GT_ASSERT(gates_node_eq(rec.source[0], spin));
+    for (int i = 0; i < 20; i++) (void)key(t, GATES_KEY_PAGE_UP);
+    GT_ASSERT(gates_range_value(t, spin) == 1000);
+    dispatch(t);
+    rec.n = 0;
+    GT_ASSERT(key(t, GATES_KEY_UP));
+    GT_ASSERT(gates_range_value(t, spin) == 1000);
+    dispatch(t);
+    GT_ASSERT(rec.n == 0);                                   /* no change, no report */
+    /* Typing: invalid while not a number in range; Enter commits. */
+    rec.n = 0;
+    dispatch(t);
+    rec.n = 0;
+    GT_ASSERT_OK(gates_textbox_set_selection(t, box, 0, (gates_u32)gates_textbox_text(t, box).size));
+    type(t, "2.5");
+    GT_ASSERT(!gates_textbox_invalid(t, box));
+    GT_ASSERT(gates_range_value(t, spin) == 1000);           /* not yet */
+    GT_ASSERT(key(t, GATES_KEY_ENTER));
+    GT_ASSERT(gates_range_value(t, spin) == 250 && seq(gates_textbox_text(t, box), "2.50"));
+    dispatch(t);
+    GT_ASSERT(rec.n == 1 && rec.value[0] == 250);
+    type(t, "x");
+    GT_ASSERT(gates_textbox_invalid(t, box));
+    /* Leaving reverts text that is not a number. */
+    gates_tree_set_focus(t, other);
+    GT_ASSERT(seq(gates_textbox_text(t, box), "2.50") && !gates_textbox_invalid(t, box));
+    GT_ASSERT(gates_range_value(t, spin) == 250);
+    /* Out of range is invalid too, and reverts. */
+    gates_tree_set_focus(t, box);
+    GT_ASSERT_OK(gates_textbox_set_selection(t, box, 0, (gates_u32)gates_textbox_text(t, box).size));
+    type(t, "20");
+    GT_ASSERT(gates_textbox_invalid(t, box));
+    GT_ASSERT(key(t, GATES_KEY_ENTER));
+    GT_ASSERT(seq(gates_textbox_text(t, box), "2.50"));
+    /* A valid typed number is committed by leaving too. */
+    GT_ASSERT_OK(gates_textbox_set_selection(t, box, 0, (gates_u32)gates_textbox_text(t, box).size));
+    type(t, "3");
+    gates_tree_set_focus(t, other);
+    GT_ASSERT(gates_range_value(t, spin) == 300 && seq(gates_textbox_text(t, box), "3.00"));
+    /* A step key commits typed text first, then steps. */
+    gates_tree_set_focus(t, box);
+    GT_ASSERT_OK(gates_textbox_set_selection(t, box, 0, (gates_u32)gates_textbox_text(t, box).size));
+    type(t, "4");
+    GT_ASSERT(key(t, GATES_KEY_UP));
+    GT_ASSERT(gates_range_value(t, spin) == 425);
+    /* The arrows: a click steps and focuses the box. */
+    gates_tree_set_focus(t, other);
+    gates_rect_t br = gates_node_layout_rect(t, box);
+    gates_point_t up = { sr.x + sr.w - 4, sr.y + 3 }, down = { sr.x + sr.w - 4, sr.y + sr.h - 3 };
+    GT_ASSERT(up.x > br.x + br.w);
+    pointer(t, GATES_POINTER_DOWN, up);
+    pointer(t, GATES_POINTER_UP, up);
+    GT_ASSERT(gates_range_value(t, spin) == 450);
+    GT_ASSERT(gates_node_eq(gates_tree_focus(t), box));
+    pointer(t, GATES_POINTER_DOWN, down);
+    pointer(t, GATES_POINTER_UP, down);
+    GT_ASSERT(gates_range_value(t, spin) == 425);
+    /* The program: silent, clamped; new limits clamp the value. */
+    rec.n = 0;
+    dispatch(t);
+    rec.n = 0;
+    GT_ASSERT_OK(gates_range_set_value(t, spin, 5000));
+    GT_ASSERT(gates_range_value(t, spin) == 1000 && seq(gates_textbox_text(t, box), "10.00"));
+    GT_ASSERT_OK(gates_range_set(t, spin, &(gates_range_t){ .min = 0, .max = 500, .step = 1, .scale = 100 }));
+    GT_ASSERT(gates_range_value(t, spin) == 500 && gates_range_get(t, spin).page == 10);
+    GT_ASSERT_OK(gates_range_set(t, spin, &(gates_range_t){ .min = 0, .max = 500, .step = 10, .page = 5, .scale = 100 }));
+    GT_ASSERT(gates_range_get(t, spin).page == 10);            /* never below a step */
+    dispatch(t);
+    GT_ASSERT(rec.n == 0);
+    GT_ASSERT(gates_range_set_value(t, other, 1) == PROVEN_ERR_INVALID_ARG);
+    /* Disabled: no stepping. */
+    GT_ASSERT_OK(gates_widget_set_disabled(t, spin, true));
+    pointer(t, GATES_POINTER_DOWN, up);
+    pointer(t, GATES_POINTER_UP, up);
+    GT_ASSERT(gates_range_value(t, spin) == 500);
+    GT_ASSERT(!gates_widget_focusable(t, box));
+    GT_ASSERT_OK(gates_widget_set_disabled(t, spin, false));
+    /* Accessibility: a spinner with a range, named by its label; the edit carries it too. */
+    gates_node_t lab;
+    GT_ASSERT_OK(gates_label_create(t, root, GATES_STR("Width"), &lab));
+    GT_ASSERT_OK(gates_node_set_labelled_by(t, spin, lab));
+    layout(t);
+    gates_access_info_t info;
+    GT_ASSERT_OK(gates_access_info(t, spin, 0, &info));
+    GT_ASSERT(info.role == GATES_ROLE_SPINNER && seq(info.name, "Width"));
+    GT_ASSERT(info.has_range && info.range_min == 0 && info.range_max == 500 && info.range_value == 500);
+    GT_ASSERT(info.actions & GATES_ACCESS_SET_VALUE);
+    GT_ASSERT_OK(gates_access_info(t, box, 0, &info));
+    GT_ASSERT(info.role == GATES_ROLE_EDIT && seq(info.name, "Width"));
+    GT_ASSERT_OK(gates_access_set_range_value(t, spin, 120));
+    GT_ASSERT(gates_range_value(t, spin) == 120 && seq(gates_textbox_text(t, box), "1.20"));
+    dispatch(t);
+    GT_ASSERT(rec.n == 1 && rec.value[0] == 120);
+    GT_ASSERT(gates_access_set_range_value(t, lab, 1) == PROVEN_ERR_INVALID_ARG);
+    gates_access_issue_t issues[8];
+    GT_ASSERT(gates_access_audit(t, theme, issues, 8) == 0);
+    /* In a form: the row's editor. */
+    gates_tree_destroy(t);
+}
+
+/* -- slider ------------------------------------------------------------------------------ */
+
+static void test_slider(void) {
+    gates_tree_t *t;
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &t));
+    gates_node_t root = gates_tree_root(t), s, v;
+    GT_ASSERT_OK(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN));
+    gates_range_t r = { .min = -50, .max = 50, .step = 5, .page = 20, .value = 0 };
+    GT_ASSERT_OK(gates_slider_create(t, root, &r, false, &s));
+    GT_ASSERT_OK(gates_slider_create(t, root, &(gates_range_t){ .min = 0, .max = 10 }, true, &v));
+    GT_ASSERT_OK(gates_layout_set_child_align(t, s, GATES_ALIGN_START_V));
+    GT_ASSERT_OK(gates_layout_set_child_align(t, v, GATES_ALIGN_START_V));
+    GT_ASSERT_OK(gates_node_set_access_name(t, s, GATES_STR("Balance")));
+    GT_ASSERT_OK(gates_node_set_access_name(t, v, GATES_STR("Level")));
+    rec_t rec = {0};
+    GT_ASSERT_OK(gates_widget_set_handler(t, s, record, &rec));
+    layout(t);
+    gates_rect_t sr = gates_node_layout_rect(t, s), vr = gates_node_layout_rect(t, v);
+    GT_ASSERT(sr.w > sr.h && sr.h >= 24);
+    GT_ASSERT(vr.h > vr.w && vr.w >= 24);
+    /* Keys. */
+    gates_tree_set_focus(t, s);
+    GT_ASSERT(key(t, GATES_KEY_RIGHT));
+    GT_ASSERT(gates_range_value(t, s) == 5);
+    GT_ASSERT(key(t, GATES_KEY_UP));
+    GT_ASSERT(key(t, GATES_KEY_PAGE_UP));
+    GT_ASSERT(gates_range_value(t, s) == 30);
+    GT_ASSERT(key(t, GATES_KEY_LEFT));
+    GT_ASSERT(key(t, GATES_KEY_DOWN));
+    GT_ASSERT(key(t, GATES_KEY_PAGE_DOWN));
+    GT_ASSERT(gates_range_value(t, s) == 0);
+    GT_ASSERT(key(t, GATES_KEY_END));
+    GT_ASSERT(gates_range_value(t, s) == 50);
+    GT_ASSERT(key(t, GATES_KEY_HOME));
+    GT_ASSERT(gates_range_value(t, s) == -50);
+    GT_ASSERT(key(t, GATES_KEY_LEFT));
+    GT_ASSERT(gates_range_value(t, s) == -50);
+    GT_ASSERT(!key(t, GATES_KEY_ENTER));                    /* not the slider's */
+    dispatch(t);
+    GT_ASSERT(rec.n == 1 && rec.value[0] == -50);
+    /* Pointer: the track pages toward the press; the thumb drags in steps. */
+    gates_point_t right_end = { sr.x + sr.w - 2, sr.y + sr.h / 2 };
+    pointer(t, GATES_POINTER_DOWN, right_end);
+    pointer(t, GATES_POINTER_UP, right_end);
+    GT_ASSERT(gates_range_value(t, s) == -30);
+    GT_ASSERT_OK(gates_range_set_value(t, s, 0));
+    layout(t);
+    gates_point_t mid = { sr.x + sr.w / 2, sr.y + sr.h / 2 };
+    pointer(t, GATES_POINTER_DOWN, mid);                     /* on the thumb */
+    GT_ASSERT(gates_range_value(t, s) == 0);
+    pointer(t, GATES_POINTER_MOVE, (gates_point_t){ sr.x + sr.w - 1, mid.y });
+    GT_ASSERT(gates_range_value(t, s) == 50);
+    pointer(t, GATES_POINTER_MOVE, (gates_point_t){ sr.x - 40, mid.y });
+    GT_ASSERT(gates_range_value(t, s) == -50);
+    pointer(t, GATES_POINTER_MOVE, (gates_point_t){ mid.x + 3, mid.y });
+    gates_i64 near = gates_range_value(t, s);
+    GT_ASSERT(near % 5 == 0 && near >= 0 && near <= 10);    /* in steps */
+    pointer(t, GATES_POINTER_UP, (gates_point_t){ mid.x + 3, mid.y });
+    GT_ASSERT(gates_node_eq(gates_tree_focus(t), s));
+    /* Vertical: up is more. */
+    gates_tree_set_focus(t, v);
+    GT_ASSERT(key(t, GATES_KEY_UP));
+    GT_ASSERT(gates_range_value(t, v) == 1);
+    gates_point_t top = { vr.x + vr.w / 2, vr.y + 2 };
+    pointer(t, GATES_POINTER_DOWN, top);
+    pointer(t, GATES_POINTER_UP, top);
+    GT_ASSERT(gates_range_value(t, v) == 10);                /* page = 10 steps */
+    /* At the top of a vertical slider sits its maximum's thumb: drag it down to the minimum. */
+    pointer(t, GATES_POINTER_DOWN, top);
+    pointer(t, GATES_POINTER_MOVE, (gates_point_t){ top.x, vr.y + vr.h - 1 });
+    pointer(t, GATES_POINTER_UP, (gates_point_t){ top.x, vr.y + vr.h - 1 });
+    GT_ASSERT(gates_range_value(t, v) == 0);
+    /* Ticks paint; accessibility. */
+    GT_ASSERT_OK(gates_slider_set_ticks(t, s, 2));
+    gates_draw_list_t dl;
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    GT_ASSERT_OK(gates_paint_tree(t, &dl, theme, be));
+    int ticks = 0;
+    for (gates_u32 i = 0; i < gates_draw_list_len(&dl); i++) {
+        const gates_draw_cmd_t *c = gates_draw_list_at(&dl, i);
+        if (c->kind == GATES_DRAW_RECT && c->rect.w == 1 && c->rect.y >= sr.y && c->rect.y < sr.y + sr.h) ticks++;
+    }
+    GT_ASSERT(ticks == 11);                                   /* -50..50 every 10 */
+    gates_draw_list_deinit(&dl);
+    gates_access_info_t info;
+    GT_ASSERT_OK(gates_access_info(t, s, 0, &info));
+    GT_ASSERT(info.role == GATES_ROLE_SLIDER && info.has_range && info.range_min == -50 && info.range_max == 50);
+    GT_ASSERT_OK(gates_access_set_range_value(t, s, 12));
+    GT_ASSERT(gates_range_value(t, s) == 12);                 /* any value in range, not only steps */
+    GT_ASSERT_OK(gates_access_set_range_value(t, s, 999));
+    GT_ASSERT(gates_range_value(t, s) == 50);
+    gates_access_issue_t issues[8];
+    GT_ASSERT(gates_access_audit(t, theme, issues, 8) == 0);
+    GT_ASSERT_OK(gates_widget_set_disabled(t, s, true));
+    GT_ASSERT(gates_access_set_range_value(t, s, 0) == PROVEN_ERR_INVALID_STATE);
+    gates_tree_destroy(t);
+}
+
 int main(void) {
     be = gates_text_backend_builtin();
     theme = gates_theme_light();
     test_bubbling();
     test_defer();
+    test_range_text();
+    test_spin();
+    test_slider();
     return gt_report("test_inputs");
 }

@@ -145,6 +145,7 @@ void gates_i_state_release(gates_tree_t *tree, gates_u32 state_index) {
     gates_i_menubar_free(tree, st);
     gates_i_toolbar_free(tree, st);
     gates_i_tabs_free(tree, st);
+    gates_i_range_free(tree, st);
     memset(st, 0, sizeof *st);
     st->next_free = tree->state_first_free;
     tree->state_first_free = state_index;
@@ -513,6 +514,7 @@ void gates_tree_destroy(gates_tree_t *tree) {
             gates_i_menubar_free(tree, &tree->states[i]);
             gates_i_toolbar_free(tree, &tree->states[i]);
             gates_i_tabs_free(tree, &tree->states[i]);
+            gates_i_range_free(tree, &tree->states[i]);
         }
         alloc.free_fn(alloc.ctx, tree->states);
     }
@@ -753,6 +755,12 @@ void gates_tree_set_focus(gates_tree_t *tree, gates_node_t node) {
      * uncommitted (the platform adapter completes it first if it wants the
      * text kept, plan-0006). */
     if (tree->focus != GATES_NONE) {
+        gates_u32 spin = gates_i_spin_of_box(tree, tree->focus);
+        if (spin != GATES_NONE) {
+            gates_u32 leaving = tree->focus;
+            gates_i_spin_commit(tree, spin); /* plan-0019: leaving commits or reverts */
+            if (tree->focus != leaving) return;
+        }
         gates_widget_state_t *st =
             gates_i_state(tree, gates_i_slot(tree, tree->focus)->state_index);
         if (st != nullptr && st->edit != nullptr) {

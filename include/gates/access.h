@@ -67,6 +67,8 @@ typedef enum gates_role_t {
     GATES_ROLE_STATUS_BAR,       /* status bar; its segments are TEXT nodes */
     GATES_ROLE_TAB,              /* a tab strip; its titles are TAB_ITEM items */
     GATES_ROLE_TAB_ITEM,
+    GATES_ROLE_SPINNER,          /* spin box (RangeValue); its text box is an EDIT inside it */
+    GATES_ROLE_SLIDER,           /* slider (RangeValue) */
 } gates_role_t;
 
 /* State bits. */
@@ -190,6 +192,10 @@ gates_access_ref_t gates_access_focus_ref(gates_tree_t *tree);
                                               bool expand);
 [[nodiscard]] gates_err_t gates_access_set_value(gates_tree_t *tree, gates_node_t node,
                                                  gates_str_t text);
+/* A spin box's or slider's value (plan-0019), as a person's change: clamped into
+ * the range, any value in it (not only whole steps), reported with VALUE_CHANGED. */
+[[nodiscard]] gates_err_t gates_access_set_range_value(gates_tree_t *tree, gates_node_t node,
+                                                       gates_i64 value);
 /* Focus a node; for an item, selecting it is how it takes focus. */
 [[nodiscard]] gates_err_t gates_access_focus(gates_tree_t *tree, gates_node_t node, gates_u64 item);
 

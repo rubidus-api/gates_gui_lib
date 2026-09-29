@@ -231,6 +231,9 @@ static gates_u32 candidate(const gates_tree_t *tree, gates_u32 idx, gates_u8 let
     }
     if (s->kind == GATES_NODE_LABEL) {
         gates_node_t t = { .index = st->mn_target_index, .generation = st->mn_target_generation };
+        if (gates_i_valid(tree, t) && gates_i_slot(tree, t.index)->kind == GATES_NODE_SPIN) {
+            t = gates_i_handle(tree, gates_i_slot(tree, t.index)->first_child); /* its text box */
+        }
         if (!gates_i_valid(tree, t) || !gates_i_reachable(tree, idx) ||
             !gates_i_focus_eligible(tree, t.index)) {
             return GATES_NONE;

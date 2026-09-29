@@ -8,7 +8,7 @@
 static bool interactive(const gates_tree_t *tree, const gates_node_slot_t *s) {
     if (s->kind != GATES_NODE_BUTTON && s->kind != GATES_NODE_CHECKBOX &&
         s->kind != GATES_NODE_TEXTBOX && s->kind != GATES_NODE_RADIO &&
-        s->kind != GATES_NODE_CHOICE && s->kind != GATES_NODE_VIEW) {
+        s->kind != GATES_NODE_CHOICE && s->kind != GATES_NODE_VIEW && s->kind != GATES_NODE_SLIDER) {
         return false;
     }
     const gates_widget_state_t *st = gates_i_state(tree, s->state_index);
@@ -159,6 +159,13 @@ static void textbox_caret_at(gates_tree_t *tree, gates_u32 idx, gates_point_t p,
  * the ordinary hit result is enough to detect them. */
 static bool drag_begin(gates_tree_t *tree, gates_u32 idx, gates_point_t p, gates_u32 clicks) {
     gates_node_slot_t *s = gates_i_slot(tree, idx);
+    if (s->kind == GATES_NODE_SLIDER) {
+        return gates_i_slider_press(tree, idx, p); /* plan-0019 */
+    }
+    if (s->kind == GATES_NODE_SPINARROWS) {
+        gates_i_spin_arrows_press(tree, idx, p);
+        return true;
+    }
     if (s->kind == GATES_NODE_VIEW) {
         return gates_i_view_pointer_down(tree, idx, p, clicks); /* rows, header, bars */
     }
@@ -226,6 +233,11 @@ static void drag_update(gates_tree_t *tree, gates_point_t p) {
         return;
     }
 
+    if (tree->drag_kind == GATES_DRAG_SLIDER) {
+        gates_i_slider_drag(tree, p, false);
+        return;
+    }
+
     if (tree->drag_kind == GATES_DRAG_TEXT_SELECT) {
         textbox_caret_at(tree, idx, p, true); /* extend the selection */
         return;
@@ -286,6 +298,7 @@ gates_node_t gates_input_pointer(gates_tree_t *tree, const gates_pointer_event_t
             drag_update(tree, ev->pos);
         } else if (ev->action == GATES_POINTER_UP) {
             drag_update(tree, ev->pos);
+            if (tree->drag_kind == GATES_DRAG_SLIDER) gates_i_slider_drag(tree, ev->pos, true);
             tree->drag_kind = GATES_DRAG_NONE;
             tree->drag_node = GATES_NONE;
         }

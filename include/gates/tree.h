@@ -30,6 +30,9 @@ typedef enum gates_node_kind_t {
     GATES_NODE_STATUSBAR,    /* status bar: a row of label segments */
     GATES_NODE_TABS,         /* tabs: a strip of titles over a stack of pages */
     GATES_NODE_TABSTRIP,     /* the strip of a tabs node (made by gates_tabs_create) */
+    GATES_NODE_SPIN,         /* spin box: a text box and arrows (gates/inputs.h) */
+    GATES_NODE_SPINARROWS,   /* the arrows of a spin box */
+    GATES_NODE_SLIDER,       /* slider (gates/inputs.h) */
     /* Semantic widgets arrive in Phase 4. */
 } gates_node_kind_t;
 

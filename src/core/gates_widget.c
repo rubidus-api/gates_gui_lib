@@ -224,6 +224,14 @@ gates_err_t gates_widget_set_disabled(gates_tree_t *tree, gates_node_t node, boo
     if (st == nullptr) {
         return PROVEN_ERR_INVALID_ARG;
     }
+    if (gates_i_slot(tree, node.index)->kind == GATES_NODE_SPIN) {
+        gates_node_t box = gates_i_handle(tree, gates_i_slot(tree, node.index)->first_child);
+        gates_widget_state_t *bs = state_of(tree, box);
+        if (bs != nullptr && bs->disabled != disabled) {
+            bs->disabled = disabled; /* the box is the spin box's input (plan-0019) */
+            gates_i_mark_dirty(tree, box.index, GATES_DIRTY_PAINT);
+        }
+    }
     if (st->disabled != disabled) {
         st->disabled = disabled;
         gates_i_mark_dirty(tree, node.index, GATES_DIRTY_PAINT);

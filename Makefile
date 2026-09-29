@@ -50,6 +50,7 @@ CORE_SRC := \
   src/core/gates_tooltip.c \
   src/core/gates_tabs.c \
   src/core/gates_state.c \
+  src/core/gates_inputs.c \
   src/render/gates_draw_list.c \
   src/render/gates_render_soft.c \
   src/text/gates_text_builtin.c \

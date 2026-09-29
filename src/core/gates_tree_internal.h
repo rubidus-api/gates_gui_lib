@@ -141,6 +141,7 @@ typedef enum gates_drag_kind_i {
     GATES_DRAG_VIEW_VTHUMB,      /* plan-0011: a view's scrollbar thumbs and a header edge */
     GATES_DRAG_VIEW_HTHUMB,
     GATES_DRAG_VIEW_COLUMN,
+    GATES_DRAG_SLIDER,           /* plan-0019: a slider's thumb */
 } gates_drag_kind_i;
 
 typedef enum gates_align_i {
@@ -223,6 +224,8 @@ typedef struct gates_widget_state_t {
     struct gates_i_toolbar *tbar;
     /* Tabs (plan-0018): the titles; the pages are the stack's children. */
     struct gates_i_tabs *tabs;
+    /* Spin box and slider (plan-0019): the range. */
+    struct gates_i_range *rng;
     /* Form (plan-0010 stage 2): its field table. */
     struct gates_i_field *fields;
     gates_u32 field_count;
@@ -796,6 +799,34 @@ bool gates_i_tabs_mnemonic(gates_tree_t *tree, gates_u8 letter);
 gates_u32 gates_i_view_ncol(const gates_tree_t *tree, gates_u32 idx);
 gates_i32 gates_i_view_col_width(const gates_tree_t *tree, gates_u32 idx, gates_u32 k);
 void gates_i_view_set_col_width(gates_tree_t *tree, gates_u32 idx, gates_u32 k, gates_i32 width);
+
+/* Spin box and slider (gates_inputs.c, plan-0019). */
+typedef struct gates_i_range {
+    gates_i64 min, max, step, page, value;
+    gates_u32 scale;
+    gates_u32 ticks;             /* slider: tick marks every n steps, 0 = none */
+    bool vertical;               /* slider */
+} gates_i_range;
+void gates_i_range_free(gates_tree_t *tree, gates_widget_state_t *st);
+gates_i64 gates_i_range_value(const gates_tree_t *tree, gates_u32 idx);
+bool gates_i_range_info(const gates_tree_t *tree, gates_u32 idx, gates_i64 *min, gates_i64 *max, gates_i64 *value);
+/* A person's change (accessibility, keys): reserved report, clamped, VALUE_CHANGED. */
+gates_err_t gates_i_range_user_set(gates_tree_t *tree, gates_u32 idx, gates_i64 v);
+/* The spin box a text box belongs to, or GATES_NONE. */
+gates_u32 gates_i_spin_of_box(const gates_tree_t *tree, gates_u32 box);
+void gates_i_spin_typed(gates_tree_t *tree, gates_u32 spin);
+void gates_i_spin_commit(gates_tree_t *tree, gates_u32 spin);
+bool gates_i_spin_key(gates_tree_t *tree, gates_u32 spin, const gates_key_event_t *ev);
+void gates_i_spin_arrows_press(gates_tree_t *tree, gates_u32 arrows, gates_point_t p);
+gates_err_t gates_i_spin_arrows_paint(const gates_tree_t *tree, gates_u32 idx, gates_draw_list_t *dl,
+                                      const gates_theme_t *theme);
+gates_size_t gates_i_spin_arrows_measure(void);
+gates_size_t gates_i_slider_measure(const gates_tree_t *tree, const gates_node_slot_t *s);
+gates_err_t gates_i_slider_paint(const gates_tree_t *tree, gates_u32 idx, gates_draw_list_t *dl,
+                                 const gates_theme_t *theme);
+bool gates_i_slider_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t *ev);
+bool gates_i_slider_press(gates_tree_t *tree, gates_u32 idx, gates_point_t p);
+void gates_i_slider_drag(gates_tree_t *tree, gates_point_t p, bool end);
 
 /* Tooltips (gates_tooltip.c, plan-0018). */
 gates_str_t gates_i_tooltip_of(const gates_tree_t *tree, gates_u32 idx);
