@@ -5,8 +5,10 @@
 #include <gates/event.h>
 #include <gates/layout.h>
 #include <gates/text.h>
+#include <gates/ui.h>
 #include "gates_tree_internal.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #define ED_PAD 3                     /* text inset inside the border */
@@ -43,14 +45,37 @@ struct gates_i_editor {
     gates_u32 scratch_cap;
     gates_u32 drag_top;
     gates_i32 drag_x;
+    /* Stage 3: wrapping, the gutter, highlighting. */
+    bool wrap, line_numbers, auto_indent;
+    gates_u32 top_row;               /* the row of `top` shown first (wrap) */
+    gates_u8 *sscratch;              /* one line's style bytes for painting */
+    gates_u32 sscratch_cap;
+    gates_editor_style_t styles[256];
+    gates_u32 nstyles;
+    gates_editor_styler_fn styler;
+    void *styler_user;
+    gates_u32 styled_end;            /* styles before this (a line start) are up to date */
 };
 
 typedef struct ed_geom {
-    gates_rect_t inner, text, vtrack, vthumb, htrack, hthumb;
+    gates_rect_t inner, text, gutter, vtrack, vthumb, htrack, hthumb;
     gates_i32 row_h;
     gates_u32 lines, visible, top, max_top;
+    gates_u32 top_row, max_top_row;  /* with wrap: rows inside the top lines */
     gates_i32 max_x, scroll_x;
 } ed_geom;
+
+/* A place on screen: a line and one of its rows (always row 0 without wrap). */
+typedef struct dpos {
+    gates_u32 line, row;
+} dpos;
+
+/* How rows are laid out: the backend, the font and the wrapping width. */
+typedef struct lay_t {
+    const gates_text_backend_t *be;
+    gates_i32 font;
+    gates_i32 w;
+} lay_t;
 
 /* -- state ------------------------------------------------------------------------------- */
 
@@ -67,6 +92,7 @@ void gates_i_editor_free(gates_tree_t *tree, gates_widget_state_t *st) {
     for (gates_u32 i = 0; i < e->nhist; i++) hist_free_entry(a, &e->hist[i]);
     if (e->hist != nullptr) a.free_fn(a.ctx, e->hist);
     if (e->scratch != nullptr) a.free_fn(a.ctx, e->scratch);
+    if (e->sscratch != nullptr) a.free_fn(a.ctx, e->sscratch);
     gates_text_buffer_destroy(e->buf);
     a.free_fn(a.ctx, e);
     st->editor = nullptr;
@@ -253,39 +279,173 @@ static const gates_text_backend_t *backend(const gates_tree_t *tree) {
     return tree->text_backend;
 }
 
-/* The caret's x in its line (0 when the line cannot be laid out). */
-static gates_i32 caret_x(const gates_tree_t *tree, gates_u32 idx, struct gates_i_editor *e, gates_u32 off) {
-    const gates_text_backend_t *be = backend(tree);
-    if (be == nullptr) return 0;
+/* -- rows ------------------------------------------------------------------------------------ */
+
+/* The end of the row that starts at `start` in line text t: without wrap the
+ * line's end; with it, after the last blank that fits, else the last code
+ * point that fits (at least one per row; blanks may hang past the edge). */
+static gates_u32 row_end(const lay_t *L, const struct gates_i_editor *e, gates_str_t t, gates_u32 start) {
+    if (!e->wrap || L->w <= 0 || L->be == nullptr) return (gates_u32)t.size;
+    gates_i32 x = 0;
+    gates_u32 brk = start;
+    for (gates_u32 i = start; i < t.size;) {
+        gates_u32 cp;
+        gates_u32 next = i + gates_text_decode(t, i, &cp);
+        bool blank = cp == ' ' || cp == '\t';
+        gates_i32 a = advance(L->be, L->font, e, x, cp);
+        if (x + a > L->w && i > start && !blank) return brk > start ? brk : i;
+        x += a;
+        i = next;
+        if (blank) brk = i;
+    }
+    return (gates_u32)t.size;
+}
+
+/* Row `row` of the line (clamped to its last): its range; returns its index. */
+static gates_u32 row_range(const lay_t *L, const struct gates_i_editor *e, gates_str_t t, gates_u32 row, gates_u32 *rs,
+                           gates_u32 *re) {
+    gates_u32 s = 0;
+    for (gates_u32 r = 0;; r++) {
+        gates_u32 en = row_end(L, e, t, s);
+        if (r == row || en >= t.size) {
+            *rs = s;
+            *re = en;
+            return r;
+        }
+        s = en;
+    }
+}
+
+/* The row holding byte `rel` of the line (a row boundary belongs to the row after it). */
+static gates_u32 row_at(const lay_t *L, const struct gates_i_editor *e, gates_str_t t, gates_u32 rel, gates_u32 *rs,
+                        gates_u32 *re) {
+    gates_u32 s = 0;
+    for (gates_u32 r = 0;; r++) {
+        gates_u32 en = row_end(L, e, t, s);
+        if (rel < en || en >= t.size) {
+            *rs = s;
+            *re = en;
+            return r;
+        }
+        s = en;
+    }
+}
+
+static gates_u32 rows_in(const gates_tree_t *tree, const lay_t *L, struct gates_i_editor *e, gates_u32 line) {
+    if (!e->wrap) return 1;
+    gates_str_t t = line_text(tree, e, line, nullptr);
+    gates_u32 rs, re;
+    return row_range(L, e, t, UINT32_MAX, &rs, &re) + 1;
+}
+
+static bool dpos_lt(dpos a, dpos b) { return a.line < b.line || (a.line == b.line && a.row < b.row); }
+static bool dpos_eq(dpos a, dpos b) { return a.line == b.line && a.row == b.row; }
+
+/* n rows down (up when negative), stopping at the first and last rows; *moved (may be null) how many. */
+static dpos advance_rows(const gates_tree_t *tree, const lay_t *L, struct gates_i_editor *e, dpos p, gates_i64 n,
+                         gates_i64 *moved) {
+    gates_u32 lines = gates_text_buffer_line_count(e->buf);
+    gates_i64 done = 0;
+    for (; n > 0; n--, done++) {
+        if (p.row + 1 < rows_in(tree, L, e, p.line)) p.row++;
+        else if (p.line + 1 < lines) p = (dpos){ p.line + 1, 0 };
+        else break;
+    }
+    for (; n < 0; n++, done--) {
+        if (p.row > 0) p.row--;
+        else if (p.line > 0) p = (dpos){ p.line - 1, rows_in(tree, L, e, p.line - 1) - 1 };
+        else break;
+    }
+    if (moved != nullptr) *moved = done;
+    return p;
+}
+
+/* Where an offset is shown. */
+static dpos pos_of(const gates_tree_t *tree, const lay_t *L, struct gates_i_editor *e, gates_u32 off) {
+    gates_u32 line = gates_text_buffer_line_of(e->buf, off);
+    if (!e->wrap) return (dpos){ line, 0 };
+    gates_str_t t = line_text(tree, e, line, nullptr);
+    gates_u32 rs, re;
+    return (dpos){ line, row_at(L, e, t, off - gates_text_buffer_line_start(e->buf, line), &rs, &re) };
+}
+
+/* The caret's x in its row (0 when the line cannot be laid out). */
+static gates_i32 caret_x(const gates_tree_t *tree, const lay_t *L, struct gates_i_editor *e, gates_u32 off) {
+    if (L->be == nullptr) return 0;
     gates_u32 line = gates_text_buffer_line_of(e->buf, off);
     gates_str_t t = line_text(tree, e, line, nullptr);
-    gates_i32 x = x_in(be, gates_i_font(tree, idx), e, t, off - gates_text_buffer_line_start(e->buf, line));
-    if (x + 1 > e->max_w) e->max_w = x + 1;
+    gates_u32 rs, re, rel = off - gates_text_buffer_line_start(e->buf, line);
+    (void)row_at(L, e, t, rel, &rs, &re);
+    gates_i32 x = x_in(L->be, L->font, e, (gates_str_t){ .ptr = t.ptr + rs, .size = t.size - rs }, rel - rs);
+    if (!e->wrap && x + 1 > e->max_w) e->max_w = x + 1;
     return x;
+}
+
+/* The offset in row p nearest x; never the row's end unless it is the line's end
+ * (that place is shown at the start of the next row). */
+static gates_u32 at_row_x(const gates_tree_t *tree, const lay_t *L, struct gates_i_editor *e, dpos p, gates_i32 x) {
+    gates_str_t t = line_text(tree, e, p.line, nullptr);
+    gates_u32 rs, re;
+    (void)row_range(L, e, t, p.row, &rs, &re);
+    gates_u32 rel = rs + (L->be != nullptr ? at_x(L->be, L->font, e, (gates_str_t){ .ptr = t.ptr + rs, .size = re - rs }, x) : 0);
+    if (rel == re && re < t.size && re > rs) {
+        do rel--; while (rel > rs && (t.ptr[rel] & 0xC0) == 0x80);
+    }
+    return gates_text_buffer_line_start(e->buf, p.line) + rel;
 }
 
 /* -- geometry -------------------------------------------------------------------------------- */
 
-static void geom(const gates_tree_t *tree, gates_u32 idx, const struct gates_i_editor *e, gates_i32 line_height,
-                 ed_geom *g) {
+static gates_u32 digits(gates_u32 n) {
+    gates_u32 d = 1;
+    while (n >= 10) {
+        n /= 10;
+        d++;
+    }
+    return d;
+}
+
+static void geom(const gates_tree_t *tree, gates_u32 idx, struct gates_i_editor *e, gates_i32 line_height, ed_geom *g) {
     memset(g, 0, sizeof *g);
     gates_rect_t r = gates_i_slot(tree, idx)->layout_rect;
     g->inner = (gates_rect_t){ r.x + 1, r.y + 1, r.w - 2 > 0 ? r.w - 2 : 0, r.h - 2 > 0 ? r.h - 2 : 0 };
     g->row_h = line_height > 0 ? line_height : 16;
     g->lines = gates_text_buffer_line_count(e->buf);
-    gates_i32 h = g->inner.h - 2 * ED_PAD, w = g->inner.w - 2 * ED_PAD;
-    bool vbar = (gates_i64)g->lines * g->row_h > h;
-    bool hbar = e->max_w > w - (vbar ? GATES_SCROLLBAR_PX : 0);
+    const gates_text_backend_t *be = backend(tree);
+    gates_i32 font = gates_i_font(tree, idx);
+    gates_i32 zero = be != nullptr && be->glyph_advance != nullptr ? be->glyph_advance(be->ctx, font, '0')
+                                                                     : (tree->advance > 0 ? tree->advance : 8);
+    gates_i32 gw = e->line_numbers ? (gates_i32)digits(g->lines) * zero + 2 * ED_PAD : 0;
+    gates_i32 h = g->inner.h - 2 * ED_PAD, w = g->inner.w - gw - 2 * ED_PAD;
+    bool vbar = e->wrap || (gates_i64)g->lines * g->row_h > h;
+    bool hbar = !e->wrap && e->max_w > w - (vbar ? GATES_SCROLLBAR_PX : 0);
     if (hbar && !vbar) vbar = (gates_i64)g->lines * g->row_h > h - GATES_SCROLLBAR_PX;
-    g->text = (gates_rect_t){ g->inner.x + ED_PAD, g->inner.y + ED_PAD, w - (vbar ? GATES_SCROLLBAR_PX : 0),
+    g->text = (gates_rect_t){ g->inner.x + gw + ED_PAD, g->inner.y + ED_PAD, w - (vbar ? GATES_SCROLLBAR_PX : 0),
                               h - (hbar ? GATES_SCROLLBAR_PX : 0) };
     if (g->text.w < 0) g->text.w = 0;
     if (g->text.h < 0) g->text.h = 0;
+    if (gw > 0) g->gutter = (gates_rect_t){ g->inner.x, g->inner.y, gw, g->inner.h - (hbar ? GATES_SCROLLBAR_PX : 0) };
     gates_u32 fit = (gates_u32)(g->text.h / g->row_h);
     g->visible = fit > 0 ? fit : 1;
-    g->max_top = g->lines > g->visible ? g->lines - g->visible : 0;
-    g->top = e->top < g->max_top ? e->top : g->max_top;
-    g->max_x = e->max_w > g->text.w ? e->max_w - g->text.w : 0;
+    if (!e->wrap) {
+        g->max_top = g->lines > g->visible ? g->lines - g->visible : 0;
+        g->top = e->top < g->max_top ? e->top : g->max_top;
+    } else {
+        /* The last place the view may start: `visible` rows before the end. */
+        lay_t L = { be, font, g->text.w };
+        dpos last = { g->lines - 1, rows_in(tree, &L, e, g->lines - 1) - 1 };
+        dpos m = advance_rows(tree, &L, e, last, -(gates_i64)(g->visible - 1), nullptr);
+        g->max_top = m.line;
+        g->max_top_row = m.row;
+        dpos top = { e->top, e->top_row };
+        if (top.line >= g->lines) top = (dpos){ g->lines - 1, 0 };
+        gates_u32 rows = rows_in(tree, &L, e, top.line);
+        if (top.row >= rows) top.row = rows - 1;
+        if (dpos_lt(m, top)) top = m;
+        g->top = top.line;
+        g->top_row = top.row;
+    }
+    g->max_x = e->wrap ? 0 : e->max_w > g->text.w ? e->max_w - g->text.w : 0;
     g->scroll_x = e->scroll_x < 0 ? 0 : e->scroll_x > g->max_x ? g->max_x : e->scroll_x;
     if (vbar) {
         g->vtrack = (gates_rect_t){ g->inner.x + g->inner.w - GATES_SCROLLBAR_PX, g->inner.y, GATES_SCROLLBAR_PX,
@@ -309,20 +469,48 @@ static void geom(const gates_tree_t *tree, gates_u32 idx, const struct gates_i_e
     }
 }
 
-static void geom_now(const gates_tree_t *tree, gates_u32 idx, const struct gates_i_editor *e, ed_geom *g) {
+static void geom_now(const gates_tree_t *tree, gates_u32 idx, struct gates_i_editor *e, ed_geom *g) {
     geom(tree, idx, e, tree->line_height, g);
 }
 
-/* Scrolls so the caret is shown (its line, and its column). */
+static lay_t lay_of(const gates_tree_t *tree, gates_u32 idx, const ed_geom *g) {
+    return (lay_t){ backend(tree), gates_i_font(tree, idx), g->text.w };
+}
+
+/* Scrolls so the caret is shown (its row, and its column without wrap). */
 static void keep_caret(gates_tree_t *tree, gates_u32 idx, struct gates_i_editor *e) {
     ed_geom g;
-    gates_i32 x = caret_x(tree, idx, e, e->caret); /* may widen max_w: before the geometry */
+    gates_i32 x = 0;
+    if (!e->wrap) {
+        lay_t L0 = { backend(tree), gates_i_font(tree, idx), 0 };
+        x = caret_x(tree, &L0, e, e->caret); /* may widen max_w: before the geometry */
+    }
     geom_now(tree, idx, e, &g);
-    gates_u32 line = gates_text_buffer_line_of(e->buf, e->caret);
-    gates_u32 top = g.top;
-    if (line < top) top = line;
-    else if (line >= top + g.visible) top = line - g.visible + 1;
-    e->top = top;
+    lay_t L = lay_of(tree, idx, &g);
+    dpos c = pos_of(tree, &L, e, e->caret);
+    dpos top = { g.top, g.top_row };
+    if (dpos_lt(c, top)) {
+        top = c;
+    } else {
+        dpos p = top;
+        bool seen = false;
+        for (gates_u32 k = 0; k < g.visible && !seen; k++) {
+            if (dpos_eq(p, c)) {
+                seen = true;
+            } else {
+                gates_i64 moved = 0;
+                p = advance_rows(tree, &L, e, p, 1, &moved);
+                if (moved == 0) break;
+            }
+        }
+        if (!seen) top = advance_rows(tree, &L, e, c, -(gates_i64)(g.visible - 1), nullptr);
+    }
+    e->top = top.line;
+    e->top_row = top.row;
+    if (e->wrap) {
+        e->scroll_x = 0;
+        return;
+    }
     gates_i32 sx = g.scroll_x;
     if (x < sx) sx = x;
     else if (x + 1 > sx + g.text.w) sx = x + 1 - g.text.w;
@@ -351,6 +539,9 @@ gates_err_t gates_editor_create(gates_tree_t *tree, gates_node_t parent, const g
                                                                                     : GATES_TEXT_BUFFER_MAX;
     e->rows = desc->rows != 0 ? desc->rows : 10;
     e->cols = desc->cols != 0 ? desc->cols : 40;
+    e->wrap = desc->wrap;
+    e->line_numbers = desc->line_numbers;
+    e->auto_indent = desc->auto_indent;
     gates_err_t err = gates_text_buffer_create(a, &e->buf);
     if (!gates_is_ok(err)) {
         a.free_fn(a.ctx, e);
@@ -415,9 +606,11 @@ gates_err_t gates_editor_set_text(gates_tree_t *tree, gates_node_t editor, gates
     hist_clear(tree, e);
     e->caret = e->anchor = 0;
     e->top = 0;
+    e->top_row = 0;
     e->scroll_x = 0;
     e->max_w = 0;
     e->pref_x = -1;
+    e->styled_end = 0;
     changed(tree, editor.index);
     return GATES_OK;
 }
@@ -523,6 +716,12 @@ static gates_err_t hist_record(gates_tree_t *tree, struct gates_i_editor *e, gat
 
 /* -- editing ------------------------------------------------------------------------------------- */
 
+/* Styles from the edited line on may be stale. */
+static void restyle_from(struct gates_i_editor *e, gates_u32 off) {
+    gates_u32 start = gates_text_buffer_line_start(e->buf, gates_text_buffer_line_of(e->buf, off));
+    if (start < e->styled_end) e->styled_end = start;
+}
+
 /* Announces a person's change (reserved by the caller). */
 static void report(gates_tree_t *tree, gates_u32 idx, bool text) {
     if (text) gates_i_event_push(tree, idx, GATES_EVENT_TEXT_CHANGED, GATES_ORIGIN_USER);
@@ -554,6 +753,7 @@ static gates_err_t edit(gates_tree_t *tree, gates_u32 idx, struct gates_i_editor
         if (removed != nullptr) tree->alloc.free_fn(tree->alloc.ctx, removed);
         return err;
     }
+    restyle_from(e, b);
     if (record) {
         gates_err_t herr = hist_record(tree, e, b, (gates_str_t){ .ptr = removed, .size = en - b }, text, caret0, anchor0,
                                        run);
@@ -620,6 +820,7 @@ static gates_err_t replay(gates_tree_t *tree, gates_u32 idx, struct gates_i_edit
     gates_u32 take = redo ? h->rlen : h->ilen;
     gates_err_t err = gates_text_buffer_replace(e->buf, h->at, h->at + take, put);
     if (!gates_is_ok(err)) return err;
+    restyle_from(e, h->at);
     if (redo) {
         e->hist_pos++;
         e->caret = e->anchor = h->at + h->ilen;
@@ -713,7 +914,7 @@ gates_err_t gates_editor_scroll_to(gates_tree_t *tree, gates_node_t editor, gate
 }
 
 gates_u32 gates_editor_first_line(const gates_tree_t *tree, gates_node_t editor) {
-    const struct gates_i_editor *e = ed_of(tree, editor);
+    struct gates_i_editor *e = ed_of(tree, editor);
     if (e == nullptr) return 0;
     ed_geom g;
     geom_now(tree, editor.index, e, &g);
@@ -721,7 +922,7 @@ gates_u32 gates_editor_first_line(const gates_tree_t *tree, gates_node_t editor)
 }
 
 gates_u32 gates_editor_visible_lines(const gates_tree_t *tree, gates_node_t editor) {
-    const struct gates_i_editor *e = ed_of(tree, editor);
+    struct gates_i_editor *e = ed_of(tree, editor);
     if (e == nullptr) return 0;
     ed_geom g;
     geom_now(tree, editor.index, e, &g);
@@ -741,6 +942,39 @@ gates_size_t gates_i_editor_measure(const gates_tree_t *tree, const gates_node_s
 
 #define TRY_DRAW(x) do { gates_err_t e_ = (x); if (!gates_is_ok(e_)) return e_; } while (0)
 
+/* One line's style bytes (none without a style table). */
+static const gates_u8 *line_styles(const gates_tree_t *tree, struct gates_i_editor *e, gates_u32 line, gates_err_t *err) {
+    if (e->nstyles == 0) return nullptr;
+    gates_u32 s = gates_text_buffer_line_start(e->buf, line), n = gates_text_buffer_line_end(e->buf, line) - s;
+    if (n > e->sscratch_cap) {
+        gates_u32 cap = e->sscratch_cap < 256 ? 256 : e->sscratch_cap;
+        while (cap < n) cap *= 2;
+        proven_result_mem_mut_t r = e->sscratch == nullptr
+                                        ? tree->alloc.alloc_fn(tree->alloc.ctx, cap, 1)
+                                        : tree->alloc.realloc_fn(tree->alloc.ctx, e->sscratch, e->sscratch_cap, cap, 1);
+        if (!proven_is_ok(r.err)) {
+            *err = r.err;
+            return nullptr;
+        }
+        e->sscratch = (gates_u8 *)r.value.ptr;
+        e->sscratch_cap = cap;
+    }
+    gates_str_t a, b;
+    gates_text_buffer_style_span(e->buf, s, s + n, &a, &b);
+    if (a.size > 0) memcpy(e->sscratch, a.ptr, a.size);
+    if (b.size > 0) memcpy(e->sscratch + a.size, b.ptr, b.size);
+    return e->sscratch;
+}
+
+static gates_color_t style_color(const struct gates_i_editor *e, const gates_theme_t *theme, gates_u8 s,
+                                 gates_color_t plain) {
+    if (s == 0 || s >= e->nstyles) return plain;
+    const gates_editor_style_t *st = &e->styles[s];
+    return st->use_rgb ? st->rgb : gates_theme_color(theme, st->token);
+}
+
+#define ED_MAX_ROWS 512
+
 gates_err_t gates_i_editor_paint(const gates_tree_t *tree, gates_u32 idx, gates_draw_list_t *dl,
                                  const gates_theme_t *theme, const gates_text_backend_t *text) {
     struct gates_i_editor *e = ed_at(tree, idx);
@@ -753,6 +987,18 @@ gates_err_t gates_i_editor_paint(const gates_tree_t *tree, gates_u32 idx, gates_
     TRY_DRAW(gates_draw_rect(dl, r, gates_theme_color(theme, GATES_COLOR_CONTROL_BG)));
     ed_geom g;
     geom(tree, idx, e, m.line_height, &g);
+    lay_t L = { text, font, g.text.w };
+    gates_u32 rows = (gates_u32)((g.text.h + g.row_h - 1) / g.row_h);
+    if (rows > ED_MAX_ROWS) rows = ED_MAX_ROWS;
+    /* Highlighting follows the view: style what is about to show and is stale. */
+    if (e->styler != nullptr) {
+        gates_u32 last = g.top + rows < g.lines ? g.top + rows : g.lines - 1;
+        gates_u32 need = gates_text_buffer_line_start(e->buf, last + 1);
+        if (e->styled_end < need) {
+            e->styler(e->styler_user, e->buf, e->styled_end, need);
+            e->styled_end = need;
+        }
+    }
     gates_u32 sel_b = e->anchor < e->caret ? e->anchor : e->caret;
     gates_u32 sel_e = e->anchor < e->caret ? e->caret : e->anchor;
     gates_color_t fg = gates_theme_color(theme, inert ? GATES_COLOR_CONTROL_DISABLED_FG : GATES_COLOR_CONTROL_FG);
@@ -760,49 +1006,62 @@ gates_err_t gates_i_editor_paint(const gates_tree_t *tree, gates_u32 idx, gates_
     gates_color_t sel_bg = gates_theme_color(theme, GATES_COLOR_SELECTION_BG);
     gates_i32 space = text->glyph_advance != nullptr ? text->glyph_advance(text->ctx, font, ' ') : 8;
     st->caret_valid = false;
+    gates_u32 numbers[ED_MAX_ROWS];  /* the line numbers to draw, and on which row */
+    gates_u32 number_rows[ED_MAX_ROWS];
+    gates_u32 nnumbers = 0;
     TRY_DRAW(gates_draw_clip_push(dl, g.text));
-    gates_u32 rows = (gates_u32)((g.text.h + g.row_h - 1) / g.row_h);
-    for (gates_u32 k = 0; k < rows && g.top + k < g.lines; k++) {
-        gates_u32 line = g.top + k;
-        gates_err_t err = GATES_OK;
-        gates_str_t t = line_text(tree, e, line, &err);
-        TRY_DRAW(err);
-        gates_u32 ls = gates_text_buffer_line_start(e->buf, line);
-        gates_u32 le = ls + (gates_u32)t.size;
+    dpos p = { g.top, g.top_row };
+    gates_err_t err = GATES_OK;
+    gates_str_t t = line_text(tree, e, p.line, &err);
+    TRY_DRAW(err);
+    const gates_u8 *sty = line_styles(tree, e, p.line, &err);
+    TRY_DRAW(err);
+    gates_u32 ls = gates_text_buffer_line_start(e->buf, p.line);
+    gates_u32 rs, re;
+    (void)row_range(&L, e, t, p.row, &rs, &re);
+    for (gates_u32 k = 0; k < rows; k++) {
         gates_i32 y = g.text.y + (gates_i32)k * g.row_h;
         gates_i32 x0 = g.text.x - g.scroll_x;
-        gates_i32 width = x_in(text, font, e, t, (gates_u32)t.size);
-        if (width + 1 > e->max_w) e->max_w = width + 1; /* the scroll extent grows as lines are seen */
-        /* Selection: its part of the line, and the line end when it continues past it. */
-        bool sel_here = sel_b < sel_e && sel_b <= le && sel_e > ls && !(sel_b == le && sel_e == le);
-        gates_i32 sx0 = 0, sx1 = 0;
-        if (sel_here) {
-            sx0 = x_in(text, font, e, t, sel_b > ls ? sel_b - ls : 0);
-            sx1 = sel_e > le ? width + space : x_in(text, font, e, t, sel_e - ls);
-            TRY_DRAW(gates_draw_rect(dl, (gates_rect_t){ x0 + sx0, y, sx1 - sx0, g.row_h }, sel_bg));
+        bool last_row = re >= t.size;
+        gates_str_t u = { .ptr = t.ptr + rs, .size = re - rs };
+        gates_u32 rb = ls + rs, rend = ls + re; /* the row's offsets */
+        gates_i32 width = x_in(text, font, e, u, (gates_u32)u.size);
+        if (!e->wrap && width + 1 > e->max_w) e->max_w = width + 1; /* the scroll extent grows as lines are seen */
+        if (p.row == 0 && e->line_numbers) {
+            numbers[nnumbers] = p.line + 1;
+            number_rows[nnumbers++] = k;
         }
-        /* Text in runs between tabs, selected parts in the selection colour. */
-        gates_i32 x = 0;
+        /* Selection: its part of the row, and the line break when it is selected too. */
+        gates_u32 a = sel_b > rb ? sel_b : rb, z = sel_e < rend ? sel_e : rend;
+        bool brk = last_row && sel_b <= rend && sel_e > rend;
+        if (sel_b < sel_e && (a < z || brk) && sel_b <= rend && sel_e >= rb) {
+            gates_i32 sx0 = x_in(text, font, e, u, a > rb ? a - rb : 0);
+            gates_i32 sx1 = brk ? width + space : x_in(text, font, e, u, z - rb);
+            if (sx1 > sx0) TRY_DRAW(gates_draw_rect(dl, (gates_rect_t){ x0 + sx0, y, sx1 - sx0, g.row_h }, sel_bg));
+        }
+        /* Text in runs cut at tabs, selection edges and style changes. */
+        gates_i32 x = 0, run_x = 0;
         gates_u32 run_start = 0;
-        gates_i32 run_x = 0;
-        for (gates_u32 i = 0; i <= t.size;) {
+        for (gates_u32 i = 0; i <= u.size;) {
             gates_u32 cp = 0;
-            gates_u32 next = i < t.size ? i + gates_text_decode(t, i, &cp) : i + 1;
-            bool tab = i < t.size && cp == '\t';
-            bool sel_edge = sel_here && (ls + i == sel_b || ls + i == sel_e) && i > run_start;
-            if ((i == t.size || tab || sel_edge) && i > run_start) {
-                bool in_sel = sel_here && ls + run_start >= sel_b && ls + run_start < sel_e;
+            gates_u32 next = i < u.size ? i + gates_text_decode(u, i, &cp) : i + 1;
+            bool tab = i < u.size && cp == '\t';
+            bool cut = i > run_start && i < u.size &&
+                       ((sel_b < sel_e && (rb + i == sel_b || rb + i == sel_e)) ||
+                        (sty != nullptr && sty[rs + i] != sty[rs + run_start]));
+            if ((i == u.size || tab || cut) && i > run_start) {
+                bool in_sel = rb + run_start >= sel_b && rb + run_start < sel_e;
+                gates_color_t c = inert ? fg : in_sel ? sel_fg : sty != nullptr ? style_color(e, theme, sty[rs + run_start], fg) : fg;
                 gates_i32 rx = x0 + run_x;
                 if (rx < g.text.x + g.text.w && rx + (x - run_x) > g.text.x) {
                     TRY_DRAW(gates_draw_text(dl, (gates_rect_t){ rx, y + (g.row_h - m.line_height) / 2, x - run_x,
                                                                  m.line_height },
-                                             (gates_str_t){ .ptr = t.ptr + run_start, .size = i - run_start }, font,
-                                             in_sel && !inert ? sel_fg : fg));
+                                             (gates_str_t){ .ptr = u.ptr + run_start, .size = i - run_start }, font, c));
                 }
                 run_start = i;
                 run_x = x;
             }
-            if (i == t.size) break;
+            if (i == u.size) break;
             x += advance(text, font, e, x, cp);
             if (tab) {
                 run_start = next;
@@ -810,16 +1069,49 @@ gates_err_t gates_i_editor_paint(const gates_tree_t *tree, gates_u32 idx, gates_
             }
             i = next;
         }
-        /* The caret. */
-        if (focused && !inert && e->caret >= ls && e->caret <= le &&
-            (line + 1 == g.lines || e->caret < gates_text_buffer_line_start(e->buf, line + 1))) {
-            gates_rect_t caret = { x0 + x_in(text, font, e, t, e->caret - ls), y, 1, g.row_h };
+        /* The caret: in this row, or at the line's end on its last row. */
+        if (focused && !inert && e->caret >= rb && (e->caret < rend || (last_row && e->caret == rend))) {
+            gates_rect_t caret = { x0 + x_in(text, font, e, u, e->caret - rb), y, 1, g.row_h };
             if (!e->read_only) TRY_DRAW(gates_draw_rect(dl, caret, fg));
             st->caret_rect = caret;
             st->caret_valid = true;
         }
+        /* The next row: in this line, or the next line's first. */
+        if (!last_row) {
+            p.row++;
+            rs = re;
+            re = row_end(&L, e, t, rs);
+        } else if (p.line + 1 < g.lines) {
+            p = (dpos){ p.line + 1, 0 };
+            t = line_text(tree, e, p.line, &err);
+            TRY_DRAW(err);
+            sty = line_styles(tree, e, p.line, &err);
+            TRY_DRAW(err);
+            ls = gates_text_buffer_line_start(e->buf, p.line);
+            rs = 0;
+            re = row_end(&L, e, t, 0);
+        } else {
+            break;
+        }
     }
     TRY_DRAW(gates_draw_clip_pop(dl));
+    if (!gates_rect_is_empty(g.gutter)) {
+        TRY_DRAW(gates_draw_rect(dl, g.gutter, gates_theme_color(theme, GATES_COLOR_PANEL_BG)));
+        TRY_DRAW(gates_draw_clip_push(dl, g.gutter));
+        gates_color_t nc = gates_theme_color(theme, GATES_COLOR_CONTROL_DISABLED_FG);
+        for (gates_u32 i = 0; i < nnumbers; i++) {
+            char buf[16];
+            int n = snprintf(buf, sizeof buf, "%u", numbers[i]);
+            gates_str_t num = { .ptr = (const gates_u8 *)buf, .size = (gates_usize_t)n };
+            gates_i32 w = gates_text_width(text, font, num);
+            TRY_DRAW(gates_draw_text(dl, (gates_rect_t){ g.gutter.x + g.gutter.w - ED_PAD - w,
+                                                         g.text.y + (gates_i32)number_rows[i] * g.row_h +
+                                                             (g.row_h - m.line_height) / 2,
+                                                         w, m.line_height },
+                                     num, font, nc));
+        }
+        TRY_DRAW(gates_draw_clip_pop(dl));
+    }
     if (!gates_rect_is_empty(g.vtrack)) {
         TRY_DRAW(gates_draw_rect(dl, g.vtrack, gates_theme_color(theme, GATES_COLOR_PANEL_BG)));
         TRY_DRAW(gates_draw_rect(dl, g.vthumb, gates_theme_color(theme, GATES_COLOR_CONTROL_BORDER)));
@@ -849,15 +1141,6 @@ static void move_to(gates_tree_t *tree, gates_u32 idx, struct gates_i_editor *e,
         if (gates_is_ok(err)) gates_i_event_push(tree, idx, GATES_EVENT_SELECTION_CHANGED, GATES_ORIGIN_USER);
         else tree->input_error = err;
     }
-}
-
-/* The offset on `line` at the preferred column. */
-static gates_u32 on_line_at(gates_tree_t *tree, gates_u32 idx, struct gates_i_editor *e, gates_u32 line) {
-    if (e->pref_x < 0) e->pref_x = caret_x(tree, idx, e, e->caret);
-    gates_str_t t = line_text(tree, e, line, nullptr);
-    const gates_text_backend_t *be = backend(tree);
-    gates_u32 rel = be != nullptr ? at_x(be, gates_i_font(tree, idx), e, t, e->pref_x) : 0;
-    return gates_text_buffer_line_start(e->buf, line) + rel;
 }
 
 static gates_u32 home_of(struct gates_i_editor *e, gates_u32 off) {
@@ -919,6 +1202,65 @@ static gates_str_t line_break(struct gates_i_editor *e) {
                 : (gates_str_t){ .ptr = (const gates_u8 *)"\n", .size = 1 };
 }
 
+/* Tab / Shift+Tab over the selected lines (or the caret's line): a tab
+ * before each non-empty line, or one tab or up to tab-width spaces taken
+ * from each. One step in the history; the lines stay selected. */
+static void block_indent(gates_tree_t *tree, gates_u32 idx, struct gates_i_editor *e, bool indent) {
+    gates_u32 b = e->anchor < e->caret ? e->anchor : e->caret, en = e->anchor < e->caret ? e->caret : e->anchor;
+    gates_u32 first = gates_text_buffer_line_of(e->buf, b), last = gates_text_buffer_line_of(e->buf, en);
+    if (en > b && last > first && en == gates_text_buffer_line_start(e->buf, last)) last--;
+    gates_u32 bs = gates_text_buffer_line_start(e->buf, first), be = gates_text_buffer_line_end(e->buf, last);
+    gates_u32 n = be - bs, lines = last - first + 1;
+    gates_allocator_t a = tree->alloc;
+    proven_result_mem_mut_t ri = a.alloc_fn(a.ctx, n + 1, 1);
+    if (!proven_is_ok(ri.err)) {
+        tree->input_error = ri.err;
+        return;
+    }
+    proven_result_mem_mut_t ro = a.alloc_fn(a.ctx, n + lines + 1, 1);
+    if (!proven_is_ok(ro.err)) {
+        a.free_fn(a.ctx, ri.value.ptr);
+        tree->input_error = ro.err;
+        return;
+    }
+    gates_u8 *in = (gates_u8 *)ri.value.ptr, *out = (gates_u8 *)ro.value.ptr;
+    gates_text_buffer_copy(e->buf, bs, be, in, n);
+    gates_u32 o = 0;
+    for (gates_u32 i = 0; i <= n;) {
+        gates_u32 q = i;
+        while (q < n && in[q] != '\n') q++;
+        gates_u32 from = i;
+        bool empty = q == i || (q == i + 1 && in[i] == '\r');
+        if (indent && !empty) {
+            out[o++] = '\t';
+        } else if (!indent) {
+            if (from < q && in[from] == '\t') from++;
+            else for (gates_u32 k = 0; k < e->tab_width && from < q && in[from] == ' '; k++) from++;
+        }
+        memcpy(out + o, in + from, q - from);
+        o += q - from;
+        if (q < n) out[o++] = '\n';
+        i = q + 1;
+    }
+    if (o != n || memcmp(in, out, n) != 0) {
+        e->run_open = false;
+        gates_u32 caret_col = e->caret - bs;
+        bool one_line = first == last && b == en;
+        if (gates_is_ok(user_edit(tree, idx, e, bs, be, (gates_str_t){ .ptr = out, .size = o }, RUN_OTHER))) {
+            if (one_line) { /* the caret keeps its place in the line */
+                gates_i64 c = (gates_i64)caret_col + (gates_i64)o - (gates_i64)n;
+                e->caret = e->anchor = bs + (gates_u32)(c < 0 ? 0 : c > (gates_i64)o ? (gates_i64)o : c);
+            } else {
+                e->anchor = bs;
+                e->caret = bs + o;
+            }
+            keep_caret(tree, idx, e);
+        }
+    }
+    a.free_fn(a.ctx, in);
+    a.free_fn(a.ctx, out);
+}
+
 bool gates_i_editor_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t *ev) {
     struct gates_i_editor *e = ed_at(tree, idx);
     if (e == nullptr || ev->alt) return false;
@@ -942,17 +1284,19 @@ bool gates_i_editor_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event
     case GATES_KEY_PAGE_DOWN: {
         if (ev->ctrl) return false;
         bool up = ev->key == GATES_KEY_UP || ev->key == GATES_KEY_PAGE_UP;
-        gates_u32 step = ev->key == GATES_KEY_UP || ev->key == GATES_KEY_DOWN ? 1u : g.visible;
-        gates_u32 target;
-        if (up) target = line >= step ? line - step : 0;
-        else target = g.lines - 1 - line >= step ? line + step : g.lines - 1;
-        gates_u32 to;
-        if (target == line) to = up ? 0 : len_of(e); /* past the first or last line: its end */
-        else to = on_line_at(tree, idx, e, target);
+        gates_i64 step = ev->key == GATES_KEY_UP || ev->key == GATES_KEY_DOWN ? 1 : (gates_i64)g.visible;
+        lay_t L = lay_of(tree, idx, &g);
+        if (e->pref_x < 0) e->pref_x = caret_x(tree, &L, e, e->caret);
+        dpos c = pos_of(tree, &L, e, e->caret);
+        gates_i64 moved = 0;
+        dpos target = advance_rows(tree, &L, e, c, up ? -step : step, &moved);
+        gates_u32 to = moved == 0 ? (up ? 0 : len_of(e)) : at_row_x(tree, &L, e, target, e->pref_x);
         if (step > 1) { /* a page also moves the view by a page */
-            e->top = up ? (g.top >= step ? g.top - step : 0) : (g.top + step < g.max_top ? g.top + step : g.max_top);
+            dpos top = advance_rows(tree, &L, e, (dpos){ g.top, g.top_row }, up ? -step : step, nullptr);
+            e->top = top.line;
+            e->top_row = top.row;
         }
-        move_to(tree, idx, e, to, ev->shift, target != line);
+        move_to(tree, idx, e, to, ev->shift, moved != 0);
         return true;
     }
     case GATES_KEY_HOME:
@@ -977,14 +1321,30 @@ bool gates_i_editor_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event
         if (b < en) (void)user_edit(tree, idx, e, b, en, (gates_str_t){0}, run);
         return true;
     }
-    case GATES_KEY_ENTER:
+    case GATES_KEY_ENTER: {
         if (e->read_only || ev->ctrl) return false;
         e->run_open = false;
-        (void)user_edit(tree, idx, e, b, en, line_break(e), RUN_OTHER);
+        gates_str_t brk = line_break(e);
+        gates_u8 nl[258];
+        gates_u32 n = (gates_u32)brk.size;
+        memcpy(nl, brk.ptr, n);
+        if (e->auto_indent) { /* the line's leading blanks, up to where the new line starts */
+            for (gates_u32 i = gates_text_buffer_line_start(e->buf, gates_text_buffer_line_of(e->buf, b));
+                 i < b && n < sizeof nl && (byte_at(e, i) == ' ' || byte_at(e, i) == '\t'); i++) {
+                nl[n++] = byte_at(e, i);
+            }
+        }
+        (void)user_edit(tree, idx, e, b, en, (gates_str_t){ .ptr = nl, .size = n }, RUN_OTHER);
         return true;
+    }
     case GATES_KEY_TAB:
-        if (!e->tab_inserts || e->read_only || ev->ctrl || ev->shift) return false; /* focus moves */
-        (void)user_edit(tree, idx, e, b, en, (gates_str_t){ .ptr = (const gates_u8 *)"\t", .size = 1 }, RUN_TYPE);
+        if (!e->tab_inserts || e->read_only) return false; /* focus moves */
+        if (ev->ctrl) return gates_tree_focus_next(tree, ev->shift); /* the way out when Tab types */
+        if (ev->shift || (sel && gates_text_buffer_line_of(e->buf, b) != gates_text_buffer_line_of(e->buf, en))) {
+            block_indent(tree, idx, e, !ev->shift);
+        } else {
+            (void)user_edit(tree, idx, e, b, en, (gates_str_t){ .ptr = (const gates_u8 *)"\t", .size = 1 }, RUN_TYPE);
+        }
         return true;
     case GATES_KEY_A:
         if (!ev->ctrl) return false;
@@ -1038,17 +1398,14 @@ bool gates_i_editor_char(gates_tree_t *tree, gates_u32 idx, gates_str_t utf8) {
 
 /* -- pointer ------------------------------------------------------------------------------------ */
 
-/* The offset under a point in the text area (clamped to the lines shown). */
+/* The offset under a point in the text area (clamped to the rows there are). */
 static gates_u32 offset_at(gates_tree_t *tree, gates_u32 idx, struct gates_i_editor *e, const ed_geom *g, gates_point_t p) {
-    gates_i32 row = (p.y - g->text.y) / g->row_h;
-    if (p.y < g->text.y) row = -1;
-    gates_i64 line = (gates_i64)g->top + row;
-    if (line < 0) line = 0;
-    if (line >= g->lines) return len_of(e);
-    gates_str_t t = line_text(tree, e, (gates_u32)line, nullptr);
-    const gates_text_backend_t *be = backend(tree);
-    gates_u32 rel = be != nullptr ? at_x(be, gates_i_font(tree, idx), e, t, p.x - g->text.x + g->scroll_x) : 0;
-    return gates_text_buffer_line_start(e->buf, (gates_u32)line) + rel;
+    gates_i64 row = p.y < g->text.y ? -1 : (p.y - g->text.y) / g->row_h;
+    lay_t L = lay_of(tree, idx, g);
+    gates_i64 moved = 0;
+    dpos d = advance_rows(tree, &L, e, (dpos){ g->top, g->top_row }, row, &moved);
+    if (moved < row) return len_of(e); /* below the last row */
+    return at_row_x(tree, &L, e, d, p.x - g->text.x + g->scroll_x);
 }
 
 bool gates_i_editor_press(gates_tree_t *tree, gates_u32 idx, gates_point_t p, gates_u32 clicks, bool shift) {
@@ -1066,8 +1423,11 @@ bool gates_i_editor_press(gates_tree_t *tree, gates_u32 idx, gates_point_t p, ga
         return true;
     }
     if (gates_rect_contains(g.vtrack, p)) {
-        e->top = p.y < g.vthumb.y ? (g.top > g.visible ? g.top - g.visible : 0)
-                                  : (g.top + g.visible < g.max_top ? g.top + g.visible : g.max_top);
+        lay_t L = lay_of(tree, idx, &g);
+        dpos top = advance_rows(tree, &L, e, (dpos){ g.top, g.top_row },
+                                p.y < g.vthumb.y ? -(gates_i64)g.visible : (gates_i64)g.visible, nullptr);
+        e->top = top.line;
+        e->top_row = top.row;
         gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
         return true;
     }
@@ -1122,6 +1482,7 @@ void gates_i_editor_drag(gates_tree_t *tree, gates_point_t p) {
         if (pos < 0) pos = 0;
         if (pos > travel) pos = travel;
         e->top = (gates_u32)((gates_i64)g.max_top * pos / travel);
+        e->top_row = 0;
     } else {
         gates_i32 travel = g.htrack.w - g.hthumb.w;
         if (travel <= 0) return;
@@ -1140,13 +1501,76 @@ bool gates_i_editor_wheel(gates_tree_t *tree, gates_u32 idx, gates_vec2_t wheel)
     ed_geom g;
     geom_now(tree, idx, e, &g);
     if (wheel.y != 0.0f) {
-        gates_i64 top = (gates_i64)g.top - (gates_i64)(wheel.y * (float)ED_WHEEL_LINES);
-        e->top = top < 0 ? 0 : top > g.max_top ? g.max_top : (gates_u32)top;
+        lay_t L = lay_of(tree, idx, &g);
+        dpos top = advance_rows(tree, &L, e, (dpos){ g.top, g.top_row }, -(gates_i64)(wheel.y * (float)ED_WHEEL_LINES),
+                                nullptr);
+        e->top = top.line;
+        e->top_row = top.row;
     }
     if (wheel.x != 0.0f) {
         gates_i32 sx = g.scroll_x + (gates_i32)(wheel.x * (float)(4 * (tree->advance > 0 ? tree->advance : 8)));
         e->scroll_x = sx < 0 ? 0 : sx > g.max_x ? g.max_x : sx;
     }
     gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
+    return true;
+}
+
+/* -- highlighting, marks, find (stage 3) -------------------------------------------------------- */
+
+gates_err_t gates_editor_set_styles(gates_tree_t *tree, gates_node_t editor, const gates_editor_style_t *styles,
+                                    gates_u32 count) {
+    struct gates_i_editor *e = ed_of(tree, editor);
+    if (e == nullptr || count > 256 || (count > 0 && styles == nullptr)) return PROVEN_ERR_INVALID_ARG;
+    if (count > 0) memcpy(e->styles, styles, (gates_usize_t)count * sizeof *styles);
+    e->nstyles = count;
+    gates_i_mark_dirty(tree, editor.index, GATES_DIRTY_PAINT);
+    return GATES_OK;
+}
+
+gates_err_t gates_editor_set_styler(gates_tree_t *tree, gates_node_t editor, gates_editor_styler_fn fn, void *user) {
+    struct gates_i_editor *e = ed_of(tree, editor);
+    if (e == nullptr) return PROVEN_ERR_INVALID_ARG;
+    e->styler = fn;
+    e->styler_user = fn != nullptr ? user : nullptr;
+    e->styled_end = 0;
+    gates_i_mark_dirty(tree, editor.index, GATES_DIRTY_PAINT);
+    return GATES_OK;
+}
+
+gates_err_t gates_editor_set_style(gates_tree_t *tree, gates_node_t editor, gates_u32 begin, gates_u32 end,
+                                   gates_u8 style) {
+    struct gates_i_editor *e = ed_of(tree, editor);
+    if (e == nullptr || begin > end || end > len_of(e)) return PROVEN_ERR_INVALID_ARG;
+    gates_text_buffer_set_style(e->buf, begin, end, style);
+    gates_i_mark_dirty(tree, editor.index, GATES_DIRTY_PAINT);
+    return GATES_OK;
+}
+
+gates_err_t gates_editor_mark_add(gates_tree_t *tree, gates_node_t editor, gates_u32 offset, gates_mark_gravity_t gravity,
+                                  gates_mark_id_t *out) {
+    struct gates_i_editor *e = ed_of(tree, editor);
+    return e != nullptr ? gates_text_buffer_mark_add(e->buf, offset, gravity, out) : PROVEN_ERR_INVALID_ARG;
+}
+
+gates_err_t gates_editor_mark_remove(gates_tree_t *tree, gates_node_t editor, gates_mark_id_t id) {
+    struct gates_i_editor *e = ed_of(tree, editor);
+    return e != nullptr ? gates_text_buffer_mark_remove(e->buf, id) : PROVEN_ERR_INVALID_ARG;
+}
+
+bool gates_editor_find(gates_tree_t *tree, gates_node_t editor, gates_str_t needle, gates_u32 flags, bool wrap_around) {
+    struct gates_i_editor *e = ed_of(tree, editor);
+    if (e == nullptr || needle.size == 0 || needle.ptr == nullptr) return false;
+    bool back = (flags & GATES_FIND_BACKWARD) != 0;
+    gates_u32 b = e->anchor < e->caret ? e->anchor : e->caret, en = e->anchor < e->caret ? e->caret : e->anchor;
+    gates_u32 at = 0;
+    bool found = gates_text_buffer_find(e->buf, back ? b : en, needle, flags, &at);
+    if (!found && wrap_around) found = gates_text_buffer_find(e->buf, back ? len_of(e) : 0, needle, flags, &at);
+    if (!found) return false;
+    e->anchor = at;
+    e->caret = at + (gates_u32)needle.size;
+    e->pref_x = -1;
+    e->run_open = false;
+    keep_caret(tree, editor.index, e);
+    gates_i_mark_dirty(tree, editor.index, GATES_DIRTY_PAINT);
     return true;
 }

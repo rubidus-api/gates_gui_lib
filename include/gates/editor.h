@@ -14,6 +14,21 @@
  * selects a word, the wheel scrolls (Shift: sideways), the scrollbars work
  * as everywhere.
  *
+ * Options: soft wrap (rows break after the last blank that fits, else at the
+ * last code point; with wrap, Up/Down move by rows and the scrollbar counts
+ * lines), a line number gutter, auto-indent (Enter repeats the line's
+ * leading blanks). When tab_inserts, Tab and Shift+Tab indent and unindent
+ * the selected lines (or type a tab), and Ctrl+Tab / Ctrl+Shift+Tab move
+ * focus, so the keyboard is still never trapped.
+ *
+ * Highlighting: a style table maps style bytes (gates/text_buffer.h) to
+ * colours. A styler callback, when set, is asked before painting to style the
+ * text from the first line whose styles may be stale up to the last line
+ * shown ("from" is always a line start); it sets styles with
+ * gates_text_buffer_set_style on the buffer it is given and must not change
+ * the text. An edit makes its line stale again. Selected text is drawn in
+ * the selection colour.
+ *
  * A person's edit is undoable (typing and deleting runs merge), reports
  * GATES_EVENT_TEXT_CHANGED (ev->text is empty: read what you need), and moves
  * the caret; caret and selection moves report GATES_EVENT_SELECTION_CHANGED
@@ -24,6 +39,7 @@
 #define GATES_EDITOR_H
 
 #include <gates/tree.h>
+#include <gates/theme.h>
 #include <gates/text_buffer.h>
 
 typedef struct gates_editor_desc_t {
@@ -33,6 +49,9 @@ typedef struct gates_editor_desc_t {
     gates_u32 max_bytes;         /* 0 -> GATES_TEXT_BUFFER_MAX; typing past it is refused */
     gates_u32 rows;              /* preferred height in lines; 0 -> 10 */
     gates_u32 cols;              /* preferred width in average characters; 0 -> 40 */
+    bool wrap;                   /* soft wrap at the view's width (no sideways scrolling) */
+    bool line_numbers;           /* a gutter with line numbers */
+    bool auto_indent;            /* Enter repeats the line's leading blanks */
 } gates_editor_desc_t;
 
 [[nodiscard]] gates_err_t gates_editor_create(gates_tree_t *tree, gates_node_t parent,
@@ -70,6 +89,33 @@ bool gates_editor_can_redo(const gates_tree_t *tree, gates_node_t editor);
  * back to it counts as unmodified again). */
 bool gates_editor_modified(const gates_tree_t *tree, gates_node_t editor);
 void gates_editor_set_unmodified(gates_tree_t *tree, gates_node_t editor);
+
+/* Highlighting. Style byte i draws with styles[i] (i < count; style 0 and
+ * bytes past the table draw as plain text). Copied; count at most 256. */
+typedef struct gates_editor_style_t {
+    gates_color_token_t token;   /* the colour from the theme ... */
+    bool use_rgb;                /* ... or this one */
+    gates_color_t rgb;
+} gates_editor_style_t;
+[[nodiscard]] gates_err_t gates_editor_set_styles(gates_tree_t *tree, gates_node_t editor,
+                                                  const gates_editor_style_t *styles, gates_u32 count);
+typedef void (*gates_editor_styler_fn)(void *user, gates_text_buffer_t *buffer, gates_u32 from, gates_u32 to);
+/* Null removes it. Setting one makes every line stale. */
+[[nodiscard]] gates_err_t gates_editor_set_styler(gates_tree_t *tree, gates_node_t editor, gates_editor_styler_fn fn,
+                                                  void *user);
+/* Styles a range from the program (a search hit, a diagnostic); a styler may restyle it. */
+[[nodiscard]] gates_err_t gates_editor_set_style(gates_tree_t *tree, gates_node_t editor, gates_u32 begin,
+                                                 gates_u32 end, gates_u8 style);
+
+/* Marks that move with edits (gates/text_buffer.h); read them through the buffer. */
+[[nodiscard]] gates_err_t gates_editor_mark_add(gates_tree_t *tree, gates_node_t editor, gates_u32 offset,
+                                                gates_mark_gravity_t gravity, gates_mark_id_t *out);
+[[nodiscard]] gates_err_t gates_editor_mark_remove(gates_tree_t *tree, gates_node_t editor, gates_mark_id_t id);
+
+/* Finds the needle after the selection (before it with GATES_FIND_BACKWARD),
+ * starting over at the other end when wrap_around; selects it and scrolls to
+ * it. false when there is none. Silent. */
+bool gates_editor_find(gates_tree_t *tree, gates_node_t editor, gates_str_t needle, gates_u32 flags, bool wrap_around);
 
 [[nodiscard]] gates_err_t gates_editor_set_read_only(gates_tree_t *tree, gates_node_t editor, bool read_only);
 bool gates_editor_read_only(const gates_tree_t *tree, gates_node_t editor);

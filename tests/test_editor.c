@@ -7,6 +7,7 @@
 #include <gates/widget.h>
 #include <gates/event.h>
 #include <gates/editor.h>
+#include <gates/layout.h>
 #include <gates/access.h>
 #include <gates/clipboard.h>
 #include "gates_test.h"
@@ -385,8 +386,13 @@ static void test_tab_read_only_limit(void) {
     done(&a);
     make(&a, &(gates_editor_desc_t){ .tab_inserts = true, .tab_width = 4 });
     GT_ASSERT(key(a.t, GATES_KEY_TAB) && text_is(&a, "\t") && gates_node_eq(gates_tree_focus(a.t), a.ed));
-    GT_ASSERT(key_mods(a.t, GATES_KEY_TAB, false, true)); /* Shift+Tab still leaves */
+    GT_ASSERT(key_mods(a.t, GATES_KEY_TAB, false, true) && text_is(&a, "")); /* Shift+Tab unindents */
+    GT_ASSERT(gates_node_eq(gates_tree_focus(a.t), a.ed));
+    GT_ASSERT(key_mods(a.t, GATES_KEY_TAB, true, true)); /* Ctrl+Shift+Tab leaves */
     GT_ASSERT(gates_node_eq(gates_tree_focus(a.t), a.before));
+    gates_tree_set_focus(a.t, a.ed);
+    GT_ASSERT(key_mods(a.t, GATES_KEY_TAB, true, false)); /* Ctrl+Tab leaves forward */
+    GT_ASSERT(gates_node_eq(gates_tree_focus(a.t), a.after));
     done(&a);
     /* Read-only: selectable and copyable, not editable. */
     make(&a, &(gates_editor_desc_t){ .read_only = true });
@@ -565,6 +571,12 @@ static void test_pointer(void) {
     press(&a, (gates_point_t){ o.x + 17, o.y + 16 * 2 + 4 }, 2);
     release(&a, (gates_point_t){ o.x + 17, o.y + 16 * 2 + 4 });
     GT_ASSERT(anchor(&a) == 26 && caret(&a) == 33);
+    /* Below the last row: the end of the text. */
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, GATES_STR("ab\ncd")));
+    press(&a, (gates_point_t){ o.x + 2, o.y + 16 * 5 }, 1);
+    release(&a, (gates_point_t){ o.x + 2, o.y + 16 * 5 });
+    GT_ASSERT(caret(&a) == 5);
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, (gates_str_t){ (const gates_u8 *)big, (gates_usize_t)n }));
     /* The wheel scrolls three lines a notch; never past the ends. */
     gates_pointer_event_t w = { .action = GATES_POINTER_WHEEL, .pos = { o.x + 10, o.y + 10 }, .wheel = { 0, -1 } };
     (void)gates_input_pointer(a.t, &w);
@@ -692,6 +704,380 @@ static void test_failures(void) {
     }
 }
 
+/* -- stage 3: wrap, gutter, highlighting, marks, find, indenting --------------------------------- */
+
+/* The editor's own text commands (not the buttons around it), in order. */
+static gates_rect_t text_zone;
+static int texts(const gates_draw_list_t *dl, const gates_draw_cmd_t **out, int cap) {
+    int n = 0;
+    for (gates_u32 i = 0; i < dl->len && n < cap; i++) {
+        const gates_draw_cmd_t *c = gates_draw_list_at(dl, i);
+        if (c->kind == GATES_DRAW_TEXT && gates_rect_contains(text_zone, (gates_point_t){ c->rect.x + 1, c->rect.y + 1 })) {
+            out[n++] = c;
+        }
+    }
+    return n;
+}
+
+static bool cmd_is(const gates_draw_list_t *dl, const gates_draw_cmd_t *c, const char *z) {
+    gates_str_t t = gates_draw_cmd_text(dl, c);
+    return t.size == strlen(z) && memcmp(t.ptr, z, t.size) == 0;
+}
+
+static void test_wrap(void) {
+    app_t a;
+    make(&a, &(gates_editor_desc_t){ .wrap = true });
+    gates_draw_list_t dl;
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    gates_rect_t er = gates_node_layout_rect(a.t, a.ed);
+    text_zone = er;
+    gates_i32 textw = er.w - 2 - 6 - GATES_SCROLLBAR_PX; /* border, inset, the scrollbar kept with wrap */
+    gates_i32 cols = textw / 8;
+    /* Words: a row ends after the last blank that fits. */
+    char line[400] = "";
+    for (int i = 0; i < 30; i++) strcat(line, "word ");
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, (gates_str_t){ (const gates_u8 *)line, strlen(line) }));
+    layout(a.t);
+    paint(&a, &dl);
+    const gates_draw_cmd_t *tc[64];
+    int n = texts(&dl, tc, 64);
+    gates_point_t o = origin(&a);
+    int per_row = (cols + 1) / 5; /* "word " x k: the last blank may hang past the edge */
+    GT_ASSERT(n >= 2);
+    GT_ASSERT(tc[0]->rect.y == o.y && tc[1]->rect.y == o.y + 16 && tc[1]->rect.x == o.x);
+    GT_ASSERT(gates_draw_cmd_text(&dl, tc[0]).size == (gates_usize_t)per_row * 5);
+    /* No sideways scrolling with wrap. */
+    GT_ASSERT(key_mods(a.t, GATES_KEY_END, true, false));
+    GT_ASSERT(gates_editor_first_line(a.t, a.ed) == 0);
+    paint(&a, &dl);
+    n = texts(&dl, tc, 64);
+    GT_ASSERT(tc[0]->rect.x == o.x);
+    /* Up/Down move by rows and keep the column. */
+    GT_ASSERT_OK(gates_editor_set_selection(a.t, a.ed, 7, 7)); /* row 0, column 7 */
+    GT_ASSERT(key(a.t, GATES_KEY_DOWN) && caret(&a) == (gates_u32)per_row * 5 + 7);
+    GT_ASSERT(key(a.t, GATES_KEY_UP) && caret(&a) == 7);
+    GT_ASSERT(key(a.t, GATES_KEY_UP) && caret(&a) == 0); /* past the first row: the start */
+    /* A long word breaks where it must; the rows cover every byte once. */
+    char word[300];
+    memset(word, 'x', 299);
+    word[299] = 0;
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, (gates_str_t){ (const gates_u8 *)word, 299 }));
+    paint(&a, &dl);
+    n = texts(&dl, tc, 64);
+    gates_usize_t total = 0;
+    for (int i = 0; i < n; i++) {
+        total += gates_draw_cmd_text(&dl, tc[i]).size;
+        GT_ASSERT(tc[i]->rect.y == o.y + 16 * i && gates_draw_cmd_text(&dl, tc[i]).size <= (gates_usize_t)cols);
+    }
+    GT_ASSERT(total == 299);
+    /* A press on the second row places the caret there. */
+    press(&a, (gates_point_t){ o.x + 8 * 3 + 2, o.y + 16 + 4 }, 1);
+    release(&a, (gates_point_t){ o.x + 8 * 3 + 2, o.y + 16 + 4 });
+    GT_ASSERT(caret(&a) == (gates_u32)cols + 3);
+    /* The end of a row is shown at the next row's start: Down from row 0's end lands in row 1. */
+    GT_ASSERT_OK(gates_editor_set_selection(a.t, a.ed, (gates_u32)cols - 1, (gates_u32)cols - 1));
+    GT_ASSERT(key(a.t, GATES_KEY_DOWN) && caret(&a) == 2u * (gates_u32)cols - 1);
+    /* Many wrapped lines: keeping the caret shown scrolls by rows, PageDown pages by rows. */
+    static char many[20000];
+    int m = 0;
+    for (int i = 0; i < 40; i++) m += snprintf(many + m, sizeof many - (size_t)m, "%.*s\n", cols + 10, word);
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, (gates_str_t){ (const gates_u8 *)many, (gates_usize_t)m }));
+    layout(a.t);
+    gates_u32 vis = gates_editor_visible_lines(a.t, a.ed);
+    GT_ASSERT(key(a.t, GATES_KEY_PAGE_DOWN));
+    GT_ASSERT(gates_text_buffer_line_of(gates_editor_buffer(a.t, a.ed), caret(&a)) == vis / 2); /* two rows a line */
+    GT_ASSERT(key_mods(a.t, GATES_KEY_END, true, false));
+    paint(&a, &dl);
+    n = texts(&dl, tc, 64);
+    GT_ASSERT(n > 0 && cmd_is(&dl, tc[n - 1], "xxxxxxxxxx")); /* the last line's second row is the last shown */
+    gates_pointer_event_t w = { .action = GATES_POINTER_WHEEL, .pos = { o.x + 5, o.y + 5 }, .wheel = { 0, 1 } };
+    gates_u32 before = gates_editor_first_line(a.t, a.ed);
+    (void)gates_input_pointer(a.t, &w);
+    GT_ASSERT(gates_editor_first_line(a.t, a.ed) == before - 2 || gates_editor_first_line(a.t, a.ed) == before - 1);
+    /* The wheel stops with the last row at the bottom. */
+    GT_ASSERT(key_mods(a.t, GATES_KEY_END, true, false));
+    gates_u32 end_first = gates_editor_first_line(a.t, a.ed);
+    w.wheel.y = -5;
+    (void)gates_input_pointer(a.t, &w);
+    GT_ASSERT(gates_editor_first_line(a.t, a.ed) == end_first);
+    paint(&a, &dl);
+    n = texts(&dl, tc, 64);
+    GT_ASSERT(n > 0 && tc[n - 1]->rect.y == o.y + 16 * ((gates_i32)vis - 2)); /* the empty last line is the bottom row */
+    /* A blank that just fills a row hangs past it: the next row starts with the word. */
+    char hang[300];
+    memset(hang, 'x', (size_t)cols);
+    memcpy(hang + cols, " bbb", 5);
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, (gates_str_t){ (const gates_u8 *)hang, strlen(hang) }));
+    paint(&a, &dl);
+    n = texts(&dl, tc, 64);
+    GT_ASSERT(n == 2 && cmd_is(&dl, tc[1], "bbb"));
+    /* The caret at a row boundary is drawn at the next row's start. */
+    GT_ASSERT_OK(gates_editor_set_selection(a.t, a.ed, (gates_u32)cols + 1, (gates_u32)cols + 1));
+    paint(&a, &dl);
+    bool at_next = false;
+    for (gates_u32 i = 0; i < dl.len; i++) {
+        const gates_draw_cmd_t *d = gates_draw_list_at(&dl, i);
+        if (d->kind == GATES_DRAW_RECT && d->rect.w == 1 && d->rect.h == 16 && d->rect.x == o.x && d->rect.y == o.y + 16) {
+            at_next = true;
+        }
+    }
+    GT_ASSERT(at_next);
+    /* A caret on a row boundary belongs to the next row: Down keeps column 0. */
+    char three[400];
+    memset(three, 'x', (size_t)cols);
+    three[cols] = ' ';
+    memset(three + cols + 1, 'y', (size_t)cols);
+    three[2 * cols + 1] = ' ';
+    memcpy(three + 2 * cols + 2, "zz", 3);
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, (gates_str_t){ (const gates_u8 *)three, strlen(three) }));
+    GT_ASSERT_OK(gates_editor_set_selection(a.t, a.ed, (gates_u32)cols + 1, (gates_u32)cols + 1));
+    GT_ASSERT(key(a.t, GATES_KEY_DOWN) && caret(&a) == 2u * ((gates_u32)cols + 1));
+    /* Up from far right in a long row into a short row stays in the short row. */
+    char shortrow[300] = "aaaa ";
+    memset(shortrow + 5, 'y', (size_t)cols);
+    shortrow[5 + cols] = 0;
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, (gates_str_t){ (const gates_u8 *)shortrow, strlen(shortrow) }));
+    GT_ASSERT_OK(gates_editor_set_selection(a.t, a.ed, 5 + 20, 5 + 20));
+    GT_ASSERT(key(a.t, GATES_KEY_UP) && caret(&a) == 4);
+    /* A narrower view wraps again. */
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, (gates_str_t){ (const gates_u8 *)word, 299 }));
+    GT_ASSERT_OK(gates_layout_run(a.t, (gates_size_t){ 200, 300 }, be));
+    text_zone = gates_node_layout_rect(a.t, a.ed);
+    paint(&a, &dl);
+    n = texts(&dl, tc, 64);
+    GT_ASSERT(n > 0 && gates_draw_cmd_text(&dl, tc[0]).size < (gates_usize_t)cols);
+    gates_draw_list_deinit(&dl);
+    done(&a);
+}
+
+static void test_gutter(void) {
+    app_t a;
+    make(&a, &(gates_editor_desc_t){ .line_numbers = true });
+    static char big[20000];
+    int n = 0;
+    for (int i = 0; i < 1200; i++) n += snprintf(big + n, sizeof big - (size_t)n, "l%d\n", i);
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, (gates_str_t){ (const gates_u8 *)big, (gates_usize_t)n }));
+    layout(a.t);
+    gates_draw_list_t dl;
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    paint(&a, &dl);
+    gates_rect_t er = gates_node_layout_rect(a.t, a.ed);
+    gates_i32 gw = 4 * 8 + 6; /* four digits for 1201 lines */
+    const gates_draw_cmd_t *l0 = text_cmd(&dl, "l0"), *n1 = text_cmd(&dl, "1"), *n2 = text_cmd(&dl, "2");
+    GT_ASSERT(l0 != nullptr && l0->rect.x == er.x + 1 + gw + 3);
+    GT_ASSERT(n1 != nullptr && n1->rect.x + n1->rect.w == er.x + 1 + gw - 3 && n1->rect.y == l0->rect.y);
+    GT_ASSERT(n2 != nullptr && n2->rect.y == l0->rect.y + 16);
+    /* Down from the bottom row scrolls by one line, not a page. */
+    GT_ASSERT_OK(gates_editor_set_selection(a.t, a.ed, 0, 0));
+    for (gates_u32 i = 0; i < gates_editor_visible_lines(a.t, a.ed); i++) GT_ASSERT(key(a.t, GATES_KEY_DOWN));
+    GT_ASSERT(gates_editor_first_line(a.t, a.ed) == 1);
+    /* Ctrl+End: the caret on the bottom row. */
+    GT_ASSERT(key_mods(a.t, GATES_KEY_END, true, false));
+    GT_ASSERT(gates_editor_first_line(a.t, a.ed) == 1201 - gates_editor_visible_lines(a.t, a.ed));
+    /* Numbers follow scrolling. */
+    GT_ASSERT_OK(gates_editor_scroll_to(a.t, a.ed, gates_text_buffer_line_start(gates_editor_buffer(a.t, a.ed), 1000)));
+    paint(&a, &dl);
+    GT_ASSERT(text_cmd(&dl, "1001") != nullptr && text_cmd(&dl, "1") == nullptr);
+    /* A press in the gutter goes to its line's start. */
+    gates_point_t o = origin(&a);
+    gates_u32 first = gates_editor_first_line(a.t, a.ed);
+    press(&a, (gates_point_t){ er.x + 5, o.y + 16 + 3 }, 1);
+    release(&a, (gates_point_t){ er.x + 5, o.y + 16 + 3 });
+    GT_ASSERT(caret(&a) == gates_text_buffer_line_start(gates_editor_buffer(a.t, a.ed), first + 1));
+    gates_draw_list_deinit(&dl);
+    done(&a);
+    /* With wrap, a line's number is on its first row only. */
+    make(&a, &(gates_editor_desc_t){ .line_numbers = true, .wrap = true });
+    char longl[400];
+    memset(longl, 'z', 300);
+    memcpy(longl + 300, "\nsecond", 8);
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, (gates_str_t){ (const gates_u8 *)longl, 307 }));
+    layout(a.t);
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    paint(&a, &dl);
+    const gates_draw_cmd_t *one = text_cmd(&dl, "1"), *two = text_cmd(&dl, "2"), *sec = text_cmd(&dl, "second");
+    GT_ASSERT(one != nullptr && two != nullptr && sec != nullptr && two->rect.y == sec->rect.y && two->rect.y > one->rect.y + 16);
+    int ones = 0;
+    for (gates_u32 i = 0; i < dl.len; i++) {
+        const gates_draw_cmd_t *d = gates_draw_list_at(&dl, i);
+        if (d->kind == GATES_DRAW_TEXT && gates_draw_cmd_text(&dl, d).size == 1 &&
+            (*gates_draw_cmd_text(&dl, d).ptr == '1' || *gates_draw_cmd_text(&dl, d).ptr == '3')) ones++;
+    }
+    GT_ASSERT(ones == 1);
+    gates_draw_list_deinit(&dl);
+    done(&a);
+}
+
+typedef struct styler_t {
+    int calls;
+    gates_u32 from[16], to[16];
+} styler_t;
+
+/* A tiny highlighter: digits are style 1, the word "if" style 2. */
+static void styler(void *user, gates_text_buffer_t *b, gates_u32 from, gates_u32 to) {
+    styler_t *s = user;
+    if (s->calls < 16) {
+        s->from[s->calls] = from;
+        s->to[s->calls] = to;
+    }
+    s->calls++;
+    gates_text_buffer_set_style(b, from, to, 0);
+    for (gates_u32 i = from; i < to; i++) {
+        gates_u8 c = gates_text_buffer_byte(b, i);
+        if (c >= '0' && c <= '9') gates_text_buffer_set_style(b, i, i + 1, 1);
+        if (c == 'i' && gates_text_buffer_byte(b, i + 1) == 'f') gates_text_buffer_set_style(b, i, i + 2, 2);
+    }
+}
+
+static void test_highlighting(void) {
+    app_t a;
+    make(&a, &(gates_editor_desc_t){0});
+    static char big[20000];
+    int n = 0;
+    for (int i = 0; i < 500; i++) n += snprintf(big + n, sizeof big - (size_t)n, "if x%d\n", i % 10);
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, (gates_str_t){ (const gates_u8 *)big, (gates_usize_t)n }));
+    layout(a.t);
+    gates_editor_style_t styles[3] = { {0}, { .use_rgb = true, .rgb = GATES_RGBA(200, 0, 0, 255) },
+                                       { .token = GATES_COLOR_ERROR } };
+    GT_ASSERT(gates_editor_set_styles(a.t, a.ed, styles, 257) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_editor_set_styles(a.t, a.ed, nullptr, 2) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT_OK(gates_editor_set_styles(a.t, a.ed, styles, 3));
+    styler_t st = {0};
+    GT_ASSERT_OK(gates_editor_set_styler(a.t, a.ed, styler, &st));
+    gates_draw_list_t dl;
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    paint(&a, &dl);
+    /* Asked once, from the start to the end of the lines shown - not the whole text. */
+    GT_ASSERT(st.calls == 1 && st.from[0] == 0 && st.to[0] > 0 && st.to[0] < (gates_u32)n / 4);
+    GT_ASSERT(st.to[0] == gates_text_buffer_line_start(gates_editor_buffer(a.t, a.ed),
+                                                      gates_editor_first_line(a.t, a.ed) + gates_editor_visible_lines(a.t, a.ed) + 2) ||
+              st.to[0] == gates_text_buffer_line_start(gates_editor_buffer(a.t, a.ed),
+                                                      gates_editor_first_line(a.t, a.ed) + gates_editor_visible_lines(a.t, a.ed) + 1));
+    /* Runs are cut at style changes and drawn in their colours. */
+    const gates_draw_cmd_t *kw = text_cmd(&dl, "if"), *num = text_cmd(&dl, "3"), *x = text_cmd(&dl, " x");
+    gates_color_t err_c = gates_theme_color(theme, GATES_COLOR_ERROR), plain = gates_theme_color(theme, GATES_COLOR_CONTROL_FG);
+    GT_ASSERT(kw != nullptr && kw->color.r == err_c.r && kw->color.g == err_c.g);
+    GT_ASSERT(num != nullptr && num->color.r == 200 && num->color.g == 0);
+    GT_ASSERT(x != nullptr && x->color.r == plain.r);
+    /* Nothing stale: no call. An edit makes its line stale from its start. */
+    paint(&a, &dl);
+    GT_ASSERT(st.calls == 1);
+    gates_u32 l3 = gates_text_buffer_line_start(gates_editor_buffer(a.t, a.ed), 3);
+    GT_ASSERT_OK(gates_editor_set_selection(a.t, a.ed, l3 + 2, l3 + 2));
+    type(a.t, "7");
+    paint(&a, &dl);
+    GT_ASSERT(st.calls == 2 && st.from[1] == l3);
+    /* Undo makes it stale too. */
+    GT_ASSERT(key_mods(a.t, GATES_KEY_Z, true, false));
+    paint(&a, &dl);
+    GT_ASSERT(st.calls == 3 && st.from[2] == l3);
+    /* Scrolling down styles only what comes into view. */
+    gates_u32 before_to = st.to[2];
+    GT_ASSERT_OK(gates_editor_scroll_to(a.t, a.ed, gates_text_buffer_line_start(gates_editor_buffer(a.t, a.ed), 400)));
+    paint(&a, &dl);
+    GT_ASSERT(st.calls == 4 && st.from[3] == before_to);
+    /* Selected text is drawn in the selection colour whatever its style. */
+    gates_u32 l400 = gates_text_buffer_line_start(gates_editor_buffer(a.t, a.ed), 400);
+    GT_ASSERT_OK(gates_editor_set_selection(a.t, a.ed, l400, l400 + 2));
+    paint(&a, &dl);
+    gates_color_t sel_fg = gates_theme_color(theme, GATES_COLOR_SELECTION_FG);
+    const gates_draw_cmd_t *tc[64];
+    text_zone = gates_node_layout_rect(a.t, a.ed);
+    int k = texts(&dl, tc, 64);
+    bool sel_kw = false;
+    for (int i = 0; i < k; i++) {
+        if (cmd_is(&dl, tc[i], "if") && tc[i]->color.r == sel_fg.r && tc[i]->color.g == sel_fg.g && tc[i]->color.b == sel_fg.b) {
+            sel_kw = true;
+        }
+    }
+    GT_ASSERT(sel_kw);
+    /* Without a styler, program styles stay; set_style checks its range. */
+    GT_ASSERT_OK(gates_editor_set_styler(a.t, a.ed, nullptr, nullptr));
+    GT_ASSERT(gates_editor_set_style(a.t, a.ed, 5, 2, 1) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_editor_set_style(a.t, a.ed, 0, (gates_u32)n + 1, 1) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT_OK(gates_editor_set_style(a.t, a.ed, l400, l400 + 4, 1));
+    GT_ASSERT(gates_text_buffer_style(gates_editor_buffer(a.t, a.ed), l400 + 3) == 1);
+    paint(&a, &dl);
+    GT_ASSERT(st.calls == 4);
+    /* Wrong nodes. */
+    gates_node_t root = gates_tree_root(a.t);
+    GT_ASSERT(gates_editor_set_styles(a.t, root, styles, 1) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_editor_set_styler(a.t, root, styler, &st) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_editor_set_style(a.t, root, 0, 0, 1) == PROVEN_ERR_INVALID_ARG);
+    gates_draw_list_deinit(&dl);
+    done(&a);
+}
+
+static void test_marks_find(void) {
+    app_t a;
+    make(&a, &(gates_editor_desc_t){0});
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, GATES_STR("alpha Beta gamma beta\nbeta")));
+    gates_mark_id_t mk = 0;
+    GT_ASSERT_OK(gates_editor_mark_add(a.t, a.ed, 11, GATES_MARK_LEFT, &mk));
+    GT_ASSERT_OK(gates_editor_set_selection(a.t, a.ed, 0, 0));
+    type(a.t, ">>");
+    gates_u32 off = 0;
+    GT_ASSERT(gates_text_buffer_mark_offset(gates_editor_buffer(a.t, a.ed), mk, &off) && off == 13);
+    GT_ASSERT_OK(gates_editor_mark_remove(a.t, a.ed, mk));
+    GT_ASSERT(gates_editor_mark_remove(a.t, a.ed, mk) == PROVEN_ERR_NOT_FOUND);
+    GT_ASSERT(gates_editor_mark_add(a.t, gates_tree_root(a.t), 0, GATES_MARK_LEFT, &mk) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_editor_mark_remove(a.t, gates_tree_root(a.t), 1) == PROVEN_ERR_INVALID_ARG);
+    /* Find: after the selection, selecting the hit; case; wrapping; backward. */
+    GT_ASSERT_OK(gates_editor_set_selection(a.t, a.ed, 0, 0));
+    GT_ASSERT(gates_editor_find(a.t, a.ed, GATES_STR("beta"), 0, false));
+    GT_ASSERT(anchor(&a) == 19 && caret(&a) == 23);
+    GT_ASSERT(gates_editor_find(a.t, a.ed, GATES_STR("beta"), 0, false) && anchor(&a) == 24);
+    GT_ASSERT(!gates_editor_find(a.t, a.ed, GATES_STR("beta"), 0, false) && anchor(&a) == 24); /* unchanged */
+    GT_ASSERT(gates_editor_find(a.t, a.ed, GATES_STR("beta"), GATES_FIND_IGNORE_CASE, true) && anchor(&a) == 8);
+    GT_ASSERT(gates_editor_find(a.t, a.ed, GATES_STR("BETA"), GATES_FIND_BACKWARD | GATES_FIND_IGNORE_CASE, true));
+    GT_ASSERT(anchor(&a) == 24); /* from the start backward: wrapped to the end */
+    GT_ASSERT(!gates_editor_find(a.t, a.ed, GATES_STR("zeta"), 0, true));
+    GT_ASSERT(!gates_editor_find(a.t, a.ed, GATES_STR(""), 0, true));
+    GT_ASSERT(!gates_editor_find(a.t, gates_tree_root(a.t), GATES_STR("beta"), 0, true));
+    done(&a);
+}
+
+static void test_indenting(void) {
+    app_t a;
+    make(&a, &(gates_editor_desc_t){ .auto_indent = true, .tab_inserts = true, .tab_width = 4 });
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, GATES_STR("    code")));
+    GT_ASSERT(key_mods(a.t, GATES_KEY_END, true, false));
+    GT_ASSERT(key(a.t, GATES_KEY_ENTER));
+    type(a.t, "more");
+    GT_ASSERT(text_is(&a, "    code\n    more"));
+    /* Enter in the leading blanks repeats only those before the caret. */
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, GATES_STR("\t\tx")));
+    GT_ASSERT_OK(gates_editor_set_selection(a.t, a.ed, 1, 1));
+    GT_ASSERT(key(a.t, GATES_KEY_ENTER) && text_is(&a, "\t\n\t\tx"));
+    /* Tab over lines indents each non-empty one; one undo step; the lines stay selected. */
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, GATES_STR("one\n\ntwo\nthree\nfour")));
+    GT_ASSERT_OK(gates_editor_set_selection(a.t, a.ed, 1, 11)); /* "one" .. into "three" */
+    GT_ASSERT(key(a.t, GATES_KEY_TAB));
+    GT_ASSERT(text_is(&a, "\tone\n\n\ttwo\n\tthree\nfour"));
+    GT_ASSERT(anchor(&a) == 0 && caret(&a) == 17);
+    GT_ASSERT(key_mods(a.t, GATES_KEY_TAB, false, true)); /* Shift+Tab takes them back */
+    GT_ASSERT(text_is(&a, "one\n\ntwo\nthree\nfour"));
+    GT_ASSERT(key_mods(a.t, GATES_KEY_Z, true, false) && text_is(&a, "\tone\n\n\ttwo\n\tthree\nfour"));
+    GT_ASSERT(key_mods(a.t, GATES_KEY_Z, true, false) && text_is(&a, "one\n\ntwo\nthree\nfour"));
+    /* A selection ending at a line's start leaves that line alone. */
+    GT_ASSERT_OK(gates_editor_set_selection(a.t, a.ed, 0, 5)); /* "one\n\n" ends at line 2's start */
+    GT_ASSERT(key(a.t, GATES_KEY_TAB) && text_is(&a, "\tone\n\ntwo\nthree\nfour"));
+    /* Shift+Tab on one line: a tab, or up to tab-width spaces; the caret stays in the text. */
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, GATES_STR("      six")));
+    GT_ASSERT_OK(gates_editor_set_selection(a.t, a.ed, 8, 8));
+    GT_ASSERT(key_mods(a.t, GATES_KEY_TAB, false, true) && text_is(&a, "  six") && caret(&a) == 4);
+    GT_ASSERT(key_mods(a.t, GATES_KEY_TAB, false, true) && text_is(&a, "six") && caret(&a) == 2);
+    bool had = gates_editor_can_undo(a.t, a.ed);
+    GT_ASSERT(key_mods(a.t, GATES_KEY_TAB, false, true) && text_is(&a, "six")); /* nothing to take: no step */
+    GT_ASSERT(had && gates_editor_can_undo(a.t, a.ed));
+    GT_ASSERT(key_mods(a.t, GATES_KEY_Z, true, false) && text_is(&a, "  six"));
+    /* A "\r\n" text keeps its line ends when indented. */
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, GATES_STR("a\r\nb\r\n")));
+    GT_ASSERT(key_mods(a.t, GATES_KEY_A, true, false));
+    GT_ASSERT(key(a.t, GATES_KEY_TAB) && text_is(&a, "\ta\r\n\tb\r\n"));
+    done(&a);
+}
+
 int main(void) {
     be = gates_text_backend_builtin();
     theme = gates_theme_light();
@@ -704,5 +1090,10 @@ int main(void) {
     test_pointer();
     test_access();
     test_failures();
+    test_wrap();
+    test_gutter();
+    test_highlighting();
+    test_marks_find();
+    test_indenting();
     return gt_report("test_editor");
 }
