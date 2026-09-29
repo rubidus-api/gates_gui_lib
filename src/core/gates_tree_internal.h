@@ -388,6 +388,13 @@ struct gates_tree {
     bool cues_always;            /* the platform always underlines access keys */
     bool eat_char;               /* a menu took the last key: drop the character it makes */
     gates_u32 tb_hover;          /* toolbar under the pointer (its hover entry), GATES_NONE */
+    /* Bubble handlers and deferred calls (plan-0019). */
+    struct gates_i_bubble *bubbles;
+    gates_u32 bubble_count;
+    gates_u32 bubble_cap;
+    struct gates_i_defer *defers;
+    gates_u32 defer_count;
+    gates_u32 defer_cap;
     /* Tooltips (plan-0018). */
     gates_u32 tip_index;         /* target node, GATES_NONE when none */
     gates_u32 tip_generation;
@@ -408,6 +415,26 @@ struct gates_tree {
 #define GATES_I_MB_OFF 0u
 #define GATES_I_MB_HIGHLIGHT 1u
 #define GATES_I_MB_OPEN 2u
+
+/* Bubble handlers and deferred calls (gates_event.c, plan-0019). */
+typedef struct gates_i_bubble {
+    gates_u32 index;
+    gates_u32 generation;
+    gates_event_fn fn;
+    void *user;
+} gates_i_bubble;
+typedef struct gates_i_defer {
+    gates_u32 key;
+    gates_defer_fn fn;
+    void *user;
+} gates_i_defer;
+/* Who hears idx's events: its own handler, else the nearest ancestor's bubble
+ * handler. false when nobody does (then nothing is queued). */
+bool gates_i_handler(const gates_tree_t *tree, gates_u32 idx, gates_event_fn *fn, void **user);
+static inline bool gates_i_wants_events(const gates_tree_t *tree, gates_u32 idx) {
+    return idx != GATES_NONE && gates_i_handler(tree, idx, nullptr, nullptr);
+}
+void gates_i_bubble_free(gates_tree_t *tree);
 
 /* Event queue helpers (gates_event.c). Reserve before mutating: `slots` more
  * entries and payload capacity for `text_bytes`. Push never allocates. */

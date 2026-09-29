@@ -341,7 +341,7 @@ gates_err_t gates_i_box_edit(gates_tree_t *tree, gates_u32 idx, gates_u32 b, gat
     }
     /* Reserve first: nothing below may fail once the text changes. */
     gates_err_t err = GATES_OK;
-    if (st->on_event != nullptr) {
+    if (gates_i_wants_events(tree, idx)) {
         err = gates_i_event_reserve(tree, user ? 1u : 0u, new_len);
     }
     if (gates_is_ok(err)) {
@@ -413,7 +413,7 @@ static gates_err_t history_apply(gates_tree_t *tree, gates_u32 idx, gates_widget
     if (st->max_bytes != 0 && new_len > st->max_bytes) {
         return PROVEN_ERR_OUT_OF_BOUNDS;
     }
-    gates_err_t err = st->on_event != nullptr ? gates_i_event_reserve(tree, 1, new_len) : GATES_OK;
+    gates_err_t err = gates_i_wants_events(tree, idx) ? gates_i_event_reserve(tree, 1, new_len) : GATES_OK;
     if (gates_is_ok(err)) {
         err = gates_text_edit_reserve(ed, new_len);
     }

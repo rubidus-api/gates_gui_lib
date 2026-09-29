@@ -97,7 +97,7 @@ void gates_i_activate(gates_tree_t *tree, gates_u32 idx) {
                         : nullptr;
     /* Reserve the notifications first: an activation or toggle that could not
      * be announced does not happen at all (RFC-0003 4.1). */
-    gates_u32 slots = (st->on_event != nullptr ? 1u : 0u) + (cmd != nullptr ? 1u : 0u);
+    gates_u32 slots = (gates_i_wants_events(tree, idx) ? 1u : 0u) + (cmd != nullptr ? 1u : 0u);
     if (slots > 0) {
         gates_err_t err = gates_i_event_reserve(tree, slots, 0);
         if (!gates_is_ok(err)) {

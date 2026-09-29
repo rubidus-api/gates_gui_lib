@@ -365,7 +365,7 @@ static gates_err_t reconcile(gates_tree_t *tree, gates_node_t view, struct gates
                 v->sel_row = r;
             }
             gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, view.index)->state_index);
-            if (st->on_event != nullptr) {
+            if (gates_i_wants_events(tree, view.index)) {
                 err = gates_i_event_reserve(tree, 1, 0);
             }
             v->sel = next;
@@ -647,8 +647,7 @@ static void note_scrolled(struct gates_i_view *v, const view_geom_t *g) {
 
 /* Asks the model to open or close a tree row. */
 static void request_expand(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id, bool open) {
-    gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
-    if (st->on_event == nullptr) return;
+    if (!gates_i_wants_events(tree, idx)) return;
     gates_err_t err = gates_i_event_reserve(tree, 1, 0);
     if (!gates_is_ok(err)) {
         tree->input_error = err;
@@ -665,7 +664,7 @@ static void pick(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v, cons
     if (id == 0) return;
     if (id != v->sel) {
         gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
-        if (st->on_event != nullptr) {
+        if (gates_i_wants_events(tree, idx)) {
             gates_err_t err = gates_i_event_reserve(tree, 1, 0);
             if (!gates_is_ok(err)) {
                 tree->input_error = err;
@@ -684,8 +683,7 @@ static void pick(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v, cons
 
 static void activate(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v) {
     if (v->sel == 0 || !v->has_model) return;
-    gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
-    if (st->on_event == nullptr) return;
+    if (!gates_i_wants_events(tree, idx)) return;
     gates_err_t err = gates_i_event_reserve(tree, 1, 0);
     if (!gates_is_ok(err)) {
         tree->input_error = err;
@@ -898,8 +896,7 @@ void gates_i_view_pointer_up(gates_tree_t *tree, gates_u32 idx, gates_point_t p)
     if (c != pressed) {
         return;
     }
-    gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
-    if (st->on_event == nullptr) return;
+    if (!gates_i_wants_events(tree, idx)) return;
     gates_err_t err = gates_i_event_reserve(tree, 1, 0);
     if (!gates_is_ok(err)) {
         tree->input_error = err;

@@ -156,7 +156,7 @@ gates_err_t gates_textbox_set_text(gates_tree_t *tree, gates_node_t node, gates_
         return PROVEN_ERR_OUT_OF_BOUNDS;
     }
     /* Silent, but a queued user event for this box will copy the new text. */
-    gates_err_t err = st->on_event != nullptr
+    gates_err_t err = gates_i_wants_events(tree, node.index)
                           ? gates_i_event_reserve(tree, 0, (gates_u32)text.size)
                           : GATES_OK;
     if (!gates_is_ok(err)) {

@@ -427,7 +427,7 @@ gates_input_result_t gates_input_preedit(gates_tree_t *tree, gates_str_t text,
     if (st == nullptr || (text.size > 0 && text.ptr == nullptr)) {
         return GATES_INPUT_IGNORED;
     }
-    gates_err_t err = st->on_event != nullptr
+    gates_err_t err = gates_i_wants_events(tree, tree->focus)
                           ? gates_i_event_reserve(tree, 1, (gates_u32)text.size)
                           : GATES_OK;
     if (!gates_is_ok(err)) {
@@ -473,7 +473,7 @@ gates_input_result_t gates_input_commit(gates_tree_t *tree, gates_str_t text) {
     bool had_preedit = gates_text_edit_preedit(st->edit).size > 0;
     gates_text_edit_t *ed = st->edit;
     /* Room for the composition-ended event as well as the text change. */
-    if (st->on_event != nullptr) {
+    if (gates_i_wants_events(tree, tree->focus)) {
         gates_u32 sel = gates_text_edit_sel_end(ed) - gates_text_edit_sel_begin(ed);
         gates_err_t err = gates_i_event_reserve(
             tree, 2u, (gates_u32)gates_text_edit_text(ed).size - sel + (gates_u32)text.size);

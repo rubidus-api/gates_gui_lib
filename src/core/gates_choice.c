@@ -243,7 +243,7 @@ gates_err_t gates_i_option_pick(gates_tree_t *tree, gates_u32 idx, gates_u32 id)
     if (st->opt_sel == id) {
         return GATES_OK;
     }
-    if (st->on_event != nullptr) {
+    if (gates_i_wants_events(tree, idx)) {
         gates_err_t err = gates_i_event_reserve(tree, 1, 0);
         if (!gates_is_ok(err)) {
             return err; /* not announced: not done (RFC-0003 4.1) */

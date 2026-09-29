@@ -491,6 +491,7 @@ void gates_tree_destroy(gates_tree_t *tree) {
     gates_i_timers_free(tree);
     gates_i_access_free(tree);
     gates_i_tip_free(tree);
+    gates_i_bubble_free(tree);
     /* Release owned widget text before dropping the pools. */
     if (tree->states != nullptr) {
         for (gates_u32 i = 0; i < tree->state_cap; i++) {

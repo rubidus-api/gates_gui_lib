@@ -92,4 +92,26 @@ gates_u32 gates_widget_revision(const gates_tree_t *tree, gates_node_t node);
 gates_u32 gates_tree_dispatch_events(gates_tree_t *tree, gates_u32 max_events);
 gates_u32 gates_tree_pending_events(const gates_tree_t *tree);
 
+/* -- bubbling (plan-0019, RFC-0005 A10) ---------------------------------------
+ * A bubble handler on any node (a panel, a form, the root) receives the events
+ * of its descendants that have no handler of their own - the nearest such
+ * ancestor only; ev->source is the descendant. An overlay (a dialog or menu) is
+ * a root of its own: its content bubbles to handlers inside it, never to the
+ * window below. null removes it. `user` is borrowed while registered. */
+[[nodiscard]] gates_err_t gates_node_set_bubble_handler(gates_tree_t *tree, gates_node_t node,
+                                                        gates_event_fn fn, void *user);
+
+/* -- deferred calls (plan-0019, RFC-0005 A8) ----------------------------------
+ * gates_tree_defer asks for fn(tree, key, user) to run once at the next safe
+ * point, however often it is asked before then: one call per key, with the
+ * fn and user of the latest request ("recompute the total after any field
+ * changed"). The safe point is gates_tree_dispatch_events, after the queued
+ * events are delivered; a call asked for during a deferred call runs in the
+ * next dispatch (its return value counts it as remaining work). */
+typedef void (*gates_defer_fn)(gates_tree_t *tree, gates_u32 key, void *user);
+[[nodiscard]] gates_err_t gates_tree_defer(gates_tree_t *tree, gates_u32 key, gates_defer_fn fn,
+                                           void *user);
+/* true when a call for `key` was waiting and is now dropped. */
+bool gates_tree_cancel_defer(gates_tree_t *tree, gates_u32 key);
+
 #endif /* GATES_EVENT_H */

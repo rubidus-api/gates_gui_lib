@@ -40,7 +40,7 @@ static void drop_record(gates_tree_t *tree, gates_u32 i) {
 static void closed_event(gates_tree_t *tree, gates_u32 idx, gates_event_kind_t kind,
                          gates_u32 result) {
     gates_widget_state_t *st = state_at(tree, idx);
-    if (st != nullptr && st->on_event != nullptr && tree->event_len < tree->event_cap) {
+    if (st != nullptr && gates_i_wants_events(tree, idx) && tree->event_len < tree->event_cap) {
         tree->events[tree->event_len++] = (gates_i_event_t){
             .node_index = idx,
             .generation = gates_i_slot(tree, idx)->generation,
@@ -153,7 +153,7 @@ gates_err_t gates_dialog_close(gates_tree_t *tree, gates_node_t dialog,
         return PROVEN_ERR_INVALID_STATE;
     }
     gates_widget_state_t *st = state_at(tree, dialog.index);
-    if (st != nullptr && st->on_event != nullptr) {
+    if (st != nullptr && gates_i_wants_events(tree, dialog.index)) {
         gates_err_t err = gates_i_event_reserve(tree, 1, 0);
         if (!gates_is_ok(err)) {
             return err; /* stays open: the result is never lost */
@@ -272,7 +272,7 @@ static void menu_remove(gates_tree_t *tree, gates_u32 i, gates_u32 result) {
     drop_record(tree, i);
     gates_widget_state_t *st = state_at(tree, idx);
     bool from_bar = st != nullptr && st->menu_from_bar;
-    if (st != nullptr && st->on_event != nullptr) {
+    if (st != nullptr && gates_i_wants_events(tree, idx)) {
         gates_err_t err = gates_i_event_reserve(tree, 1, 0);
         if (!gates_is_ok(err)) {
             tree->input_error = err; /* it still closes; only the report is lost */

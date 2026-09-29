@@ -329,7 +329,7 @@ gates_err_t gates_i_tabs_pick(gates_tree_t *tree, gates_u32 tabs, gates_u32 inde
     if (index >= gates_i_tabs_count(tree, tabs)) return PROVEN_ERR_OUT_OF_BOUNDS;
     if (index == old) return GATES_OK;
     gates_widget_state_t *st = state_at(tree, tabs);
-    if (st->on_event != nullptr) {
+    if (gates_i_wants_events(tree, tabs)) {
         gates_err_t err = gates_i_event_reserve(tree, 1, 0); /* no switch without its report */
         if (!gates_is_ok(err)) return err;
     }
@@ -348,7 +348,7 @@ gates_err_t gates_i_tabs_pick(gates_tree_t *tree, gates_u32 tabs, gates_u32 inde
         gates_tree_set_focus(tree, gates_i_handle(tree, to != GATES_NONE ? to : strip));
     }
     gates_i_focus_check(tree);
-    if (st->on_event != nullptr) {
+    if (gates_i_wants_events(tree, tabs)) {
         gates_i_event_push_ex(tree, tabs, GATES_EVENT_VALUE_CHANGED, GATES_ORIGIN_USER, index, 0);
     }
     return GATES_OK;

@@ -67,10 +67,129 @@ static bool coalesces(gates_event_kind_t kind) {
            kind == GATES_EVENT_SELECTION_CHANGED;
 }
 
+/* -- bubbling (plan-0019) -------------------------------------------------------- */
+
+static gates_i_bubble *bubble_of(const gates_tree_t *tree, gates_u32 idx) {
+    gates_u32 gen = gates_i_slot(tree, idx)->generation;
+    for (gates_u32 i = 0; i < tree->bubble_count; i++) {
+        gates_i_bubble *b = &tree->bubbles[i];
+        if (b->fn != nullptr && b->index == idx && b->generation == gen) return b;
+    }
+    return nullptr;
+}
+
+bool gates_i_handler(const gates_tree_t *tree, gates_u32 idx, gates_event_fn *fn, void **user) {
+    const gates_widget_state_t *st = state_at(tree, idx);
+    if (st != nullptr && st->on_event != nullptr) {
+        if (fn != nullptr) *fn = st->on_event;
+        if (user != nullptr) *user = st->event_user;
+        return true;
+    }
+    if (tree->bubble_count == 0) return false;
+    for (gates_u32 a = gates_i_slot(tree, idx)->parent; a != GATES_NONE; a = gates_i_slot(tree, a)->parent) {
+        const gates_i_bubble *b = bubble_of(tree, a);
+        if (b != nullptr) {
+            if (fn != nullptr) *fn = b->fn;
+            if (user != nullptr) *user = b->user;
+            return true;
+        }
+    }
+    return false;
+}
+
+gates_err_t gates_node_set_bubble_handler(gates_tree_t *tree, gates_node_t node, gates_event_fn fn, void *user) {
+    if (tree == nullptr || !gates_i_valid(tree, node)) return PROVEN_ERR_INVALID_ARG;
+    gates_i_bubble *b = bubble_of(tree, node.index);
+    if (b == nullptr && fn == nullptr) return GATES_OK;
+    if (b == nullptr) {
+        for (gates_u32 i = 0; i < tree->bubble_count && b == nullptr; i++) {
+            gates_i_bubble *q = &tree->bubbles[i];
+            gates_node_t n = { .index = q->index, .generation = q->generation };
+            if (q->fn == nullptr || !gates_i_valid(tree, n)) b = q; /* reuse a free or dead entry */
+        }
+    }
+    if (b == nullptr) {
+        if (tree->bubble_count == tree->bubble_cap) {
+            gates_u32 cap = tree->bubble_cap == 0 ? 4u : tree->bubble_cap * 2u;
+            gates_allocator_t a = tree->alloc;
+            proven_result_mem_mut_t r =
+                tree->bubbles == nullptr
+                    ? a.alloc_fn(a.ctx, cap * sizeof *tree->bubbles, alignof(gates_i_bubble))
+                    : a.realloc_fn(a.ctx, tree->bubbles, tree->bubble_cap * sizeof *tree->bubbles,
+                                   cap * sizeof *tree->bubbles, alignof(gates_i_bubble));
+            if (!proven_is_ok(r.err)) return r.err;
+            tree->bubbles = (gates_i_bubble *)r.value.ptr;
+            tree->bubble_cap = cap;
+        }
+        b = &tree->bubbles[tree->bubble_count++];
+    }
+    *b = (gates_i_bubble){ .index = node.index, .generation = gates_i_slot(tree, node.index)->generation,
+                           .fn = fn, .user = user };
+    return GATES_OK;
+}
+
+void gates_i_bubble_free(gates_tree_t *tree) {
+    gates_allocator_t a = tree->alloc;
+    if (tree->bubbles != nullptr) a.free_fn(a.ctx, tree->bubbles);
+    if (tree->defers != nullptr) a.free_fn(a.ctx, tree->defers);
+    tree->bubbles = nullptr;
+    tree->defers = nullptr;
+    tree->bubble_count = tree->bubble_cap = tree->defer_count = tree->defer_cap = 0;
+}
+
+/* -- deferred calls (plan-0019) ------------------------------------------------------- */
+
+gates_err_t gates_tree_defer(gates_tree_t *tree, gates_u32 key, gates_defer_fn fn, void *user) {
+    if (tree == nullptr || fn == nullptr) return PROVEN_ERR_INVALID_ARG;
+    for (gates_u32 i = 0; i < tree->defer_count; i++) {
+        if (tree->defers[i].key == key) {
+            tree->defers[i].fn = fn; /* one call: the latest request's */
+            tree->defers[i].user = user;
+            return GATES_OK;
+        }
+    }
+    if (tree->defer_count == tree->defer_cap) {
+        gates_u32 cap = tree->defer_cap == 0 ? 4u : tree->defer_cap * 2u;
+        gates_allocator_t a = tree->alloc;
+        proven_result_mem_mut_t r =
+            tree->defers == nullptr
+                ? a.alloc_fn(a.ctx, cap * sizeof *tree->defers, alignof(gates_i_defer))
+                : a.realloc_fn(a.ctx, tree->defers, tree->defer_cap * sizeof *tree->defers,
+                               cap * sizeof *tree->defers, alignof(gates_i_defer));
+        if (!proven_is_ok(r.err)) return r.err;
+        tree->defers = (gates_i_defer *)r.value.ptr;
+        tree->defer_cap = cap;
+    }
+    tree->defers[tree->defer_count++] = (gates_i_defer){ .key = key, .fn = fn, .user = user };
+    return GATES_OK;
+}
+
+bool gates_tree_cancel_defer(gates_tree_t *tree, gates_u32 key) {
+    if (tree == nullptr) return false;
+    for (gates_u32 i = 0; i < tree->defer_count; i++) {
+        if (tree->defers[i].key == key) {
+            memmove(&tree->defers[i], &tree->defers[i + 1], (tree->defer_count - i - 1) * sizeof *tree->defers);
+            tree->defer_count--;
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Runs the calls waiting now, oldest first; calls asked for meanwhile wait. */
+static void run_defers(gates_tree_t *tree) {
+    gates_u32 n = tree->defer_count;
+    for (gates_u32 k = 0; k < n && tree->defer_count > 0; k++) {
+        gates_i_defer d = tree->defers[0];
+        memmove(&tree->defers[0], &tree->defers[1], (tree->defer_count - 1) * sizeof *tree->defers);
+        tree->defer_count--;
+        d.fn(tree, d.key, d.user); /* may defer again: that one runs next time */
+    }
+}
+
 void gates_i_event_push(gates_tree_t *tree, gates_u32 idx, gates_event_kind_t kind,
                         gates_event_origin_t origin) {
-    gates_widget_state_t *st = state_at(tree, idx);
-    if (st == nullptr || st->on_event == nullptr) {
+    if (!gates_i_wants_events(tree, idx)) {
         return;
     }
     gates_u32 gen = gates_i_slot(tree, idx)->generation;
@@ -103,8 +222,7 @@ void gates_i_event_push_ex(gates_tree_t *tree, gates_u32 idx, gates_event_kind_t
 
 void gates_i_event_try_push(gates_tree_t *tree, gates_u32 idx, gates_event_kind_t kind,
                             gates_u32 text_bytes) {
-    gates_widget_state_t *st = state_at(tree, idx);
-    if (st == nullptr || st->on_event == nullptr) {
+    if (!gates_i_wants_events(tree, idx)) {
         return;
     }
     gates_err_t err = gates_i_event_reserve(tree, 1, text_bytes);
@@ -179,7 +297,7 @@ gates_err_t gates_widget_notify(gates_tree_t *tree, gates_node_t node) {
     if (!has_events(kind) || st == nullptr) {
         return PROVEN_ERR_INVALID_ARG;
     }
-    if (st->on_event == nullptr) {
+    if (!gates_i_wants_events(tree, node.index)) {
         return GATES_OK;
     }
     gates_event_kind_t ek = kind == GATES_NODE_VIEW      ? GATES_EVENT_SELECTION_CHANGED
@@ -268,7 +386,9 @@ gates_u32 gates_tree_dispatch_events(gates_tree_t *tree, gates_u32 max_events) {
             }
             continue;
         }
-        if (st == nullptr || st->on_event == nullptr) {
+        gates_event_fn fn = nullptr;
+        void *user = nullptr;
+        if (st == nullptr || !gates_i_handler(tree, e.node_index, &fn, &user)) {
             continue; /* handler removed */
         }
         gates_event_t ev = {
@@ -309,8 +429,6 @@ gates_u32 gates_tree_dispatch_events(gates_tree_t *tree, gates_u32 max_events) {
                 continue;
             }
         }
-        gates_event_fn fn = st->on_event;
-        void *user = st->event_user;
         tree->event_text_busy = tree->event_text;
         fn(tree, &ev, user); /* may mutate anything, including `st`'s storage */
         tree->event_text_busy = nullptr;
@@ -326,6 +444,9 @@ gates_u32 gates_tree_dispatch_events(gates_tree_t *tree, gates_u32 max_events) {
     }
     tree->event_len = rest;
     tree->event_head = 0;
+    if (rest == 0) {
+        run_defers(tree); /* after the events: the safe point (plan-0019) */
+    }
     tree->dispatching = false;
-    return rest;
+    return rest + tree->defer_count;
 }
