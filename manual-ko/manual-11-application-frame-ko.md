@@ -1,6 +1,6 @@
 # 11장 - 응용 프로그램 틀
 
-헤더: `gates/frame.h`, `gates/command.h`.
+헤더: `gates/frame.h`, `gates/command.h`, `gates/state.h`.
 
 데스크톱 도구는 보통 내용 둘레에 틀을 갖는다. 메뉴 막대가 있고, 레이블과 버튼에는 키보드 접근 키가 있으며, 사람이 익히고 바꿀 수 있는 단축키가 있다. 이 모두는 4장의 명령으로 움직이므로, 한 동작은 어디에 나타나든 레이블 하나, 사용 가능 상태 하나, 단축키 하나를 지킨다.
 
@@ -214,6 +214,76 @@ int main(void) {
 }
 ```
 
+## 탭
+
+`gates_tabs_create(tree, parent, &tabs)`는 페이지 위에 제목이 늘어선 띠를 만들고, `gates_tabs_add(tree, tabs, title, &page)`를 부를 때마다 탭 하나가 더해지며 그 페이지를 돌려준다. 페이지는 컨트롤을 담는 세로 패널이다. 한 번에 한 페이지만 보이고, 다른 페이지의 컨트롤은 포인터, 키보드, 보조 기술이 닿지 않는다.
+
+띠 전체가 Tab 정지 위치 하나이다. Left, Right, Home, End는 곧바로 고르고, Ctrl+Tab과 Ctrl+Shift+Tab(또는 Ctrl+PgDn과 Ctrl+PgUp)은 탭 안 어디서나 바꾸며 끝에서 처음으로 돌아간다. 클릭은 고르고 띠에 초점을 주며, 제목의 니모닉은 그 탭을 고른다. 초점이 사라지는 페이지에 있었으면 새 페이지의 첫 컨트롤로, 없으면 띠로 옮겨 간다. 사람이 바꾸면 탭 노드에 GATES_EVENT_VALUE_CHANGED가 오고 `result`는 새 번호이다. `gates_tabs_set_selected`는 조용히 바꾼다. 이 판에서 들어가지 않는 제목은 오른쪽 끝에서 잘린다.
+
+## 배치 기억하기
+
+분할선을 끌고, 탭을 고르고, 열을 넓히고, 스크롤한 사람은 다음에도 그대로이기를 바란다. `gates_state_save`는 자동화 id가 있는 모든 노드의 그런 배치를 글자로 적고(`split`, `tabs`, `columns`, `scroll` 줄), `gates_state_load`는 그 글자를 새로 만든 트리에 적용한다. 글자를 어디에 둘지는 프로그램이 정하며, 보통 설정 옆의 파일이다. id가 열쇠이므로 판이 바뀌어도 id를 그대로 둔다. 더는 맞지 않는 줄은 건너뛰므로 오래된 파일이 새 프로그램을 망가뜨리지 않는다. Windows에서는 `gates_window_placement`와 `gates_window_set_placement`가 창의 위치, 크기, 최대화 상태를 같은 방식으로 다루고, 모니터가 사라진 창은 가장 가까운 모니터로 데려온다.
+
+<!-- example: manual/examples/ex_11_tabs_state.c -->
+```c
+/* manual example (host): tabs, and state kept between runs.
+ * expect: tab 1 (Advanced) after Ctrl+Tab; saved 2 lines; next run: tab 1, split 700 */
+#include <gates/gates.h>
+
+#include <stdio.h>
+
+/* Builds the same window each run: tabs and a split, both with automation ids. */
+static bool build(gates_tree_t **out, gates_node_t *tabs, gates_node_t *split, gates_node_t *apply) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&(gates_tree_desc_t){0}, &t))) return false;
+    gates_node_t root = gates_tree_root(t), page, left, right, reset;
+    bool ok = gates_is_ok(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN)) &&
+              gates_is_ok(gates_tabs_create(t, root, tabs)) &&
+              gates_is_ok(gates_tabs_add(t, *tabs, GATES_STR("&General"), &page)) &&
+              gates_is_ok(gates_button_create(t, page, GATES_STR("Apply"), nullptr, nullptr, apply)) &&
+              gates_is_ok(gates_tabs_add(t, *tabs, GATES_STR("&Advanced"), &page)) &&
+              gates_is_ok(gates_button_create(t, page, GATES_STR("Reset"), nullptr, nullptr, &reset)) &&
+              gates_is_ok(gates_node_set_automation_id(t, *tabs, GATES_STR("settings.tabs"))) &&
+              gates_is_ok(gates_panel_create(t, root, split)) &&
+              gates_is_ok(gates_layout_set(t, *split, GATES_LAYOUT_KIND_SPLIT)) &&
+              gates_is_ok(gates_panel_create(t, *split, &left)) &&
+              gates_is_ok(gates_panel_create(t, *split, &right)) &&
+              gates_is_ok(gates_node_set_automation_id(t, *split, GATES_STR("main.split"))) &&
+              gates_is_ok(gates_layout_run(t, (gates_size_t){ 400, 300 }, gates_text_backend_builtin()));
+    *out = t;
+    return ok;
+}
+
+int main(void) {
+    gates_tree_t *t;
+    gates_node_t tabs, split, apply;
+    if (!build(&t, &tabs, &split, &apply)) return 1;
+    /* The person works in General, then Ctrl+Tab switches to Advanced. */
+    gates_tree_set_focus(t, apply);
+    gates_key_event_t ctrl_tab = { .key = GATES_KEY_TAB, .ctrl = true, .down = true };
+    (void)gates_input_key(t, &ctrl_tab);
+    gates_u32 now = gates_tabs_selected(t, tabs);
+    gates_str_t title = gates_tabs_title(t, tabs, now);
+    /* ...and drags the split. Save the state (a real program writes it to a file). */
+    if (!gates_is_ok(gates_layout_set_split(t, split, GATES_SPLIT_HORIZONTAL, 700))) return 1;
+    gates_u8 text[256];
+    gates_usize_t len = 0;
+    if (!gates_is_ok(gates_state_save(t, text, sizeof text, &len))) return 1;
+    int lines = 0;
+    for (gates_usize_t i = 0; i < len; i++) lines += text[i] == '\n' && i > 16;
+    gates_tree_destroy(t);
+
+    /* The next run builds the window again and loads what was saved. */
+    if (!build(&t, &tabs, &split, &apply)) return 1;
+    if (!gates_is_ok(gates_state_load(t, (gates_str_t){ .ptr = text, .size = len }, nullptr))) return 1;
+    printf("tab %u (%.*s) after Ctrl+Tab; saved %d lines; next run: tab %u, split %d\n", now,
+           (int)title.size - 1, (const char *)title.ptr + 1, lines, gates_tabs_selected(t, tabs),
+           gates_layout_split_ratio(t, split));
+    gates_tree_destroy(t);
+    return 0;
+}
+```
+
 ## 접근성
 
-메뉴 막대는 MenuBar 요소이고 그 제목은 ExpandCollapse가 있는 메뉴 항목이다. 메뉴 모드에서는 강조된 제목이 키보드 초점을 가진다. 니모닉이 있는 컨트롤은 모두 그것을 접근 키로 알린다("Alt+F", 열린 메뉴의 항목은 글자만). 메뉴 항목과 명령에 묶인 버튼은 명령의 단축키를 가속 키로 알리며, 접근성 이름에는 `&` 표시가 들어가지 않는다. 도구 막대는 버튼을 항목으로 가진 ToolBar 요소이고(구분선은 항목이 아니며, `>>`는 보이는 동안 More라는 항목이다), 상태 줄은 구역을 글자로 가진 StatusBar 요소이다.
+메뉴 막대는 MenuBar 요소이고 그 제목은 ExpandCollapse가 있는 메뉴 항목이다. 메뉴 모드에서는 강조된 제목이 키보드 초점을 가진다. 니모닉이 있는 컨트롤은 모두 그것을 접근 키로 알린다("Alt+F", 열린 메뉴의 항목은 글자만). 메뉴 항목과 명령에 묶인 버튼은 명령의 단축키를 가속 키로 알리며, 접근성 이름에는 `&` 표시가 들어가지 않는다. 도구 막대는 버튼을 항목으로 가진 ToolBar 요소이고(구분선은 항목이 아니며, `>>`는 보이는 동안 More라는 항목이다), 상태 줄은 구역을 글자로 가진 StatusBar 요소이다. 탭 띠는 제목을 SelectionItem이 있는 TabItem 항목으로 가진 Tab 요소이고, 각 페이지는 탭 이름을 가진 그룹이다.

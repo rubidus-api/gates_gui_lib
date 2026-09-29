@@ -20,6 +20,7 @@
 #include <gates/overlay.h>
 #include <gates/post.h>
 #include <gates/render.h>
+#include <gates/state.h>
 #include <gates/text.h>
 #include <gates/text_edit.h>
 #include <gates/theme.h>

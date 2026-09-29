@@ -3,6 +3,7 @@
 #include "gates_win32_internal.h"
 #include <dwmapi.h>
 
+#include <stdio.h>
 #include <string.h>
 
 #define GATES_WINDOW_DEFAULT_W 800
@@ -632,4 +633,77 @@ void gates_window_request_repaint(gates_window_t *win) {
     if (win != nullptr && win->hwnd != nullptr) {
         InvalidateRect(win->hwnd, nullptr, FALSE);
     }
+}
+
+/* -- placement (plan-0018, RFC-0005 A5) ------------------------------------------------ */
+
+gates_err_t gates_window_placement(const gates_window_t *win, gates_u8 *buf, gates_usize_t cap,
+                                   gates_usize_t *needed) {
+    if (win == nullptr || needed == nullptr) return PROVEN_ERR_INVALID_ARG;
+    WINDOWPLACEMENT wp = { .length = sizeof wp };
+    if (!GetWindowPlacement(win->hwnd, &wp)) return PROVEN_ERR_INVALID_STATE;
+    RECT r = wp.rcNormalPosition;
+    bool max = wp.showCmd == SW_SHOWMAXIMIZED || (IsZoomed(win->hwnd) && !IsIconic(win->hwnd));
+    char tmp[96];
+    int n = snprintf(tmp, sizeof tmp, "%ld,%ld,%ld,%ld,%s", (long)r.left, (long)r.top, (long)(r.right - r.left),
+                     (long)(r.bottom - r.top), max ? "maximized" : "normal");
+    if (n <= 0 || (gates_usize_t)n >= sizeof tmp) return PROVEN_ERR_INVALID_STATE;
+    *needed = (gates_usize_t)n;
+    if (buf == nullptr) return GATES_OK;
+    if ((gates_usize_t)n > cap) return PROVEN_ERR_OVERFLOW;
+    memcpy(buf, tmp, (size_t)n);
+    return GATES_OK;
+}
+
+/* A signed decimal field ending at `,` or the end; advances *p. */
+static bool field(const gates_u8 **p, const gates_u8 *end, long *out) {
+    const gates_u8 *q = *p;
+    bool neg = q < end && *q == '-';
+    if (neg) q++;
+    long v = 0;
+    int digits = 0;
+    while (q < end && *q >= '0' && *q <= '9' && digits < 9) {
+        v = v * 10 + (*q - '0');
+        q++;
+        digits++;
+    }
+    if (digits == 0 || q >= end || *q != ',') return false;
+    *out = neg ? -v : v;
+    *p = q + 1;
+    return true;
+}
+
+gates_err_t gates_window_set_placement(gates_window_t *win, gates_str_t text) {
+    if (win == nullptr || (text.size > 0 && text.ptr == nullptr)) return PROVEN_ERR_INVALID_ARG;
+    const gates_u8 *p = text.ptr, *end = text.ptr + text.size;
+    while (end > p && (end[-1] == '\n' || end[-1] == '\r' || end[-1] == ' ')) end--;
+    long x, y, w, h;
+    if (!field(&p, end, &x) || !field(&p, end, &y) || !field(&p, end, &w) || !field(&p, end, &h) || w <= 0 ||
+        h <= 0) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    gates_usize_t rest = (gates_usize_t)(end - p);
+    bool max;
+    if (rest == 9 && memcmp(p, "maximized", 9) == 0) max = true;
+    else if (rest == 6 && memcmp(p, "normal", 6) == 0) max = false;
+    else return PROVEN_ERR_INVALID_ARG;
+    RECT r = { x, y, x + w, y + h };
+    /* A rectangle on a monitor that is gone moves onto the nearest one. */
+    if (MonitorFromRect(&r, MONITOR_DEFAULTTONULL) == nullptr) {
+        MONITORINFO mi = { .cbSize = sizeof mi };
+        if (GetMonitorInfoW(MonitorFromRect(&r, MONITOR_DEFAULTTONEAREST), &mi)) {
+            RECT wa = mi.rcWork;
+            if (w > wa.right - wa.left) w = wa.right - wa.left;
+            if (h > wa.bottom - wa.top) h = wa.bottom - wa.top;
+            long nx = r.left < wa.left ? wa.left : (r.left + w > wa.right ? wa.right - w : r.left);
+            long ny = r.top < wa.top ? wa.top : (r.top + h > wa.bottom ? wa.bottom - h : r.top);
+            r = (RECT){ nx, ny, nx + w, ny + h };
+        }
+    }
+    WINDOWPLACEMENT wp = { .length = sizeof wp };
+    if (!GetWindowPlacement(win->hwnd, &wp)) return PROVEN_ERR_INVALID_STATE;
+    wp.flags = 0;
+    wp.showCmd = max ? SW_SHOWMAXIMIZED : SW_SHOWNORMAL;
+    wp.rcNormalPosition = r;
+    return SetWindowPlacement(win->hwnd, &wp) ? GATES_OK : PROVEN_ERR_INVALID_STATE;
 }

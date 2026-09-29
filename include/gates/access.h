@@ -65,6 +65,8 @@ typedef enum gates_role_t {
     GATES_ROLE_MENU_BAR,         /* menu bar (plan-0018); its titles are MENU_ITEM items */
     GATES_ROLE_TOOL_BAR,         /* toolbar; its buttons are BUTTON items */
     GATES_ROLE_STATUS_BAR,       /* status bar; its segments are TEXT nodes */
+    GATES_ROLE_TAB,              /* a tab strip; its titles are TAB_ITEM items */
+    GATES_ROLE_TAB_ITEM,
 } gates_role_t;
 
 /* State bits. */

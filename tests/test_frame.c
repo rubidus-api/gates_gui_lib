@@ -8,6 +8,8 @@
 #include <gates/frame.h>
 #include <gates/access.h>
 #include <gates/timer.h>
+#include <gates/state.h>
+#include <gates/view.h>
 #include "gates_test.h"
 #include <proven/heap.h>
 
@@ -49,6 +51,7 @@ static bool focused(const gates_tree_t *t, gates_node_t n) {
 typedef struct rec_t {
     gates_event_kind_t kind[32];
     gates_node_t node[32];
+    gates_u32 result[32];
     int n;
     int cmd[64];
 } rec_t;
@@ -59,6 +62,7 @@ static void record(gates_tree_t *tree, const gates_event_t *ev, void *user) {
     if (r->n < 32) {
         r->kind[r->n] = ev->kind;
         r->node[r->n] = ev->source;
+        r->result[r->n] = ev->result;
         r->n++;
     }
 }
@@ -1204,6 +1208,270 @@ static void test_tooltip_without_clock(void) {
     gates_tree_destroy(t);
 }
 
+
+/* -- tabs -------------------------------------------------------------------------------- */
+
+typedef struct tabs_app_t {
+    gates_tree_t *t;
+    gates_node_t tabs, strip, before, after;
+    gates_node_t page[3], ctl[3];
+    rec_t rec;
+} tabs_app_t;
+
+static void make_tabs(tabs_app_t *a) {
+    memset(a, 0, sizeof *a);
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &a->t));
+    gates_tree_t *t = a->t;
+    gates_node_t root = gates_tree_root(t);
+    GT_ASSERT_OK(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN));
+    GT_ASSERT_OK(gates_button_create(t, root, GATES_STR("Before"), nullptr, nullptr, &a->before));
+    GT_ASSERT_OK(gates_tabs_create(t, root, &a->tabs));
+    GT_ASSERT_OK(gates_layout_set_child_grow(t, a->tabs, 1));
+    static const char *titles[3] = { "&General", "&Advanced", "A&bout" };
+    static const char *ctls[3] = { "Apply", "Reset", "" };
+    for (int i = 0; i < 3; i++) {
+        GT_ASSERT_OK(gates_tabs_add(t, a->tabs, (gates_str_t){ .ptr = (const gates_u8 *)titles[i], .size = strlen(titles[i]) },
+                                    &a->page[i]));
+        if (ctls[i][0] != 0) {
+            GT_ASSERT_OK(gates_button_create(t, a->page[i], (gates_str_t){ .ptr = (const gates_u8 *)ctls[i], .size = strlen(ctls[i]) },
+                                             nullptr, nullptr, &a->ctl[i]));
+        } else {
+            GT_ASSERT_OK(gates_label_create(t, a->page[i], GATES_STR("gates"), &a->ctl[i]));
+        }
+    }
+    GT_ASSERT_OK(gates_button_create(t, root, GATES_STR("After"), nullptr, nullptr, &a->after));
+    GT_ASSERT_OK(gates_widget_set_handler(t, a->tabs, record, &a->rec));
+    layout(t);
+    a->strip = gates_access_first_child(t, (gates_access_ref_t){ a->tabs, 0 }).node;
+}
+
+static int changes(tabs_app_t *a, gates_u32 *last) {
+    dispatch(a->t);
+    int n = 0;
+    for (int i = 0; i < a->rec.n; i++) {
+        if (a->rec.kind[i] != GATES_EVENT_VALUE_CHANGED) continue;
+        n++;
+        if (a->rec.result[i] != gates_tabs_selected(a->t, a->tabs)) n += 100; /* result = the new index */
+    }
+    if (last != nullptr) *last = gates_tabs_selected(a->t, a->tabs);
+    a->rec.n = 0;
+    return n;
+}
+
+static gates_rect_t tab_rect(tabs_app_t *a, gates_u32 i) {
+    gates_access_info_t info;
+    return gates_is_ok(gates_access_info(a->t, a->strip, (gates_u64)i + 1, &info)) ? info.bounds : (gates_rect_t){0};
+}
+
+static void test_tabs(void) {
+    tabs_app_t a;
+    make_tabs(&a);
+    gates_tree_t *t = a.t;
+    GT_ASSERT(gates_node_kind(t, a.tabs) == GATES_NODE_TABS);
+    GT_ASSERT(gates_node_kind(t, a.strip) == GATES_NODE_TABSTRIP);
+    GT_ASSERT(gates_tabs_count(t, a.tabs) == 3);
+    GT_ASSERT(seq(gates_tabs_title(t, a.tabs, 2), GATES_STR("A&bout")));
+    GT_ASSERT(gates_node_eq(gates_tabs_page(t, a.tabs, 1), a.page[1]));
+    GT_ASSERT(gates_node_eq(gates_tabs_page(t, a.tabs, 3), GATES_NODE_NULL));
+    GT_ASSERT(gates_tabs_selected(t, a.tabs) == 0);
+    GT_ASSERT(gates_tabs_add(t, a.before, GATES_STR("x"), nullptr) == PROVEN_ERR_INVALID_ARG);
+    /* The strip sits above the shown page; the other pages are not reachable. */
+    gates_rect_t sr = gates_node_layout_rect(t, a.strip), pr = gates_node_layout_rect(t, a.page[0]);
+    GT_ASSERT(sr.h >= 24 && pr.y >= sr.y + sr.h);
+    GT_ASSERT(gates_widget_focusable(t, a.ctl[0]) && !gates_widget_focusable(t, a.ctl[1]));
+    gates_draw_list_t dl;
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    GT_ASSERT_OK(gates_paint_tree(t, &dl, theme, be));
+    char buf[512];
+    draw_texts(&dl, buf, sizeof buf);
+    GT_ASSERT(strstr(buf, "GeneralAdvancedAbout") != nullptr && strstr(buf, "Apply") && !strstr(buf, "Reset"));
+    gates_draw_list_deinit(&dl);
+    /* A click selects and focuses the strip; the program's change is silent. */
+    click_at(t, mid(tab_rect(&a, 1)));
+    gates_u32 sel = 99;
+    GT_ASSERT(changes(&a, &sel) == 1 && sel == 1);
+    GT_ASSERT(focused(t, a.strip));
+    GT_ASSERT(gates_widget_focusable(t, a.ctl[1]) && !gates_widget_focusable(t, a.ctl[0]));
+    GT_ASSERT_OK(gates_tabs_set_selected(t, a.tabs, 0));
+    GT_ASSERT(changes(&a, &sel) == 0 && sel == 0);
+    GT_ASSERT(gates_tabs_set_selected(t, a.tabs, 3) == PROVEN_ERR_OUT_OF_BOUNDS);
+    click_at(t, mid(tab_rect(&a, 0)));                         /* the selected one: no change */
+    GT_ASSERT(changes(&a, nullptr) == 0);
+    /* Keys on the strip: at once, no wrapping. */
+    GT_ASSERT(key(t, GATES_KEY_RIGHT));
+    GT_ASSERT(key(t, GATES_KEY_RIGHT));
+    GT_ASSERT(key(t, GATES_KEY_RIGHT)); /* two switches before delivery coalesce into one report of the latest */
+    GT_ASSERT(changes(&a, &sel) == 1 && sel == 2);
+    GT_ASSERT(key(t, GATES_KEY_HOME));
+    GT_ASSERT(changes(&a, &sel) == 1 && sel == 0);
+    GT_ASSERT(key(t, GATES_KEY_LEFT));
+    GT_ASSERT(changes(&a, &sel) == 0 && sel == 0);
+    GT_ASSERT(key(t, GATES_KEY_END));
+    GT_ASSERT(changes(&a, &sel) == 1 && sel == 2);
+    GT_ASSERT(key(t, GATES_KEY_LEFT));
+    GT_ASSERT(changes(&a, &sel) == 1 && sel == 1);
+    GT_ASSERT(key(t, GATES_KEY_HOME));
+    changes(&a, nullptr);
+    /* Tab goes from the strip into the page; Shift+Tab back. */
+    GT_ASSERT(key(t, GATES_KEY_TAB));
+    GT_ASSERT(focused(t, a.ctl[0]));
+    GT_ASSERT(keyx(t, GATES_KEY_TAB, false, true, 0));
+    GT_ASSERT(focused(t, a.strip));
+    /* Ctrl+Tab inside a page: the next page, the focus follows into it. */
+    gates_tree_set_focus(t, a.ctl[0]);
+    GT_ASSERT(keyx(t, GATES_KEY_TAB, true, false, 0));
+    GT_ASSERT(changes(&a, &sel) == 1 && sel == 1);
+    GT_ASSERT(focused(t, a.ctl[1]));
+    GT_ASSERT(keyx(t, GATES_KEY_PAGE_DOWN, true, false, 0));    /* to About: nothing to focus there */
+    GT_ASSERT(changes(&a, &sel) == 1 && sel == 2);
+    GT_ASSERT(focused(t, a.strip));
+    GT_ASSERT(keyx(t, GATES_KEY_TAB, true, false, 0));          /* wraps to General */
+    GT_ASSERT(changes(&a, &sel) == 1 && sel == 0);
+    GT_ASSERT(focused(t, a.strip));                             /* the focus was on the strip */
+    GT_ASSERT(keyx(t, GATES_KEY_TAB, true, true, 0));           /* Ctrl+Shift+Tab wraps back */
+    GT_ASSERT(changes(&a, &sel) == 1 && sel == 2);
+    GT_ASSERT(keyx(t, GATES_KEY_PAGE_UP, true, false, 0));
+    GT_ASSERT(changes(&a, &sel) == 1 && sel == 1);
+    /* Outside the tabs, Ctrl+Tab is not theirs. */
+    gates_tree_set_focus(t, a.after);
+    GT_ASSERT(!keyx(t, GATES_KEY_TAB, true, false, 0));
+    GT_ASSERT(changes(&a, nullptr) == 0);
+    /* A title's mnemonic selects its tab and focuses the strip. */
+    GT_ASSERT(gates_input_mnemonic(t, 'b'));
+    GT_ASSERT(changes(&a, &sel) == 1 && sel == 2);
+    GT_ASSERT(focused(t, a.strip));
+    /* Titles can change. */
+    GT_ASSERT_OK(gates_tabs_set_title(t, a.tabs, 2, GATES_STR("&Help")));
+    GT_ASSERT(gates_input_mnemonic(t, 'h'));
+    GT_ASSERT(gates_tabs_set_title(t, a.tabs, 5, GATES_STR("x")) == PROVEN_ERR_OUT_OF_BOUNDS);
+    /* Accessibility: a Tab of TabItems, pages named by their titles. */
+    gates_access_info_t info;
+    GT_ASSERT_OK(gates_access_info(t, a.strip, 0, &info));
+    GT_ASSERT(info.role == GATES_ROLE_TAB && info.item_count == 3);
+    GT_ASSERT_OK(gates_access_info(t, a.strip, 1, &info));
+    GT_ASSERT(info.role == GATES_ROLE_TAB_ITEM && seq(info.name, GATES_STR("General")));
+    GT_ASSERT(seq(info.access_key, GATES_STR("Alt+G")) && !(info.states & GATES_ACCESS_SELECTED));
+    GT_ASSERT(info.actions & GATES_ACCESS_SELECT);
+    GT_ASSERT_OK(gates_access_info(t, a.strip, 3, &info));
+    GT_ASSERT(info.states & GATES_ACCESS_SELECTED);
+    gates_access_ref_t f = gates_access_focus_ref(t);
+    GT_ASSERT(gates_node_eq(f.node, a.strip) && f.item == 3);
+    GT_ASSERT_OK(gates_access_select(t, a.strip, 2));
+    GT_ASSERT(changes(&a, &sel) == 1 && sel == 1);
+    GT_ASSERT_OK(gates_access_info(t, a.page[1], 0, &info));
+    GT_ASSERT(info.role == GATES_ROLE_GROUP && seq(info.name, GATES_STR("Advanced")));
+    GT_ASSERT_OK(gates_access_info(t, a.tabs, 0, &info));
+    GT_ASSERT(info.role == GATES_ROLE_NONE);
+    gates_access_issue_t issues[8];
+    GT_ASSERT(gates_access_audit(t, theme, issues, 8) == 0);
+    gates_tree_destroy(t);
+}
+
+/* -- persisted state (A5) ---------------------------------------------------------------- */
+
+typedef struct state_app_t {
+    gates_tree_t *t;
+    gates_node_t split, tabs, view, scroll;
+} state_app_t;
+
+static void make_state_app(state_app_t *a) {
+    memset(a, 0, sizeof *a);
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &a->t));
+    gates_tree_t *t = a->t;
+    gates_node_t root = gates_tree_root(t), left, right, p;
+    GT_ASSERT_OK(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN));
+    GT_ASSERT_OK(gates_panel_create(t, root, &a->split));
+    GT_ASSERT_OK(gates_layout_set(t, a->split, GATES_LAYOUT_KIND_SPLIT));
+    GT_ASSERT_OK(gates_layout_set_child_grow(t, a->split, 1));
+    GT_ASSERT_OK(gates_panel_create(t, a->split, &left));
+    GT_ASSERT_OK(gates_panel_create(t, a->split, &right));
+    GT_ASSERT_OK(gates_node_set_automation_id(t, a->split, GATES_STR("main split")));
+    GT_ASSERT_OK(gates_tabs_create(t, left, &a->tabs));
+    for (int i = 0; i < 3; i++) GT_ASSERT_OK(gates_tabs_add(t, a->tabs, GATES_STR("T"), &p));
+    GT_ASSERT_OK(gates_node_set_automation_id(t, a->tabs, GATES_STR("settings.tabs")));
+    static const gates_column_desc_t cols[] = { { .id = 1, .label = GATES_STR("Name"), .width = 100 },
+                                                { .id = 2, .label = GATES_STR("Size"), .width = 60 } };
+    GT_ASSERT_OK(gates_view_create(t, right, &(gates_view_desc_t){ .columns = cols, .column_count = 2, .header = true },
+                                   &a->view));
+    GT_ASSERT_OK(gates_node_set_automation_id(t, a->view, GATES_STR("files=table")));
+    GT_ASSERT_OK(gates_panel_create(t, root, &a->scroll));
+    GT_ASSERT_OK(gates_layout_set(t, a->scroll, GATES_LAYOUT_KIND_SCROLL));
+    for (int i = 0; i < 30; i++) {
+        gates_node_t l;
+        GT_ASSERT_OK(gates_label_create(t, a->scroll, GATES_STR("line"), &l));
+    }
+    GT_ASSERT_OK(gates_node_set_automation_id(t, a->scroll, GATES_STR("help.scroll")));
+    layout(t);
+}
+
+static void test_state(void) {
+    state_app_t a;
+    make_state_app(&a);
+    gates_tree_t *t = a.t;
+    /* A person arranges things... */
+    GT_ASSERT_OK(gates_layout_set_split(t, a.split, GATES_SPLIT_HORIZONTAL, 620));
+    GT_ASSERT_OK(gates_tabs_set_selected(t, a.tabs, 2));
+    GT_ASSERT_OK(gates_view_set_column_width(t, a.view, 1, 140));
+    GT_ASSERT_OK(gates_layout_set_scroll_offset(t, a.scroll, 40));
+    layout(t);
+    /* ...and it is saved as text. */
+    gates_usize_t need = 0;
+    GT_ASSERT_OK(gates_state_save(t, nullptr, 0, &need));
+    char text[512];
+    GT_ASSERT(need > 0 && need < sizeof text);
+    gates_usize_t small = 0;
+    GT_ASSERT(gates_state_save(t, (gates_u8 *)text, 10, &small) == PROVEN_ERR_OVERFLOW && small == need);
+    GT_ASSERT_OK(gates_state_save(t, (gates_u8 *)text, sizeof text, &need));
+    text[need] = 0;
+    GT_ASSERT(strncmp(text, "# gates state 1\n", 16) == 0);
+    GT_ASSERT(strstr(text, "split 620 main split\n") != nullptr);
+    GT_ASSERT(strstr(text, "tabs 2 settings.tabs\n") != nullptr);
+    GT_ASSERT(strstr(text, "columns 140,60 files=table\n") != nullptr);
+    GT_ASSERT(strstr(text, "scroll 40 help.scroll\n") != nullptr);
+    gates_tree_destroy(t);
+
+    /* The next start: a fresh tree with the same ids takes it all back. */
+    make_state_app(&a);
+    t = a.t;
+    gates_u32 applied = 0;
+    GT_ASSERT_OK(gates_state_load(t, (gates_str_t){ .ptr = (const gates_u8 *)text, .size = need }, &applied));
+    GT_ASSERT(applied == 4);
+    layout(t);
+    GT_ASSERT(gates_layout_split_ratio(t, a.split) == 620);
+    GT_ASSERT(gates_tabs_selected(t, a.tabs) == 2);
+    GT_ASSERT(gates_view_column_width(t, a.view, 1) == 140 && gates_view_column_width(t, a.view, 2) == 60);
+    GT_ASSERT(gates_layout_scroll_offset(t, a.scroll) == 40);
+    /* Old or damaged files never break a program: what does not match is skipped. */
+    const char *junk = "junk\r\n"
+                       "split x main split\r\n"
+                       "split 610 no such id\n"
+                       "tabs 7 settings.tabs\n"
+                       "tabs 1 main split\n"
+                       "columns 1,2,3 files=table\n"
+                       "columns 90,abc files=table\n"
+                       "columns 90 files=table\n"
+                       "scroll -5 help.scroll\n"
+                       "split 5000 main split\n"
+                       "\n"
+                       "tabs 1\n"
+                       "split 300 main split\r\n"
+                       "tabs 0 settings.tabs";
+    GT_ASSERT_OK(gates_state_load(t, (gates_str_t){ .ptr = (const gates_u8 *)junk, .size = strlen(junk) }, &applied));
+    GT_ASSERT(applied == 2);
+    GT_ASSERT(gates_layout_split_ratio(t, a.split) == 300);
+    GT_ASSERT(gates_tabs_selected(t, a.tabs) == 0);
+    GT_ASSERT(gates_view_column_width(t, a.view, 1) == 140);
+    GT_ASSERT_OK(gates_state_load(t, (gates_str_t){0}, nullptr));
+    GT_ASSERT(gates_state_load(nullptr, (gates_str_t){0}, nullptr) == PROVEN_ERR_INVALID_ARG);
+    /* Nodes without an id are not saved; an id with a line break is skipped. */
+    GT_ASSERT_OK(gates_node_set_automation_id(t, a.split, GATES_STR("")));
+    GT_ASSERT_OK(gates_node_set_automation_id(t, a.tabs, GATES_STR("bad\nid")));
+    GT_ASSERT_OK(gates_state_save(t, (gates_u8 *)text, sizeof text, &need));
+    text[need] = 0;
+    GT_ASSERT(strstr(text, "split") == nullptr && strstr(text, "tabs") == nullptr);
+    gates_tree_destroy(t);
+}
+
 /* -- allocation failure -------------------------------------------------------------- */
 
 typedef struct fail_alloc_t {
@@ -1272,6 +1540,8 @@ int main(void) {
     test_statusbar();
     test_tooltips();
     test_tooltip_without_clock();
+    test_tabs();
+    test_state();
     test_allocation_failure();
     return gt_report("test_frame");
 }

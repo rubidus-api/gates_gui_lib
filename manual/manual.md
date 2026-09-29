@@ -17,7 +17,7 @@ settings panels, inspectors, log viewers, build tools. Every chapter is one file
 - [Chapter 8 - Themes, units and scaling](manual-08-themes-units.md)
 - [Chapter 9 - Accessibility](manual-09-accessibility.md): the model, the rules, UI Automation
 - [Chapter 10 - Deployment and troubleshooting](manual-10-deployment.md)
-- [Chapter 11 - The application frame](manual-11-application-frame.md): mnemonics, the menu bar, the keymap, toolbar, status bar, tooltips
+- [Chapter 11 - The application frame](manual-11-application-frame.md): mnemonics, the menu bar, the keymap, toolbar, status bar, tooltips, tabs, saved state
 
 ## How to read it
 

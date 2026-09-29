@@ -144,6 +144,9 @@ static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
     case GATES_NODE_TOOLBAR:
         emit(ctx, gates_i_toolbar_paint(tree, idx, ctx->dl, ctx->theme, ctx->text));
         break;
+    case GATES_NODE_TABSTRIP:
+        emit(ctx, gates_i_tabstrip_paint(tree, idx, ctx->dl, ctx->theme, ctx->text));
+        break;
     case GATES_NODE_STATUSBAR:
         emit(ctx, gates_i_statusbar_paint(tree, idx, ctx->dl, ctx->theme));
         break; /* its segments follow */

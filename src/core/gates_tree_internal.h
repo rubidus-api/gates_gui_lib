@@ -221,6 +221,8 @@ typedef struct gates_widget_state_t {
     struct gates_i_menubar *mbar;
     /* Toolbar (plan-0018): its entries (command ids, 0 = separator). */
     struct gates_i_toolbar *tbar;
+    /* Tabs (plan-0018): the titles; the pages are the stack's children. */
+    struct gates_i_tabs *tabs;
     /* Form (plan-0010 stage 2): its field table. */
     struct gates_i_field *fields;
     gates_u32 field_count;
@@ -732,6 +734,41 @@ gates_u32 gates_i_toolbar_tip(const gates_tree_t *tree, gates_u32 idx, gates_u32
                               gates_u32 cap);
 gates_err_t gates_i_statusbar_paint(const gates_tree_t *tree, gates_u32 idx, gates_draw_list_t *dl,
                                     const gates_theme_t *theme);
+
+/* Tabs (gates_tabs.c, plan-0018): a TABS column holds the strip (TABSTRIP) and
+ * a stack panel whose children are the pages. */
+typedef struct gates_i_tab_title {
+    gates_u8 *text;
+    gates_u32 len;
+} gates_i_tab_title;
+typedef struct gates_i_tabs {
+    gates_i_tab_title *titles;
+    gates_u32 count;
+    gates_u32 cap;
+} gates_i_tabs;
+void gates_i_tabs_free(gates_tree_t *tree, gates_widget_state_t *st);
+gates_u32 gates_i_tabs_count(const gates_tree_t *tree, gates_u32 tabs);
+gates_str_t gates_i_tabs_title(const gates_tree_t *tree, gates_u32 tabs, gates_u32 index);
+gates_u32 gates_i_tabs_selected(const gates_tree_t *tree, gates_u32 tabs);
+/* A person switches to `index`: reserves the event, switches, moves the focus
+ * into the new page when it was in the old one, queues VALUE_CHANGED. */
+gates_err_t gates_i_tabs_pick(gates_tree_t *tree, gates_u32 tabs, gates_u32 index);
+gates_i32 gates_i_tab_page_index(const gates_tree_t *tree, gates_u32 idx, gates_u32 *out_tabs);
+gates_size_t gates_i_tabstrip_measure(const gates_tree_t *tree, const gates_node_slot_t *s,
+                                      const gates_text_backend_t *text);
+gates_err_t gates_i_tabstrip_paint(const gates_tree_t *tree, gates_u32 strip, gates_draw_list_t *dl,
+                                   const gates_theme_t *theme, const gates_text_backend_t *text);
+gates_rect_t gates_i_tab_rect(const gates_tree_t *tree, gates_u32 strip, gates_u32 index);
+gates_i32 gates_i_tab_at(const gates_tree_t *tree, gates_u32 strip, gates_point_t p);
+bool gates_i_tabstrip_key(gates_tree_t *tree, gates_u32 strip, const gates_key_event_t *ev);
+bool gates_i_tabs_ctrl_key(gates_tree_t *tree, const gates_key_event_t *ev);
+void gates_i_tabstrip_press(gates_tree_t *tree, gates_u32 strip, gates_point_t p);
+bool gates_i_tabs_mnemonic(gates_tree_t *tree, gates_u8 letter);
+
+/* View columns by position (gates_view.c) for persisted state. */
+gates_u32 gates_i_view_ncol(const gates_tree_t *tree, gates_u32 idx);
+gates_i32 gates_i_view_col_width(const gates_tree_t *tree, gates_u32 idx, gates_u32 k);
+void gates_i_view_set_col_width(gates_tree_t *tree, gates_u32 idx, gates_u32 k, gates_i32 width);
 
 /* Tooltips (gates_tooltip.c, plan-0018). */
 gates_str_t gates_i_tooltip_of(const gates_tree_t *tree, gates_u32 idx);

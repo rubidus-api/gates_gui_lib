@@ -276,6 +276,10 @@ bool gates_input_mnemonic(gates_tree_t *tree, gates_u32 codepoint) {
             }
         }
     }
+    /* Tab titles (plan-0018). */
+    if (gates_i_tabs_mnemonic(tree, letter)) {
+        return true;
+    }
     /* Controls of the focus scope, in tree order. */
     gates_u32 scope = gates_i_scope_root(tree);
     gates_u32 found[2] = { GATES_NONE, GATES_NONE }; /* first match, first after focus */

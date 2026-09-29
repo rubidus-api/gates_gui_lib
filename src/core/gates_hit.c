@@ -351,6 +351,11 @@ gates_node_t gates_input_pointer(gates_tree_t *tree, const gates_pointer_event_t
     if (ev->action == GATES_POINTER_MOVE) {
         gates_i_tip_hover(tree, ev->pos, hit);
     }
+    if (ev->action == GATES_POINTER_DOWN && ev->button == GATES_BUTTON_LEFT && hit != GATES_NONE &&
+        gates_i_slot(tree, hit)->kind == GATES_NODE_TABSTRIP) {
+        gates_i_tabstrip_press(tree, hit, ev->pos);
+        return gates_i_handle(tree, hit);
+    }
     if (ev->action == GATES_POINTER_DOWN && ev->button == GATES_BUTTON_LEFT && tb != GATES_NONE) {
         set_hover(tree, GATES_NONE);
         gates_i_toolbar_down(tree, tb, ev->pos);

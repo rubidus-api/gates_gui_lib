@@ -399,7 +399,7 @@ static gates_str_t label_text(const gates_tree_t *tree, gates_node_t n) {
 static bool is_interactive(gates_node_kind_t k) {
     return k == GATES_NODE_BUTTON || k == GATES_NODE_CHECKBOX || k == GATES_NODE_TEXTBOX ||
            k == GATES_NODE_RADIO || k == GATES_NODE_CHOICE || k == GATES_NODE_VIEW ||
-           k == GATES_NODE_TOOLBAR;
+           k == GATES_NODE_TOOLBAR || k == GATES_NODE_TABSTRIP;
 }
 
 static gates_role_t role_of(const gates_tree_t *tree, gates_u32 idx) {
@@ -420,6 +420,7 @@ static gates_role_t role_of(const gates_tree_t *tree, gates_u32 idx) {
     case GATES_NODE_MENUBAR: return GATES_ROLE_MENU_BAR;
     case GATES_NODE_TOOLBAR: return GATES_ROLE_TOOL_BAR;
     case GATES_NODE_STATUSBAR: return GATES_ROLE_STATUS_BAR;
+    case GATES_NODE_TABSTRIP: return GATES_ROLE_TAB;
     case GATES_NODE_VIEW: {
         gates_u32 k = gates_i_view_kind(tree, idx);
         return k == GATES_I_VIEW_TREE ? GATES_ROLE_TREE : k == GATES_I_VIEW_TABLE ? GATES_ROLE_TABLE : GATES_ROLE_LIST;
@@ -428,6 +429,7 @@ static gates_role_t role_of(const gates_tree_t *tree, gates_u32 idx) {
     case GATES_NODE_CUSTOM:
     default:
         if (s->layout_kind == GATES_LAYOUT_SCROLL) return GATES_ROLE_SCROLL_AREA;
+        if (gates_i_tab_page_index(tree, idx, nullptr) >= 0) return GATES_ROLE_GROUP; /* a tab's page */
         return find_prop(tree, idx) != nullptr && find_prop(tree, idx)->name_len > 0 ? GATES_ROLE_GROUP
                                                                                    : GATES_ROLE_NONE;
     }
@@ -443,6 +445,7 @@ gates_u64 gates_access_item_count(gates_tree_t *tree, gates_node_t node) {
     if (s->kind == GATES_NODE_RADIO || s->kind == GATES_NODE_CHOICE) return st->opt_count;
     if (s->kind == GATES_NODE_VIEW) return gates_i_view_item_count(tree, node.index);
     if (s->kind == GATES_NODE_MENUBAR) return st->mbar != nullptr ? st->mbar->count : 0;
+    if (s->kind == GATES_NODE_TABSTRIP) return s->parent != GATES_NONE ? gates_i_tabs_count(tree, s->parent) : 0;
     if (s->kind == GATES_NODE_TOOLBAR && st->tbar != nullptr) {
         gates_u64 n = 0;
         for (gates_u32 k = 0; k < st->tbar->count; k++) n += st->tbar->ids[k] != 0 ? 1u : 0u;
@@ -468,6 +471,9 @@ gates_u64 gates_access_item_at(gates_tree_t *tree, gates_node_t node, gates_u64 
     if (s->kind == GATES_NODE_VIEW) return gates_i_view_item_at(tree, node.index, index);
     if (s->kind == GATES_NODE_MENUBAR) {
         return st->mbar != nullptr && index < st->mbar->count ? index + 1 : 0; /* titles 1..n */
+    }
+    if (s->kind == GATES_NODE_TABSTRIP) {
+        return s->parent != GATES_NONE && index < gates_i_tabs_count(tree, s->parent) ? index + 1 : 0;
     }
     if (s->kind == GATES_NODE_TOOLBAR && st->tbar != nullptr) { /* entry + 1; ">>" is count + 1 */
         gates_u64 k = 0;
@@ -658,6 +664,9 @@ gates_access_ref_t gates_access_at_point(gates_tree_t *tree, gates_point_t p) {
     } else if (s->kind == GATES_NODE_TOOLBAR) {
         gates_i32 k = gates_i_toolbar_entry_at(tree, idx, p);
         if (k >= 0) return (gates_access_ref_t){ n, (gates_u64)k + 1 };
+    } else if (s->kind == GATES_NODE_TABSTRIP) {
+        gates_i32 k = gates_i_tab_at(tree, idx, p);
+        if (k >= 0) return (gates_access_ref_t){ n, (gates_u64)k + 1 };
     }
     return (gates_access_ref_t){ n, 0 };
 }
@@ -683,6 +692,10 @@ gates_access_ref_t gates_access_focus_ref(gates_tree_t *tree) {
     if (gates_i_slot(tree, tree->focus)->kind == GATES_NODE_RADIO && st != nullptr &&
         gates_i_option_find(st, st->opt_sel) != nullptr) {
         return ref_of(tree, tree->focus, st->opt_sel);
+    }
+    if (gates_i_slot(tree, tree->focus)->kind == GATES_NODE_TABSTRIP) {
+        gates_u32 tabs = gates_i_slot(tree, tree->focus)->parent;
+        return ref_of(tree, tree->focus, (gates_u64)gates_i_tabs_selected(tree, tabs) + 1);
     }
     if (gates_i_slot(tree, tree->focus)->kind == GATES_NODE_TOOLBAR && st != nullptr) {
         gates_i32 k = gates_i_toolbar_stop(tree, tree->focus); /* the button with the focus */
@@ -749,6 +762,23 @@ static gates_err_t item_info(gates_tree_t *tree, gates_u32 idx, gates_u64 item, 
         out->bounds = gates_i_menu_row_rect(tree, idx, (gates_u32)row);
         out->set_size = gates_access_item_count(tree, gates_i_handle(tree, idx));
         out->set_position = (gates_u64)item_pos(tree, gates_i_handle(tree, idx), item) + 1;
+    } else if (s->kind == GATES_NODE_TABSTRIP) {
+        gates_u32 tabs = s->parent;
+        if (tabs == GATES_NONE || item == 0 || item > gates_i_tabs_count(tree, tabs)) return PROVEN_ERR_INVALID_ARG;
+        gates_u32 k = (gates_u32)item - 1;
+        gates_str_t title = gates_i_tabs_title(tree, tabs, k);
+        gates_usize_t nn = 0;
+        gates_u32 at = put_shown(b, title, true, &nn);
+        bind(b, &out->name, at, nn);
+        key_str(b, &out->access_key, gates_mnemonic_of(title), true);
+        out->role = GATES_ROLE_TAB_ITEM;
+        out->states = (k == gates_i_tabs_selected(tree, tabs) ? GATES_ACCESS_SELECTED : 0u) |
+                      (node_on ? 0u : GATES_ACCESS_DISABLED);
+        out->actions = node_on ? GATES_ACCESS_SELECT : 0u;
+        out->bounds = gates_i_tab_rect(tree, idx, k);
+        if (!shown(tree, idx) || gates_rect_is_empty(out->bounds)) out->states |= GATES_ACCESS_OFFSCREEN;
+        out->set_position = item;
+        out->set_size = gates_i_tabs_count(tree, tabs);
     } else if (s->kind == GATES_NODE_TOOLBAR) {
         if (st->tbar == nullptr || item == 0 || item > (gates_u64)st->tbar->count + 1) return PROVEN_ERR_INVALID_ARG;
         gates_u32 k = (gates_u32)item - 1;
@@ -887,6 +917,14 @@ gates_err_t gates_access_info(gates_tree_t *tree, gates_node_t node, gates_u64 i
         markup = gates_i_valid(tree, field.label) && gates_i_mn_markup(tree, field.label.index);
     } else if (s->kind == GATES_NODE_DIALOG && s->first_child != GATES_NONE) {
         name = label_text(tree, gates_i_handle(tree, s->first_child));
+    } else if (s->kind == GATES_NODE_TABSTRIP && s->parent != GATES_NONE) {
+        name = gates_i_tabs_title(tree, s->parent, gates_i_tabs_selected(tree, s->parent));
+        markup = true; /* the selected tab names the strip */
+    } else if (gates_i_tab_page_index(tree, idx, nullptr) >= 0) {
+        gates_u32 tabs = GATES_NONE;
+        gates_i32 pi = gates_i_tab_page_index(tree, idx, &tabs);
+        name = gates_i_tabs_title(tree, tabs, (gates_u32)pi);
+        markup = true;
     } else {
         name = own_text(tree, idx);
         markup = gates_i_mn_markup(tree, idx) && s->kind != GATES_NODE_MENUBAR;
@@ -896,7 +934,7 @@ gates_err_t gates_access_info(gates_tree_t *tree, gates_node_t node, gates_u64 i
     gates_u32 at = put_shown(&b, name, markup, &name_n);
     bind(&b, &out->name, at, name_n);
     /* Access key: the node's own mnemonic, or that of the label that targets it. */
-    if (markup && gates_node_eq(key_label, GATES_NODE_NULL)) {
+    if (markup && gates_node_eq(key_label, GATES_NODE_NULL) && gates_i_mn_markup(tree, idx)) {
         key_str(&b, &out->access_key, gates_mnemonic_of(name), true);
     } else if (gates_i_valid(tree, key_label) && gates_node_eq(gates_label_target(tree, key_label), node)) {
         key_str(&b, &out->access_key, gates_mnemonic_of(label_text(tree, key_label)), true);
@@ -1072,6 +1110,11 @@ gates_err_t gates_access_select(gates_tree_t *tree, gates_node_t node, gates_u64
     if (!gates_is_ok(err)) return err;
     gates_node_kind_t k = gates_i_slot(tree, node.index)->kind;
     if (k == GATES_NODE_VIEW && item != 0) return gates_i_view_pick_id(tree, node.index, item);
+    if (k == GATES_NODE_TABSTRIP && item != 0) {
+        gates_u32 tabs = gates_i_slot(tree, node.index)->parent;
+        if (item > gates_i_tabs_count(tree, tabs)) return PROVEN_ERR_INVALID_ARG;
+        return gates_i_tabs_pick(tree, tabs, (gates_u32)item - 1);
+    }
     if (k != GATES_NODE_RADIO && k != GATES_NODE_CHOICE) return PROVEN_ERR_INVALID_ARG;
     const gates_i_option_t *o = gates_i_option_find(st, (gates_u32)item);
     if (o == nullptr || item > UINT32_MAX) return PROVEN_ERR_INVALID_ARG;

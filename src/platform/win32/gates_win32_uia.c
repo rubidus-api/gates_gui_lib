@@ -313,9 +313,10 @@ static bool has_pattern(const gates_access_info_t *i, PATTERNID p) {
     case UIA_RangeValuePatternId:     return i->has_range;
     case UIA_SelectionPatternId:      return i->role == GATES_ROLE_RADIO_GROUP || i->role == GATES_ROLE_COMBO_BOX ||
                                              i->role == GATES_ROLE_LIST || i->role == GATES_ROLE_TABLE ||
-                                             i->role == GATES_ROLE_TREE;
+                                             i->role == GATES_ROLE_TREE || i->role == GATES_ROLE_TAB;
     case UIA_SelectionItemPatternId:  return i->role == GATES_ROLE_RADIO_ITEM || i->role == GATES_ROLE_LIST_ITEM ||
-                                             i->role == GATES_ROLE_ROW || i->role == GATES_ROLE_TREE_ITEM;
+                                             i->role == GATES_ROLE_ROW || i->role == GATES_ROLE_TREE_ITEM ||
+                                             i->role == GATES_ROLE_TAB_ITEM;
     case UIA_ExpandCollapsePatternId: return (i->states & GATES_ACCESS_EXPANDABLE) != 0;
     case UIA_GridPatternId:           return i->role == GATES_ROLE_TABLE;
     case UIA_GridItemPatternId:       return i->role == GATES_ROLE_ROW;
@@ -352,6 +353,8 @@ static int control_type(gates_role_t role) {
     case GATES_ROLE_MENU_BAR:     return UIA_MenuBarControlTypeId;
     case GATES_ROLE_TOOL_BAR:     return UIA_ToolBarControlTypeId;
     case GATES_ROLE_STATUS_BAR:   return UIA_StatusBarControlTypeId;
+    case GATES_ROLE_TAB:          return UIA_TabControlTypeId;
+    case GATES_ROLE_TAB_ITEM:     return UIA_TabItemControlTypeId;
     default:                      return UIA_PaneControlTypeId;
     }
 }
@@ -836,7 +839,7 @@ static HRESULT STDMETHODCALLTYPE sel_required(ISelectionProvider *This, WINBOOL 
     gates_access_info_t i;
     HRESULT hr = el_info(e, &i);
     if (FAILED(hr)) return hr;
-    *out = i.role == GATES_ROLE_RADIO_GROUP;
+    *out = i.role == GATES_ROLE_RADIO_GROUP || i.role == GATES_ROLE_TAB; /* a tab strip always has one */
     return S_OK;
 }
 

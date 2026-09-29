@@ -72,6 +72,15 @@ bool gates_window_reduced_motion(const gates_window_t *win);
 /* Spoken by screen readers (a UI Automation notification); assertive
  * interrupts what is being read. The text is copied. */
 [[nodiscard]] gates_err_t gates_window_announce(gates_window_t *win, gates_str_t text, bool assertive);
+/* Placement (plan-0018, RFC-0005 A5): where the window is, as text to keep in a
+ * file - "x,y,w,h,state" with the normal (restored) rectangle in screen pixels
+ * and state "normal" or "maximized". *needed always receives its length; with
+ * a buffer too small nothing is written (OVERFLOW). set_placement takes that
+ * text back; a rectangle that no longer meets any monitor moves onto the
+ * nearest one; malformed text is INVALID_ARG and changes nothing. */
+[[nodiscard]] gates_err_t gates_window_placement(const gates_window_t *win, gates_u8 *buf,
+                                                 gates_usize_t cap, gates_usize_t *needed);
+[[nodiscard]] gates_err_t gates_window_set_placement(gates_window_t *win, gates_str_t text);
 /* GATES_ACCESS_STRICT=1 in the environment audits the tree after every layout
  * (gates_access_audit) and shows the issue count in the title. */
 

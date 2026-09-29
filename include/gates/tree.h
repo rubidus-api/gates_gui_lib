@@ -28,6 +28,8 @@ typedef enum gates_node_kind_t {
     GATES_NODE_MENUBAR,      /* menu bar: titles over command menus (gates/frame.h) */
     GATES_NODE_TOOLBAR,      /* toolbar: buttons bound to commands */
     GATES_NODE_STATUSBAR,    /* status bar: a row of label segments */
+    GATES_NODE_TABS,         /* tabs: a strip of titles over a stack of pages */
+    GATES_NODE_TABSTRIP,     /* the strip of a tabs node (made by gates_tabs_create) */
     /* Semantic widgets arrive in Phase 4. */
 } gates_node_kind_t;
 

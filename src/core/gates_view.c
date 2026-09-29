@@ -1312,3 +1312,23 @@ gates_err_t gates_i_view_scroll_step(gates_tree_t *tree, gates_u32 idx, gates_i3
     scroll_rows(tree, idx, v, &g, (gates_i64)amount * (page ? (gates_i64)g.visible : 1));
     return GATES_OK;
 }
+
+/* -- columns by position (plan-0018, persisted state) ------------------------------- */
+
+gates_u32 gates_i_view_ncol(const gates_tree_t *tree, gates_u32 idx) {
+    const gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
+    return st != nullptr && st->view != nullptr ? st->view->ncol : 0;
+}
+
+gates_i32 gates_i_view_col_width(const gates_tree_t *tree, gates_u32 idx, gates_u32 k) {
+    const gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
+    return st != nullptr && st->view != nullptr && k < st->view->ncol ? st->view->cols[k].width : 0;
+}
+
+void gates_i_view_set_col_width(gates_tree_t *tree, gates_u32 idx, gates_u32 k, gates_i32 width) {
+    gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
+    if (st == nullptr || st->view == nullptr || k >= st->view->ncol) return;
+    gates_i_column_t *c = &st->view->cols[k];
+    c->width = width < c->min_width ? c->min_width : width;
+    gates_i_mark_dirty(tree, idx, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
+}

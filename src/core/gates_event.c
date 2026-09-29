@@ -149,7 +149,8 @@ void gates_i_event_free(gates_tree_t *tree) {
 static bool has_events(gates_node_kind_t kind) {
     return kind == GATES_NODE_TEXTBOX || kind == GATES_NODE_CHECKBOX ||
            kind == GATES_NODE_BUTTON || kind == GATES_NODE_DIALOG || kind == GATES_NODE_MENU ||
-           kind == GATES_NODE_RADIO || kind == GATES_NODE_CHOICE || kind == GATES_NODE_VIEW;
+           kind == GATES_NODE_RADIO || kind == GATES_NODE_CHOICE || kind == GATES_NODE_VIEW ||
+           kind == GATES_NODE_TABS;
 }
 
 gates_err_t gates_widget_set_handler(gates_tree_t *tree, gates_node_t node, gates_event_fn fn,
@@ -276,7 +277,8 @@ gates_u32 gates_tree_dispatch_events(gates_tree_t *tree, gates_u32 max_events) {
             .source = node,
             .revision = st->revision,
             .checked = st->checked,
-            .result = e.kind == GATES_EVENT_VALUE_CHANGED ? st->opt_sel
+            .result = e.kind == GATES_EVENT_VALUE_CHANGED
+                          ? (st->tabs != nullptr ? gates_i_tabs_selected(tree, node.index) : st->opt_sel)
                       : (e.kind == GATES_EVENT_SORT_REQUESTED ||
                          e.kind == GATES_EVENT_EXPAND_REQUESTED) ? e.aux
                                                                : 0,

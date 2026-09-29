@@ -1,5 +1,5 @@
 /* gates_gui_lib - the application frame (plan-0018): mnemonics, menu bar,
- * toolbar, status bar, tooltips.
+ * toolbar, status bar, tooltips, tabs.
  *
  * Mnemonics. In the text of a button, check box, command, menu bar title or
  * tab, "&x" marks x as the mnemonic when x is a letter or digit (ASCII); "&&"
@@ -143,5 +143,32 @@ gates_str_t gates_node_tooltip(const gates_tree_t *tree, gates_node_t node);
  * (window coordinates, after layout). */
 bool gates_tooltip_shown(const gates_tree_t *tree, gates_node_t *node, gates_u64 *item,
                          gates_str_t *text, gates_rect_t *box);
+
+/* -- tabs ----------------------------------------------------------------------------------
+ *
+ * A strip of titles over pages, one page shown at a time. gates_tabs_add
+ * returns the page: a column panel for the application's controls. The strip
+ * is one Tab stop (the selected tab): Left/Right/Home/End select at once (no
+ * wrapping); Ctrl+Tab / Ctrl+Shift+Tab and Ctrl+PgDn / Ctrl+PgUp switch from
+ * anywhere inside the tabs (wrapping); a click on a title selects it and
+ * focuses the strip; a title's mnemonic selects it. When the focus was inside
+ * the page that goes away, it moves into the new page (its first control), or
+ * to the strip. A person's switch queues GATES_EVENT_VALUE_CHANGED on the tabs
+ * node (ev->result = the new index); the program's gates_tabs_set_selected is
+ * silent. Titles that do not fit are cut off at the right edge in this version. */
+
+[[nodiscard]] gates_err_t gates_tabs_create(gates_tree_t *tree, gates_node_t parent,
+                                            gates_node_t *out_tabs);
+/* Adds a tab with a title (copied, mnemonic markup) and returns its page. */
+[[nodiscard]] gates_err_t gates_tabs_add(gates_tree_t *tree, gates_node_t tabs, gates_str_t title,
+                                         gates_node_t *out_page);
+[[nodiscard]] gates_err_t gates_tabs_set_title(gates_tree_t *tree, gates_node_t tabs, gates_u32 index,
+                                               gates_str_t title);
+gates_u32 gates_tabs_count(const gates_tree_t *tree, gates_node_t tabs);
+gates_str_t gates_tabs_title(const gates_tree_t *tree, gates_node_t tabs, gates_u32 index);
+gates_node_t gates_tabs_page(const gates_tree_t *tree, gates_node_t tabs, gates_u32 index);
+/* Silent. OUT_OF_BOUNDS for a bad index. */
+[[nodiscard]] gates_err_t gates_tabs_set_selected(gates_tree_t *tree, gates_node_t tabs, gates_u32 index);
+gates_u32 gates_tabs_selected(const gates_tree_t *tree, gates_node_t tabs);
 
 #endif /* GATES_FRAME_H */
