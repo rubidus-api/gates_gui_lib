@@ -1,4 +1,4 @@
-# gates Manual (v0.4.0)
+# gates Manual (v0.5.0)
 
 The manual of `gates`, a small retained GUI library in C23 for tool-style Windows programs:
 settings panels, inspectors, log viewers, build tools. Every chapter is one file under
@@ -19,7 +19,7 @@ settings panels, inspectors, log viewers, build tools. Every chapter is one file
 - [Chapter 10 - Deployment and troubleshooting](manual-10-deployment.md)
 - [Chapter 11 - The application frame](manual-11-application-frame.md): mnemonics, the menu bar, the keymap, toolbar, status bar, tooltips, tabs, saved state
 - [Chapter 12 - Numbers, groups and layouts](manual-12-numbers-layouts.md): bubbling, deferred calls, spin box, slider, group box, grid and wrap layouts
-- [Chapter 13 - Images and native dialogs](manual-13-images-dialogs.md): images, icons
+- [Chapter 13 - Images and native dialogs](manual-13-images-dialogs.md): images, icons, file/folder/colour/message dialogs
 
 ## How to read it
 
@@ -31,8 +31,8 @@ and the text is a bug.
 
 ## Edition
 
-- Library and manual version: 0.4.0. Chapters note the headers they need; everything here is
-  in the 0.4.0 profile ("Windows Tool UI 1": Win32, one window per top-level surface, software
+- Library and manual version: 0.5.0. Chapters note the headers they need; everything here is
+  in the 0.5.0 profile ("Windows Tool UI 1": Win32, one window per top-level surface, software
   rendering).
 - Author: rubidus. License: MIT - Copyright (c) 2026 rubidus-api; the library and this manual
   are under the same license (`LICENSE` in the package).

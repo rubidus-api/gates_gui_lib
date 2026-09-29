@@ -4,7 +4,7 @@ Headers: `gates/widget.h`, `gates/layout.h`, `gates/geometry.h`.
 
 ## The control matrix
 
-Every control is one node. The table is the whole finite set in 0.4.0: what the person does
+Every control is one node. The table is the whole finite set in 0.5.0: what the person does
 with it, the keys, the events the program receives, and what a screen reader hears (chapter 9).
 
 | Control | Create | The person | Keys | Events | Accessible as |
@@ -27,6 +27,7 @@ with it, the keys, the events the program receives, and what a screen reader hea
 | spin box | `gates_spin_create` | types or steps a number | Up/Down, PgUp/PgDn, Enter | VALUE_CHANGED (value) | spinner (RangeValue) (chapter 12) |
 | slider | `gates_slider_create` | drags a number along a track | arrows, PgUp/PgDn, Home, End | VALUE_CHANGED (value) | slider (RangeValue) (chapter 12) |
 | group box | `gates_group_create` | sees (and folds) a set of controls | Space, Enter on the title | VALUE_CHANGED (checked = expanded) | group (ExpandCollapse) (chapter 12) |
+| image | `gates_image_create` | sees a picture | - | - | image when named (chapter 13) |
 | tabs | `gates_tabs_create` | switches between pages | arrows, Ctrl+Tab, Ctrl+PgUp/PgDn | VALUE_CHANGED (result = index) | tab (Selection) (chapter 11) |
 
 Tab and Shift+Tab move focus through every enabled, shown control in tree order;

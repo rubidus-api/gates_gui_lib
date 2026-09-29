@@ -16,6 +16,7 @@
 #include <gates/app.h>
 #include <gates/window.h>
 #include <gates/frame.h>
+#include <gates/image.h>
 #include <gates/render.h>
 #include <gates/text.h>
 #include <gates/theme.h>
@@ -155,6 +156,8 @@ void gates_win32_perf_log(const char *fmt, ...);
 gates_u64 gates_win32_perf_process_ms(void);
 /* gates_win32_clipboard.c: CF_UNICODETEXT provider for the window's tree. */
 void gates_win32_install_clipboard(gates_window_t *win);
+/* gates_win32_image.c: the WIC image decoder for the window's tree (plan-0020). */
+void gates_win32_install_image_decoder(gates_window_t *win);
 /* Capture lost or mode cancelled: forget held buttons, press and drags. */
 void gates_win32_cancel_pointer(gates_window_t *win);
 

@@ -128,7 +128,9 @@ WIN32_SRC := \
   src/platform/win32/gates_win32_text_gdi.c \
   src/platform/win32/gates_win32_clipboard.c \
   src/platform/win32/gates_win32_uia.c \
-  src/platform/win32/gates_win32_perf.c
+  src/platform/win32/gates_win32_perf.c \
+  src/platform/win32/gates_win32_image.c \
+  src/platform/win32/gates_win32_dialogs.c
 
 # Headers the Windows programs are built from: a change rebuilds them.
 WIN_HDRS := $(wildcard include/gates/*.h) $(wildcard src/core/*.h) $(wildcard src/platform/win32/*.h)

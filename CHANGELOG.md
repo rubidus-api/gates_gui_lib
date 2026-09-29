@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 This project follows Keep a Changelog.
 
+## [0.5.0] - 2026-09-29
+
+Images and native dialogs (plan-0020, RFC-0005 group 4).
+
+### Added
+
+- Images (`gates/image.h`): a tree's image store (RGBA8 in, ids never reused), a decoder seam
+  (`gates_tree_set_image_decoder`, `gates_image_load_file` / `_memory`), the IMAGE draw command
+  (`gates_draw_image`, bilinear, alpha), the image node (natural or fixed size, aspect kept;
+  Image role when named), icons on buttons, commands (menus, toolbars) and icons-only toolbars.
+- Manual chapter 13.
+- Windows: images decode through Windows Imaging Component (PNG, JPEG, BMP, GIF, ICO, TIFF);
+  `gates_window_open_file`, `gates_window_save_file`, `gates_window_choose_folder`,
+  `gates_window_choose_color` and `gates_window_message` show the platform's dialogs. Both are
+  reached at run time: the link line is unchanged.
+- The gallery's Pictures page (a picture, toolbar icons, every native dialog).
+
+### Changed
+
+- The IMAGE draw command, reserved until now, draws images; `gates_draw_cmd_t` has a new
+  `image` field.
+
 ## [0.4.0] - 2026-09-29
 
 Input controls and plumbing (plan-0019, RFC-0005 group 3).

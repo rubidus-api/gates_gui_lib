@@ -1,6 +1,6 @@
 # 13장 - 이미지와 네이티브 대화 상자
 
-헤더: `gates/image.h`, `gates/draw.h`.
+헤더: `gates/image.h`, `gates/draw.h`, `gates/window.h`.
 
 ## 이미지
 
@@ -77,3 +77,14 @@ int main(void) {
     return 0;
 }
 ```
+
+## 네이티브 대화 상자
+
+파일, 폴더, 색을 고르는 일과 예/아니오를 묻는 일은 플랫폼에 맡기는 것이 가장 좋다. 사람들은 그 대화 상자를 알고, 그것은 플랫폼의 키보드 지원, 화면 낭독기 지원, 최근 위치를 함께 가져온다. Windows에서는 다음과 같다.
+
+- `gates_window_open_file`, `gates_window_save_file`, `gates_window_choose_folder`는 `gates_file_dialog_t`(제목, `"Pictures|*.png;*.jpg|All files|*.*"` 같은 필터, 시작 폴더, 저장할 때의 추천 이름)를 받아 고른 경로를 UTF-8로 버퍼에 적는다. 저장 대화 상자는 덮어쓰기 전에 묻는다.
+- `gates_window_choose_color`는 한 색에서 시작해 고른 색을 답한다.
+- `gates_window_message`는 확인, 확인/취소, 예/아니오, 예/아니오/취소 버튼과 정보, 경고, 오류, 질문 아이콘으로 메시지를 보이고 답을 돌려준다(Escape와 닫기 상자는 취소로 답한다).
+
+이것은 플랫폼의 모달 대화 상자이다. 호출은 사람이 답할 때 돌아오고, 창의 메뉴는 먼저 닫힌다. 취소는 오류가 아니다. 경로가 비어서 돌아오거나 `chosen`이 거짓이다. 명령이나 이벤트 처리기에서 부르고, 그리는 도중에는 부르지 않는다.
+

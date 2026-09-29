@@ -81,6 +81,51 @@ bool gates_window_reduced_motion(const gates_window_t *win);
 [[nodiscard]] gates_err_t gates_window_placement(const gates_window_t *win, gates_u8 *buf,
                                                  gates_usize_t cap, gates_usize_t *needed);
 [[nodiscard]] gates_err_t gates_window_set_placement(gates_window_t *win, gates_str_t text);
+/* Native dialogs (plan-0020): the platform's own modal dialogs. The call
+ * returns when the person answers; the window's menus close first. A cancel is
+ * GATES_OK with *len = 0 (or chosen = false). Paths are UTF-8; *len receives the
+ * path's length, and a too small cap returns OVERFLOW and writes nothing.
+ * filters: "Text files|*.txt|All files|*.*" (name|patterns pairs, patterns
+ * separated by ';'). folder: where it starts (empty: the platform's choice);
+ * name: a save dialog's suggested file name. A save dialog asks before
+ * overwriting. Run them from a command or event handler, never while painting. */
+typedef struct gates_file_dialog_t {
+    gates_str_t title;
+    gates_str_t filters;
+    gates_str_t folder;
+    gates_str_t name;
+} gates_file_dialog_t;
+[[nodiscard]] gates_err_t gates_window_open_file(gates_window_t *win, const gates_file_dialog_t *desc,
+                                                 gates_u8 *buf, gates_usize_t cap, gates_usize_t *len);
+[[nodiscard]] gates_err_t gates_window_save_file(gates_window_t *win, const gates_file_dialog_t *desc,
+                                                 gates_u8 *buf, gates_usize_t cap, gates_usize_t *len);
+[[nodiscard]] gates_err_t gates_window_choose_folder(gates_window_t *win, const gates_file_dialog_t *desc,
+                                                     gates_u8 *buf, gates_usize_t cap, gates_usize_t *len);
+/* *color is the starting colour and, when chosen, the answer (alpha kept). */
+[[nodiscard]] gates_err_t gates_window_choose_color(gates_window_t *win, gates_color_t *color, bool *chosen);
+
+typedef enum gates_message_buttons_t {
+    GATES_MESSAGE_OK = 0,
+    GATES_MESSAGE_OK_CANCEL,
+    GATES_MESSAGE_YES_NO,
+    GATES_MESSAGE_YES_NO_CANCEL,
+} gates_message_buttons_t;
+typedef enum gates_message_icon_t {
+    GATES_MESSAGE_INFO = 0,
+    GATES_MESSAGE_WARNING,
+    GATES_MESSAGE_ERROR,
+    GATES_MESSAGE_QUESTION,
+} gates_message_icon_t;
+typedef enum gates_answer_t {
+    GATES_ANSWER_NONE = 0,       /* the message could not be shown */
+    GATES_ANSWER_OK,
+    GATES_ANSWER_CANCEL,         /* also Escape or the close box */
+    GATES_ANSWER_YES,
+    GATES_ANSWER_NO,
+} gates_answer_t;
+gates_answer_t gates_window_message(gates_window_t *win, gates_str_t title, gates_str_t text,
+                                    gates_message_buttons_t buttons, gates_message_icon_t icon);
+
 /* GATES_ACCESS_STRICT=1 in the environment audits the tree after every layout
  * (gates_access_audit) and shows the issue count in the title. */
 

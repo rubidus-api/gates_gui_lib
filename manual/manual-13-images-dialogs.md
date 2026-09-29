@@ -1,6 +1,6 @@
 # Chapter 13 - Images and native dialogs
 
-Headers: `gates/image.h`, `gates/draw.h`.
+Headers: `gates/image.h`, `gates/draw.h`, `gates/window.h`.
 
 ## Images
 
@@ -91,3 +91,23 @@ int main(void) {
     return 0;
 }
 ```
+
+## Native dialogs
+
+Choosing a file, a folder or a colour, and asking a yes-or-no question, are best left to the
+platform: people know its dialogs, and they come with the platform's keyboard support, screen
+reader support and recent places. On Windows:
+
+- `gates_window_open_file`, `gates_window_save_file` and `gates_window_choose_folder` take a
+  `gates_file_dialog_t` (a title, filters such as `"Pictures|*.png;*.jpg|All files|*.*"`, a
+  starting folder, and for saving a suggested name) and write the chosen path, in UTF-8, to your
+  buffer. A save dialog asks before overwriting.
+- `gates_window_choose_color` starts from a colour and answers with the chosen one.
+- `gates_window_message` shows a message with OK, OK/Cancel, Yes/No or Yes/No/Cancel and an
+  information, warning, error or question icon, and returns the answer (Escape and the close
+  box answer Cancel).
+
+These are the platform's modal dialogs: the call returns when the person answers, and the
+window's own menus close first. A cancel is not an error - the path comes back empty, or
+`chosen` false. Call them from a command or event handler, never while painting.
+

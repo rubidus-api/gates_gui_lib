@@ -6,7 +6,8 @@
  * buttons and check boxes, text boxes with labels that carry access keys,
  * radio groups and a choice, a table in a split, progress and separators, a
  * dialog, and (0.4.0) spin boxes, a slider, a collapsible group in a grid,
- * wrapped chips and a total recomputed once per turn. The theme (system, light, dark) and the zoom are commands. The
+ * wrapped chips and a total recomputed once per turn, and (0.5.0) pictures,
+ * toolbar icons and the native file, folder, colour and message dialogs. The theme (system, light, dark) and the zoom are commands. The
  * arrangement - selected tab, split, table columns, window placement - is kept
  * in %LOCALAPPDATA%\gates-gallery.ini and comes back at the next start.
  *
@@ -27,6 +28,7 @@
 #define TRY(x) do { gates_err_t e_ = (x); if (!gates_is_ok(e_)) return e_; } while (0)
 
 enum {
+    CMD_OPEN_PIC = 40, CMD_SAVE_AS, CMD_FOLDER, CMD_COLOUR, CMD_ASK,
     CMD_SAVE = 1, CMD_QUIT, CMD_SYSTEM, CMD_LIGHT, CMD_DARK, CMD_ZOOM_IN, CMD_ZOOM_OUT, CMD_ZOOM_RESET,
     CMD_ABOUT, CMD_ABOUT_OK, CMD_STEP,
 };
@@ -39,6 +41,8 @@ typedef struct app_t {
     gates_tree_t *tree;
     gates_node_t root, tabs, split, table, clock, zoom_seg, status, progress, about;
     gates_node_t qty, price, volume, total;
+    gates_node_t picture, swatch, media_status;
+    gates_color_t colour;
     char path[512];
     char cell[64];
 } app_t;
@@ -325,6 +329,127 @@ static gates_err_t page_inputs(app_t *a, gates_node_t page) {
     return GATES_OK;
 }
 
+/* Pictures (0.5.0): generated images, WIC decoding, native dialogs. */
+static gates_image_id_t make_image(gates_tree_t *t, int w, int h, int kind, gates_color_t c) {
+    gates_u8 *px = malloc((size_t)w * (size_t)h * 4);
+    if (px == nullptr) return 0;
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            gates_u8 *p = px + (y * w + x) * 4;
+            if (kind == 0) { /* a soft gradient picture */
+                p[0] = (gates_u8)(40 + 180 * x / w); p[1] = (gates_u8)(90 + 120 * y / h); p[2] = 200; p[3] = 255;
+            } else {         /* an icon: a ring, a filled circle, or a square */
+                int dx = 2 * x - w + 1, dy = 2 * y - h + 1, r2 = dx * dx + dy * dy, R = w - 2;
+                bool on = kind == 1 ? (r2 <= R * R && r2 >= (R - 5) * (R - 5)) : kind == 2 ? r2 <= R * R
+                                                                                            : (x > 1 && y > 1 && x < w - 2 && y < h - 2);
+                p[0] = c.r; p[1] = c.g; p[2] = c.b; p[3] = on ? 255 : 0;
+            }
+        }
+    }
+    gates_image_id_t id = 0;
+    (void)gates_image_add_rgba(t, w, h, px, 0, &id);
+    free(px);
+    return id;
+}
+
+static void media_say(app_t *a, const char *what, const gates_u8 *text, gates_usize_t n) {
+    char line[600];
+    snprintf(line, sizeof line, "%s%.*s", what, (int)n, (const char *)text);
+    (void)gates_widget_set_text(a->tree, a->media_status, cs(line));
+}
+
+static void on_media(gates_tree_t *tree, gates_command_id_t id, void *user) {
+    app_t *a = user;
+    gates_u8 path[512];
+    gates_usize_t n = 0;
+    gates_file_dialog_t pics = { .title = cs("Open a picture"),
+                                 .filters = cs("Pictures|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.ico|All files|*.*") };
+    switch (id) {
+    case CMD_OPEN_PIC:
+        if (gates_is_ok(gates_window_open_file(a->win, &pics, path, sizeof path, &n)) && n > 0) {
+            gates_image_id_t img = 0;
+            gates_err_t err = gates_image_load_file(tree, (gates_str_t){ .ptr = path, .size = n }, &img);
+            if (gates_is_ok(err)) {
+                gates_image_id_t old = gates_image_node_image(tree, a->picture);
+                (void)gates_image_node_set(tree, a->picture, img);
+                if (old != 0) (void)gates_image_remove(tree, old);
+                media_say(a, "Showing ", path, n);
+            } else {
+                media_say(a, "Not a picture Windows can read: ", path, n);
+            }
+        } else {
+            media_say(a, "No picture chosen", path, 0);
+        }
+        break;
+    case CMD_SAVE_AS: {
+        gates_file_dialog_t d = { .title = cs("Save the notes"), .filters = cs("Text files|*.txt|All files|*.*"),
+                                  .name = cs("notes.txt") };
+        if (gates_is_ok(gates_window_save_file(a->win, &d, path, sizeof path, &n)) && n > 0) {
+            media_say(a, "Would save to ", path, n);   /* the gallery writes nothing */
+        } else {
+            media_say(a, "Not saved", path, 0);
+        }
+        break;
+    }
+    case CMD_FOLDER:
+        if (gates_is_ok(gates_window_choose_folder(a->win, &(gates_file_dialog_t){ .title = cs("Pick a folder") }, path,
+                                                   sizeof path, &n)) && n > 0) {
+            media_say(a, "Folder ", path, n);
+        } else {
+            media_say(a, "No folder chosen", path, 0);
+        }
+        break;
+    case CMD_COLOUR: {
+        bool chosen = false;
+        if (gates_is_ok(gates_window_choose_color(a->win, &a->colour, &chosen)) && chosen) {
+            gates_image_id_t old = gates_image_node_image(tree, a->swatch);
+            (void)gates_image_node_set(tree, a->swatch, make_image(tree, 24, 24, 3, a->colour));
+            if (old != 0) (void)gates_image_remove(tree, old);
+            char rgb[32];
+            int k = snprintf(rgb, sizeof rgb, "%u, %u, %u", a->colour.r, a->colour.g, a->colour.b);
+            media_say(a, "Colour ", (const gates_u8 *)rgb, (gates_usize_t)k);
+        }
+        break;
+    }
+    case CMD_ASK: {
+        gates_answer_t r = gates_window_message(a->win, cs("A question"), cs("Keep the changes?"),
+                                                GATES_MESSAGE_YES_NO_CANCEL, GATES_MESSAGE_QUESTION);
+        const char *w = r == GATES_ANSWER_YES ? "yes" : r == GATES_ANSWER_NO ? "no" : "cancel";
+        media_say(a, "Answer: ", (const gates_u8 *)w, strlen(w));
+        break;
+    }
+    default: break;
+    }
+}
+
+static gates_err_t page_pictures(app_t *a, gates_node_t page) {
+    gates_tree_t *t = a->tree;
+    gates_node_t row, b;
+    static const struct { gates_command_id_t id; const char *label; } media[] = {
+        { CMD_OPEN_PIC, "O&pen picture..." }, { CMD_SAVE_AS, "Save &as..." }, { CMD_FOLDER, "Choose fol&der..." },
+        { CMD_COLOUR, "Choose &colour..." }, { CMD_ASK, "As&k..." },
+    };
+    TRY(gates_panel_create(t, page, &row));
+    TRY(gates_layout_set(t, row, GATES_LAYOUT_KIND_WRAP));
+    TRY(gates_layout_set_gap(t, row, 8));
+    for (size_t i = 0; i < sizeof media / sizeof media[0]; i++) {
+        gates_command_desc_t d = { .id = media[i].id, .label = cs(media[i].label), .enabled = true,
+                                   .invoke = on_media, .user = a };
+        TRY(gates_command_register(t, a->root, &d));
+        TRY(gates_button_create(t, row, cs(""), nullptr, nullptr, &b));
+        TRY(gates_button_set_command(t, b, a->root, media[i].id));
+    }
+    a->colour = GATES_RGB(30, 120, 200);
+    TRY(gates_image_create(t, row, make_image(t, 24, 24, 3, a->colour), &a->swatch));
+    TRY(gates_label_create(t, page, cs("No picture chosen"), &a->media_status));
+    TRY(gates_node_set_live(t, a->media_status, GATES_LIVE_POLITE));
+    TRY(gates_image_create(t, page, make_image(t, 240, 150, 0, a->colour), &a->picture));
+    TRY(gates_image_node_set_size(t, a->picture, (gates_size_t){ 320, 200 }));
+    TRY(gates_layout_set_child_align(t, a->picture, GATES_ALIGN_START_V));
+    TRY(gates_node_set_access_name(t, a->picture, cs("The chosen picture")));
+    return GATES_OK;
+}
+
 static gates_err_t page_progress(app_t *a, gates_node_t page) {
     gates_tree_t *t = a->tree;
     gates_node_t l, sep;
@@ -372,6 +497,11 @@ static gates_err_t build(app_t *a) {
                                              CMD_ZOOM_RESET, 0, CMD_STEP, CMD_ABOUT };
     for (size_t i = 0; i < sizeof tb / sizeof tb[0]; i++) TRY(gates_toolbar_add(t, tools, tb[i]));
     TRY(gates_node_set_access_name(t, tools, cs("Tools")));
+    gates_color_t ink = GATES_RGB(60, 90, 140);
+    TRY(gates_command_set_icon(t, root, CMD_SAVE, make_image(t, 16, 16, 3, ink)));
+    TRY(gates_command_set_icon(t, root, CMD_LIGHT, make_image(t, 16, 16, 1, GATES_RGB(230, 170, 0))));
+    TRY(gates_command_set_icon(t, root, CMD_DARK, make_image(t, 16, 16, 2, GATES_RGB(70, 70, 90))));
+    TRY(gates_command_set_icon(t, root, CMD_ABOUT, make_image(t, 16, 16, 1, ink)));
 
     TRY(gates_tabs_create(t, root, &a->tabs));
     TRY(gates_layout_set_child_grow(t, a->tabs, 1));
@@ -388,6 +518,8 @@ static gates_err_t build(app_t *a) {
     TRY(page_progress(a, page));
     TRY(gates_tabs_add(t, a->tabs, cs("&Inputs"), &page));
     TRY(page_inputs(a, page));
+    TRY(gates_tabs_add(t, a->tabs, cs("Pict&ures"), &page));
+    TRY(page_pictures(a, page));
 
     TRY(gates_statusbar_create(t, root, &sb));
     TRY(gates_statusbar_add(t, sb, cs("Ready - Alt shows the access keys"), 1, &a->status));
