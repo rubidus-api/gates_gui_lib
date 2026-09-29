@@ -285,8 +285,21 @@ bool gates_input_key(gates_tree_t *tree, const gates_key_event_t *ev) {
         }
         return false;
     }
-    /* An open menu takes every key (plan-0009 stage 2). */
+    tree->eat_char = false;
+    /* An open menu takes every key (plan-0009 stage 2); the character a key
+     * makes is not typed into the control below (plan-0018). */
     if (gates_i_overlay_key(tree, ev)) {
+        tree->eat_char = true;
+        return true;
+    }
+    /* Menu mode on the menu bar, and F10 as the menu key (plan-0018). */
+    if (tree->mb_mode == GATES_I_MB_HIGHLIGHT) {
+        if (gates_i_menubar_key(tree, ev)) {
+            tree->eat_char = true;
+            return true;
+        }
+    } else if (ev->key == GATES_KEY_F10 && !ev->ctrl && !ev->shift && !ev->alt &&
+               gates_i_menubar_f10(tree)) {
         return true;
     }
     if (ev->ctrl && ev->alt) {
@@ -351,6 +364,10 @@ bool gates_input_key(gates_tree_t *tree, const gates_key_event_t *ev) {
 }
 
 gates_input_result_t gates_input_char(gates_tree_t *tree, gates_u32 codepoint) {
+    if (tree != nullptr && tree->eat_char) {
+        tree->eat_char = false;
+        return GATES_INPUT_CONSUMED; /* made by a key a menu took (plan-0018) */
+    }
     if (codepoint < 0x20 || codepoint == 0x7F) {
         return GATES_INPUT_IGNORED; /* control characters are not text */
     }

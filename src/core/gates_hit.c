@@ -292,6 +292,11 @@ gates_node_t gates_input_pointer(gates_tree_t *tree, const gates_pointer_event_t
         return gates_i_handle(tree, tree->drag_node);
     }
 
+    /* A press hides the keyboard cues (plan-0018). */
+    if (ev->action == GATES_POINTER_DOWN && tree->cues_shown) {
+        tree->cues_shown = false;
+        if (!tree->cues_always) gates_i_mark_dirty(tree, GATES_NONE, GATES_DIRTY_PAINT);
+    }
     /* Overlays first: a menu takes the event; a modal dialog is the only hit root. */
     bool taken = false;
     gates_u32 base = gates_i_overlay_pointer(tree, ev, &taken);
@@ -299,6 +304,26 @@ gates_node_t gates_input_pointer(gates_tree_t *tree, const gates_pointer_event_t
         return GATES_NODE_NULL;
     }
     gates_u32 hit = hit_idx(tree, base, ev->pos);
+
+    /* The menu bar (plan-0018): hover over titles, a press opens or closes. */
+    gates_u32 hover_title = GATES_NONE;
+    if (hit != GATES_NONE && gates_i_slot(tree, hit)->kind == GATES_NODE_MENUBAR && hit == tree->menubar) {
+        gates_i32 t = gates_i_menubar_title_at(tree, hit, ev->pos);
+        hover_title = t >= 0 ? (gates_u32)t : GATES_NONE;
+    }
+    if (hover_title != tree->mb_hover && ev->action != GATES_POINTER_WHEEL) {
+        tree->mb_hover = hover_title;
+        if (tree->menubar != GATES_NONE) gates_i_mark_dirty(tree, tree->menubar, GATES_DIRTY_PAINT);
+    }
+    if (ev->action == GATES_POINTER_DOWN && tree->mb_mode != GATES_I_MB_OFF &&
+        (hit == GATES_NONE || hit != tree->menubar)) {
+        gates_i_menubar_leave(tree); /* a press elsewhere ends menu mode */
+    }
+    if (ev->action == GATES_POINTER_DOWN && ev->button == GATES_BUTTON_LEFT && hit != GATES_NONE &&
+        hit == tree->menubar) {
+        gates_i_menubar_press(tree, hit, ev->pos);
+        return gates_i_handle(tree, hit);
+    }
 
     if (ev->action == GATES_POINTER_WHEEL) {
         if (hit != GATES_NONE && gates_i_slot(tree, hit)->kind == GATES_NODE_VIEW &&

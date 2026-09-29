@@ -15,6 +15,7 @@
 
 #include <gates/app.h>
 #include <gates/window.h>
+#include <gates/frame.h>
 #include <gates/render.h>
 #include <gates/text.h>
 #include <gates/theme.h>

@@ -13,6 +13,7 @@
 #include <gates/draw.h>
 #include <gates/event.h>
 #include <gates/form.h>
+#include <gates/frame.h>
 #include <gates/geometry.h>
 #include <gates/input.h>
 #include <gates/layout.h>

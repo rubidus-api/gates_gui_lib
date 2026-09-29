@@ -129,6 +129,7 @@ static gates_u32 find_next(const gates_tree_t *tree, gates_u32 from, bool backwa
 
 void gates_i_focus_check(gates_tree_t *tree) {
     gates_i_choice_lists_check(tree, GATES_NONE); /* same triggers: disabled, hidden, page */
+    gates_i_menubar_check(tree);
     if (tree->focus == GATES_NONE || gates_i_focus_eligible(tree, tree->focus)) {
         return;
     }

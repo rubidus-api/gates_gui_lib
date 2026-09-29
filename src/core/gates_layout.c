@@ -140,6 +140,8 @@ static gates_size_t widget_intrinsic(const gates_tree_t *tree, const gates_node_
     gates_text_metrics_t m = text->metrics(text->ctx, fsz);
     if (txt.size == 0) {
         ts = (gates_size_t){ 0, m.line_height };
+    } else if (gates_i_mn_markup(tree, (gates_u32)(s - tree->slots))) {
+        ts.w = gates_i_mn_width(text, fsz, txt); /* markup takes no room (plan-0018) */
     }
 
     switch (s->kind) {
@@ -147,6 +149,8 @@ static gates_size_t widget_intrinsic(const gates_tree_t *tree, const gates_node_
         return ts;
     case GATES_NODE_MENU:
         return st != nullptr ? gates_i_menu_measure(tree, st, text, fsz) : (gates_size_t){ 0, 0 };
+    case GATES_NODE_MENUBAR:
+        return gates_i_menubar_measure(tree, s, text);
     case GATES_NODE_BUTTON:
         return (gates_size_t){
             ts.w + 2 * (GATES_BUTTON_PAD_X + GATES_BUTTON_BORDER),

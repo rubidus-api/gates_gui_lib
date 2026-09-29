@@ -172,6 +172,14 @@ static void paint_window(gates_window_t *win, HDC dc) {
 static void resolve_theme(gates_window_t *win);
 static gates_u32 forced_dpi(void);
 
+/* "Underline access keys" in the system settings (plan-0018). */
+static void cues_setting(gates_window_t *win) {
+    BOOL always = FALSE;
+    if (SystemParametersInfoW(SPI_GETKEYBOARDCUES, 0, &always, 0)) {
+        gates_tree_set_cues_always(win->tree, always != FALSE);
+    }
+}
+
 LRESULT CALLBACK gates_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     gates_window_t *win;
     if (msg == WM_NCCREATE) {
@@ -256,7 +264,17 @@ LRESULT CALLBACK gates_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM 
         InvalidateRect(hwnd, nullptr, FALSE);
         return 0;
     }
+    case WM_SYSCOMMAND:
+        /* Alt released alone or F10 (lparam 0): menu mode on the menu bar
+         * (plan-0018). Without a reachable bar Windows keeps its own. */
+        if ((wparam & 0xFFF0) == SC_KEYMENU && lparam == 0 && gates_input_menu_key(win->tree)) {
+            gates_win32_after_input(win);
+            return 0;
+        }
+        return DefWindowProcW(hwnd, msg, wparam, lparam);
     case WM_SETTINGCHANGE:   /* app mode ("ImmersiveColorSet"), high contrast, text size */
+        cues_setting(win);
+        [[fallthrough]];
     case WM_SYSCOLORCHANGE:
     case WM_THEMECHANGED:
         resolve_theme(win);
@@ -494,6 +512,7 @@ gates_err_t gates_window_create(gates_app_t *app, const gates_window_desc_t *des
         return err;
     }
     gates_win32_install_clipboard(win); /* copy/cut/paste for textboxes */
+    cues_setting(win);
     gates_tree_set_clock(win->tree, clock_ms, timers_changed, win);
     if (app->sender != nullptr) {
         err = gates_sender_attach(app->sender, win->tree);

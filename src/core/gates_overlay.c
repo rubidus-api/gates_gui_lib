@@ -1,6 +1,7 @@
 /* gates_gui_lib - overlays: modal dialog and context menu with one set of
  * dismissal rules (plan-0009 stage 2, RFC-0003 7, RFC-0001 10). Platform-free. */
 #include <gates/overlay.h>
+#include <gates/frame.h>
 #include <gates/widget.h>
 #include <gates/layout.h>
 #include <gates/ui.h>
@@ -215,6 +216,7 @@ void gates_i_overlay_node_destroyed(gates_tree_t *tree, gates_u32 idx) {
 /* One row as the menu shows it: from a command, or from a choice's option. */
 typedef struct menu_row_t {
     bool present;                /* false: separator, or command/option gone */
+    bool markup;                 /* command labels carry mnemonic markup; options do not */
     bool enabled;
     bool checked;
     gates_str_t label;
@@ -252,7 +254,7 @@ static menu_row_t menu_row(const gates_tree_t *tree, const gates_widget_state_t 
     const gates_i_command_t *c = gates_i_command_find(tree, st->menu_scope_index,
                                                       st->menu_scope_generation, st->menu_ids[r]);
     if (c != nullptr) {
-        row = (menu_row_t){ .present = true, .enabled = c->enabled, .checked = c->checked,
+        row = (menu_row_t){ .present = true, .markup = true, .enabled = c->enabled, .checked = c->checked,
                             .label = { .ptr = c->label, .size = c->label_len },
                             .shortcut = &c->shortcut };
     }
@@ -269,15 +271,35 @@ static void menu_remove(gates_tree_t *tree, gates_u32 i, gates_u32 result) {
     gates_u32 idx = tree->overlays[i].index;
     drop_record(tree, i);
     gates_widget_state_t *st = state_at(tree, idx);
+    bool from_bar = st != nullptr && st->menu_from_bar;
     if (st != nullptr && st->on_event != nullptr) {
         gates_err_t err = gates_i_event_reserve(tree, 1, 0);
         if (!gates_is_ok(err)) {
             tree->input_error = err; /* it still closes; only the report is lost */
             (void)gates_node_destroy(tree, gates_i_handle(tree, idx));
+            if (from_bar) gates_i_menubar_menu_closed(tree);
             return;
         }
     }
     closed_event(tree, idx, GATES_EVENT_MENU_CLOSED, result);
+    if (from_bar) {
+        gates_i_menubar_menu_closed(tree); /* plan-0018: menu mode ends unless switching */
+    }
+}
+
+gates_i32 gates_i_bar_menu_overlay(const gates_tree_t *tree) {
+    for (gates_u32 i = 0; i < tree->overlay_count; i++) {
+        if (tree->overlays[i].kind != GATES_NODE_MENU) continue;
+        const gates_widget_state_t *ms = state_at(tree, tree->overlays[i].index);
+        if (ms != nullptr && ms->menu_from_bar) {
+            return (gates_i32)i;
+        }
+    }
+    return -1;
+}
+
+void gates_i_menu_close_record(gates_tree_t *tree, gates_u32 i) {
+    menu_remove(tree, i, 0);
 }
 
 /* Invokes the selected entry (queued, re-checked) and closes the menu. */
@@ -373,6 +395,25 @@ gates_err_t gates_menu_open(gates_tree_t *tree, gates_point_t at, gates_node_t s
     }
     *out_menu = GATES_NODE_NULL;
     return menu_create(tree, at, at.y, scope, ids, count, out_menu);
+}
+
+static void menu_step(gates_tree_t *tree, gates_u32 idx, gates_i32 from, gates_i32 dir);
+
+gates_err_t gates_i_menu_open_for_bar(gates_tree_t *tree, gates_point_t at, gates_i32 above_y,
+                                      gates_node_t scope, const gates_command_id_t *ids,
+                                      gates_u32 count, gates_u32 title, bool keyboard,
+                                      gates_node_t *out_menu) {
+    gates_err_t err = menu_create(tree, at, above_y, scope, ids, count, out_menu);
+    if (!gates_is_ok(err)) {
+        return err;
+    }
+    gates_widget_state_t *st = state_at(tree, out_menu->index);
+    st->menu_from_bar = true;
+    st->menu_bar_title = title;
+    if (keyboard) {
+        menu_step(tree, out_menu->index, -1, 1); /* the first enabled entry */
+    }
+    return GATES_OK;
 }
 
 /* -- choice option list (plan-0010) --------------------------------------------- */
@@ -478,6 +519,9 @@ void gates_tree_dismiss_menus(gates_tree_t *tree) {
             menu_remove(tree, k, 0);
         }
     }
+    if (tree->mb_mode != GATES_I_MB_OFF) {
+        gates_i_menubar_leave(tree); /* a highlighted title too (plan-0018) */
+    }
 }
 
 gates_u32 gates_tree_overlay_count(const gates_tree_t *tree) {
@@ -535,39 +579,8 @@ static gates_i32 row_height(const gates_tree_t *tree) {
     return h < GATES_ACCESS_MIN_TARGET ? GATES_ACCESS_MIN_TARGET : h; /* WCAG 2.5.8 */
 }
 
-/* "Ctrl+Shift+S", "F5": written into buf, returns the length. */
 static gates_usize_t shortcut_text(const gates_shortcut_t *k, char *buf, gates_usize_t cap) {
-    gates_usize_t n = 0;
-    const char *parts[3] = { k->ctrl ? "Ctrl+" : "", k->shift ? "Shift+" : "", "" };
-    for (int p = 0; p < 2; p++) {
-        for (const char *c = parts[p]; *c && n + 1 < cap; c++) buf[n++] = *c;
-    }
-    char name[8] = {0};
-    if (k->letter != 0) {
-        name[0] = (char)k->letter;
-    } else if (k->key >= GATES_KEY_F1 && k->key <= GATES_KEY_F12) {
-        int f = (int)(k->key - GATES_KEY_F1) + 1;
-        name[0] = 'F';
-        name[1] = (char)('0' + (f >= 10 ? 1 : f));
-        if (f >= 10) name[2] = (char)('0' + f - 10);
-    } else {
-        static const struct { gates_key_t key; const char *text; } names[] = {
-            { GATES_KEY_A, "A" }, { GATES_KEY_C, "C" }, { GATES_KEY_X, "X" },
-            { GATES_KEY_V, "V" }, { GATES_KEY_Z, "Z" }, { GATES_KEY_Y, "Y" },
-            { GATES_KEY_DELETE, "Del" }, { GATES_KEY_ENTER, "Enter" },
-            { GATES_KEY_SPACE, "Space" }, { GATES_KEY_HOME, "Home" }, { GATES_KEY_END, "End" },
-        };
-        for (gates_usize_t q = 0; q < sizeof names / sizeof names[0]; q++) {
-            if (names[q].key == k->key) {
-                strncpy(name, names[q].text, sizeof name - 1);
-            }
-        }
-    }
-    if (name[0] == 0) {
-        return 0; /* no shortcut */
-    }
-    for (const char *c = name; *c && n + 1 < cap; c++) buf[n++] = *c;
-    return n;
+    return gates_i_shortcut_text(k, buf, cap); /* one formatter (gates_command.c) */
 }
 
 gates_size_t gates_i_menu_measure(const gates_tree_t *tree, const gates_widget_state_t *st,
@@ -579,8 +592,9 @@ gates_size_t gates_i_menu_measure(const gates_tree_t *tree, const gates_widget_s
     for (gates_u32 r = 0; r < st->menu_count; r++) {
         menu_row_t mr = menu_row(tree, st, (gates_i32)r);
         if (!mr.present) continue;
-        gates_size_t ls = text->measure(text->ctx, font_size, mr.label);
-        if (ls.w > label_w) label_w = ls.w;
+        gates_i32 lw = mr.markup ? gates_i_mn_width(text, font_size, mr.label)
+                                 : text->measure(text->ctx, font_size, mr.label).w;
+        if (lw > label_w) label_w = lw;
         char buf[24];
         gates_usize_t n = mr.shortcut != nullptr ? shortcut_text(mr.shortcut, buf, sizeof buf) : 0;
         if (n > 0) {
@@ -637,9 +651,14 @@ gates_err_t gates_i_menu_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
         }
         if (gates_is_ok(err) && c.label.size > 0) {
             gates_str_t lab = c.label;
-            gates_size_t ls = text->measure(text->ctx, font, lab);
-            err = gates_draw_text(dl, (gates_rect_t){ rr.x + 2 * m.advance, ty, ls.w, ls.h }, lab, font,
-                                  gates_theme_color(theme, fg));
+            if (c.markup) {
+                err = gates_i_mn_draw(dl, text, (gates_rect_t){ rr.x + 2 * m.advance, ty, 0, m.line_height },
+                                      lab, font, gates_theme_color(theme, fg), gates_i_cues(tree));
+            } else {
+                gates_size_t ls = text->measure(text->ctx, font, lab);
+                err = gates_draw_text(dl, (gates_rect_t){ rr.x + 2 * m.advance, ty, ls.w, ls.h }, lab, font,
+                                      gates_theme_color(theme, fg));
+            }
         }
         char buf[24];
         gates_usize_t n = c.shortcut != nullptr ? shortcut_text(c.shortcut, buf, sizeof buf) : 0;
@@ -690,6 +709,25 @@ gates_u32 gates_i_overlay_pointer(gates_tree_t *tree, const gates_pointer_event_
     gates_u32 idx = o->index;
     gates_widget_state_t *st = state_at(tree, idx);
     gates_i32 row = menu_row_at(tree, idx, ev->pos);
+    /* plan-0018: over the menu bar while one of its menus is open. */
+    if (st != nullptr && st->menu_from_bar && row == -2 && tree->menubar != GATES_NONE &&
+        gates_rect_contains(gates_i_slot(tree, tree->menubar)->layout_rect, ev->pos)) {
+        gates_i32 t = gates_i_menubar_title_at(tree, tree->menubar, ev->pos);
+        gates_err_t err = GATES_OK;
+        if (ev->action == GATES_POINTER_MOVE && t >= 0 && (gates_u32)t != st->menu_bar_title) {
+            err = gates_i_menubar_open(tree, (gates_u32)t, false);
+        } else if (ev->action == GATES_POINTER_DOWN) {
+            if (t < 0 || (gates_u32)t == st->menu_bar_title) {
+                gates_i_menubar_leave(tree);
+            } else {
+                err = gates_i_menubar_open(tree, (gates_u32)t, false);
+            }
+        }
+        if (!gates_is_ok(err)) {
+            tree->input_error = err;
+        }
+        return GATES_NONE;
+    }
     switch (ev->action) {
     case GATES_POINTER_MOVE:
         if (row >= 0) {
@@ -759,9 +797,42 @@ bool gates_i_overlay_key(gates_tree_t *tree, const gates_key_event_t *ev) {
         menu_choose(tree, top);
         break;
     case GATES_KEY_ESCAPE:
-        menu_remove(tree, top, 0);
+        if (st->menu_from_bar) {
+            gates_i_menu_close_record(tree, top); /* back to the highlighted title */
+            tree->mb_mode = GATES_I_MB_HIGHLIGHT;
+        } else {
+            menu_remove(tree, top, 0);
+        }
+        break;
+    case GATES_KEY_LEFT:
+    case GATES_KEY_RIGHT:
+        if (st->menu_from_bar && tree->menubar != GATES_NONE) {
+            gates_u32 bn = gates_menubar_count(tree, gates_i_handle(tree, tree->menubar));
+            if (bn > 0) {
+                gates_u32 t = (st->menu_bar_title + (ev->key == GATES_KEY_LEFT ? bn - 1 : 1)) % bn;
+                gates_err_t err = gates_i_menubar_open(tree, t, true);
+                if (!gates_is_ok(err)) tree->input_error = err;
+            }
+        }
+        break;
+    case GATES_KEY_F10:
+        if (st->menu_from_bar) {
+            gates_i_menubar_leave(tree);
+        }
         break;
     default:
+        /* A letter chooses the entry whose mnemonic it is (plan-0018). */
+        if (ev->letter != 0 && !ev->ctrl && !st->menu_is_list) {
+            gates_u8 l = ev->letter >= 'a' && ev->letter <= 'z' ? (gates_u8)(ev->letter - 32) : ev->letter;
+            for (gates_i32 r = 0; r < n; r++) {
+                menu_row_t mr = menu_row(tree, st, r);
+                if (mr.present && mr.enabled && mr.markup && gates_mnemonic_of(mr.label) == l) {
+                    menu_select(tree, idx, r);
+                    menu_choose(tree, top);
+                    break;
+                }
+            }
+        }
         break; /* a menu takes every key while it is open */
     }
     return true;

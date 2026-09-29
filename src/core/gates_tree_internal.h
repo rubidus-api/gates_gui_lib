@@ -200,6 +200,8 @@ typedef struct gates_widget_state_t {
     gates_u32 menu_scope_index;
     gates_u32 menu_scope_generation;
     bool menu_is_list;           /* a choice's option list: scope = the choice, ids = option ids */
+    bool menu_from_bar;          /* opened from the menu bar (plan-0018): title menu_bar_title */
+    gates_u32 menu_bar_title;
     gates_i32 menu_min_w;        /* a choice's list: at least as wide as the choice */
     /* Radio group / choice (plan-0010): one allocation holds array and labels. */
     bool has_options;
@@ -209,6 +211,12 @@ typedef struct gates_widget_state_t {
     gates_i32 opt_press;         /* radio: row a press started on, -1 = none */
     /* Virtual view (plan-0011): columns, model binding, scroll and selection. */
     struct gates_i_view *view;
+    /* Label with a mnemonic target (plan-0018). */
+    bool has_mn_target;
+    gates_u32 mn_target_index;
+    gates_u32 mn_target_generation;
+    /* Menu bar (plan-0018): its titles and their command ids. */
+    struct gates_i_menubar *mbar;
     /* Form (plan-0010 stage 2): its field table. */
     struct gates_i_field *fields;
     gates_u32 field_count;
@@ -364,7 +372,20 @@ struct gates_tree {
     gates_u8 *announce;
     gates_u32 announce_len;
     bool announce_assertive;
+
+    /* Application frame (plan-0018): the menu bar and menu mode, keyboard cues. */
+    gates_u32 menubar;           /* slot of the live menu bar, or GATES_NONE */
+    gates_u8 mb_mode;            /* GATES_I_MB_OFF / _HIGHLIGHT / _OPEN */
+    gates_u32 mb_sel;            /* highlighted or open title */
+    gates_u32 mb_hover;          /* title under the pointer, GATES_NONE when none */
+    bool cues_shown;             /* keyboard cues since the last Alt / menu mode */
+    bool cues_always;            /* the platform always underlines access keys */
+    bool eat_char;               /* a menu took the last key: drop the character it makes */
 };
+
+#define GATES_I_MB_OFF 0u
+#define GATES_I_MB_HIGHLIGHT 1u
+#define GATES_I_MB_OPEN 2u
 
 /* Event queue helpers (gates_event.c). Reserve before mutating: `slots` more
  * entries and payload capacity for `text_bytes`. Push never allocates. */
@@ -577,6 +598,82 @@ bool gates_i_form_field_info(const gates_tree_t *tree, gates_u32 editor_idx,
 gates_err_t gates_i_menu_invoke(gates_tree_t *tree, gates_u32 menu_idx, gates_command_id_t id);
 /* Menu row geometry for accessibility bounds. */
 gates_rect_t gates_i_menu_row_rect(const gates_tree_t *tree, gates_u32 menu_idx, gates_u32 row);
+
+/* Mnemonics (gates_mnemonic.c, plan-0018). A text is markup when its node
+ * parses it: buttons, check boxes, labels with a target, command labels in
+ * menus, menu bar titles. Widths add up exactly (RFC-0004), so markup text is
+ * measured and drawn in pieces around each removed '&'. */
+bool gates_i_mn_markup(const gates_tree_t *tree, gates_u32 idx);
+/* The width of the shown text (markup removed). */
+gates_i32 gates_i_mn_width(const gates_text_backend_t *be, gates_i32 font, gates_str_t text);
+/* Draws markup text with its top-left at rect.x/y (rect.h the line), underlining
+ * the mnemonic when `cues`. */
+gates_err_t gates_i_mn_draw(gates_draw_list_t *dl, const gates_text_backend_t *be, gates_rect_t rect,
+                            gates_str_t text, gates_i32 font, gates_color_t color, bool cues);
+/* Copies the shown text into buf (cut to cap); returns its full length. */
+gates_u32 gates_i_mn_strip(gates_str_t text, gates_u8 *buf, gates_u32 cap);
+/* Keyboard cues visible now. */
+bool gates_i_cues(const gates_tree_t *tree);
+/* A node's text as shown by paint and layout: markup or not. */
+static inline gates_i32 gates_i_text_w(const gates_tree_t *tree, gates_u32 idx,
+                                       const gates_text_backend_t *be, gates_i32 font,
+                                       gates_str_t text) {
+    return gates_i_mn_markup(tree, idx) ? gates_i_mn_width(be, font, text)
+                                        : be->measure(be->ctx, font, text).w;
+}
+/* Shortcut text for menus and accessibility (gates_command.c). */
+gates_usize_t gates_i_shortcut_text(const gates_shortcut_t *k, char *buf, gates_usize_t cap);
+
+/* Menu bar (gates_menubar.c, plan-0018). */
+typedef struct gates_i_menubar_item {
+    gates_u8 *title;
+    gates_u32 title_len;
+    gates_command_id_t *ids;
+    gates_u32 count;
+} gates_i_menubar_item;
+typedef struct gates_i_menubar {
+    gates_u32 scope_index;
+    gates_u32 scope_generation;
+    gates_i_menubar_item *items;
+    gates_u32 count;
+    gates_u32 cap;
+} gates_i_menubar;
+void gates_i_menubar_free(gates_tree_t *tree, gates_widget_state_t *st);
+gates_size_t gates_i_menubar_measure(const gates_tree_t *tree, const gates_node_slot_t *s,
+                                     const gates_text_backend_t *text);
+gates_err_t gates_i_menubar_paint(const gates_tree_t *tree, gates_u32 idx, gates_draw_list_t *dl,
+                                  const gates_theme_t *theme, const gates_text_backend_t *text);
+/* Title geometry (window coordinates, after layout). */
+gates_rect_t gates_i_menubar_title_rect(const gates_tree_t *tree, gates_u32 idx, gates_u32 title);
+gates_i32 gates_i_menubar_title_at(const gates_tree_t *tree, gates_u32 idx, gates_point_t p);
+/* The live, reachable menu bar, or GATES_NONE. */
+gates_u32 gates_i_menubar_live(const gates_tree_t *tree);
+/* Opens title t's menu (keyboard: first entry selected). Leaves menu mode and
+ * returns the error when the menu cannot be built. */
+gates_err_t gates_i_menubar_open(gates_tree_t *tree, gates_u32 t, bool keyboard);
+/* Leaves menu mode, closing the bar's menu. */
+void gates_i_menubar_leave(gates_tree_t *tree);
+/* F10 (gates_input.c): enters or leaves menu mode; false without a reachable bar. */
+bool gates_i_menubar_f10(gates_tree_t *tree);
+/* Keys in menu mode with no bar menu open (true: consumed). */
+bool gates_i_menubar_key(gates_tree_t *tree, const gates_key_event_t *ev);
+/* A left press on the bar (not while a bar menu is open). */
+void gates_i_menubar_press(gates_tree_t *tree, gates_u32 idx, gates_point_t p);
+/* A bar menu was removed (gates_overlay.c): menu mode ends (callers that
+ * switch menus or go back to the title set the mode again). */
+void gates_i_menubar_menu_closed(gates_tree_t *tree);
+/* Destroy / hide / unreachable: forget or leave (gates_tree.c, gates_focus.c). */
+void gates_i_menubar_check(gates_tree_t *tree);
+void gates_i_menubar_destroying(gates_tree_t *tree, gates_u32 top);
+/* The overlay record index of the bar's open menu, or -1 (gates_overlay.c). */
+gates_i32 gates_i_bar_menu_overlay(const gates_tree_t *tree);
+/* Opens a menu overlay for the bar (gates_overlay.c). */
+gates_err_t gates_i_menu_open_for_bar(gates_tree_t *tree, gates_point_t at, gates_i32 above_y,
+                                      gates_node_t scope, const gates_command_id_t *ids,
+                                      gates_u32 count, gates_u32 title, bool keyboard,
+                                      gates_node_t *out_menu);
+/* Closes menu overlay record i (reported with result 0). */
+void gates_i_menu_close_record(gates_tree_t *tree, gates_u32 i);
 
 /* Form (gates_form.c). */
 void gates_i_form_free(gates_tree_t *tree, gates_widget_state_t *st);

@@ -349,6 +349,7 @@ static int control_type(gates_role_t role) {
     case GATES_ROLE_TREE:         return UIA_TreeControlTypeId;
     case GATES_ROLE_ROW:          return UIA_DataItemControlTypeId;
     case GATES_ROLE_TREE_ITEM:    return UIA_TreeItemControlTypeId;
+    case GATES_ROLE_MENU_BAR:     return UIA_MenuBarControlTypeId;
     default:                      return UIA_PaneControlTypeId;
     }
 }
@@ -431,6 +432,12 @@ static HRESULT STDMETHODCALLTYPE simple_property(IRawElementProviderSimple *This
         break;
     case UIA_HelpTextPropertyId:
         if (i.description.size > 0) v_str(out, i.description);
+        break;
+    case UIA_AccessKeyPropertyId:        /* plan-0018: "Alt+F" */
+        if (i.access_key.size > 0) v_str(out, i.access_key);
+        break;
+    case UIA_AcceleratorKeyPropertyId:   /* the command's shortcut */
+        if (i.accelerator.size > 0) v_str(out, i.accelerator);
         break;
     case UIA_FrameworkIdPropertyId:
         v_str(out, GATES_STR("gates"));

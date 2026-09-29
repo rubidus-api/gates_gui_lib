@@ -62,6 +62,7 @@ typedef enum gates_role_t {
     GATES_ROLE_TREE_ITEM,        /* item of a tree */
     GATES_ROLE_FORM,
     GATES_ROLE_SCROLL_AREA,      /* scroll layout */
+    GATES_ROLE_MENU_BAR,         /* menu bar (plan-0018); its titles are MENU_ITEM items */
 } gates_role_t;
 
 /* State bits. */
@@ -123,6 +124,10 @@ typedef struct gates_access_info_t {
      * the model, of set_size rows), 0 for nodes. */
     gates_u64 set_position, set_size;
     gates_u32 level;             /* a tree row's depth + 1, else 0 */
+    /* Keys (plan-0018): the mnemonic as "Alt+F" (an entry of an open menu: its
+     * letter alone), and the shortcut of the node's command ("Ctrl+N"). */
+    gates_str_t access_key;
+    gates_str_t accelerator;
 } gates_access_info_t;
 
 /* Fills *out for (node, item). INVALID_ARG when the node is gone (a stale

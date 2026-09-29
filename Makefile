@@ -44,6 +44,8 @@ CORE_SRC := \
   src/core/gates_timer.c \
   src/core/gates_access.c \
   src/core/gates_version.c \
+  src/core/gates_mnemonic.c \
+  src/core/gates_menubar.c \
   src/render/gates_draw_list.c \
   src/render/gates_render_soft.c \
   src/text/gates_text_builtin.c \
@@ -59,7 +61,7 @@ TESTS     := test_foundation test_node_pool test_tree test_draw_list test_render
              test_text_edit test_textbox test_text_conformance test_ime_compose \
              test_events test_text_editing test_focus_commands \
              test_overlay test_controls test_form test_view test_view_adapters test_post \
-             test_post_stress test_theme_dpi test_access test_text_prop
+             test_post_stress test_theme_dpi test_access test_text_prop test_frame
 TEST_BINS := $(addprefix $(TESTBIN)/,$(TESTS))
 TEST_OBJ  := $(patsubst %,$(OBJ)/tests/%.o,$(TESTS))
 

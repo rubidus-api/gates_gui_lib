@@ -74,6 +74,37 @@ gates_str_t gates_command_label(const gates_tree_t *tree, gates_node_t scope,
 [[nodiscard]] gates_err_t gates_command_invoke(gates_tree_t *tree, gates_node_t scope,
                                                gates_command_id_t id);
 
+/* -- keymap (plan-0018, RFC-0005 A4) ---------------------------------------------
+ * The per-command shortcut is the keymap: a program can list a scope's commands,
+ * rebind them (a user's keymap from a file) and print shortcuts the same way
+ * menus and accessibility do. */
+
+/* Rebinds (an all-zero shortcut removes it). INVALID_ARG for an invalid
+ * shortcut; INVALID_STATE when another command of the scope has it, with that
+ * command's id in *conflict (optional; 0 otherwise). NOT_FOUND: no command. */
+[[nodiscard]] gates_err_t gates_command_set_shortcut(gates_tree_t *tree, gates_node_t scope,
+                                                     gates_command_id_t id,
+                                                     gates_shortcut_t shortcut,
+                                                     gates_command_id_t *conflict);
+/* The command's shortcut (all zero when none or no command). */
+gates_shortcut_t gates_command_shortcut(const gates_tree_t *tree, gates_node_t scope,
+                                        gates_command_id_t id);
+/* The scope's live commands, in storage order (stable while none of the scope
+ * is registered or unregistered). gates_command_at answers 0 past the end. */
+gates_u32 gates_command_count(const gates_tree_t *tree, gates_node_t scope);
+gates_command_id_t gates_command_at(const gates_tree_t *tree, gates_node_t scope,
+                                    gates_u32 index);
+/* "Ctrl+Shift+S", "F5", "Ctrl+Del" (empty for no shortcut) written to buf with a
+ * terminating NUL when cap > 0 (cut to fit); returns the length it needs,
+ * without the NUL. */
+gates_usize_t gates_shortcut_format(const gates_shortcut_t *shortcut, char *buf,
+                                    gates_usize_t cap);
+/* Reads what gates_shortcut_format writes (case-insensitive; "Control", "Delete",
+ * "Escape", "PageUp" and "PageDown" are accepted too). Empty text is the empty
+ * shortcut. INVALID_ARG for unknown names or an invalid shortcut (no Ctrl and
+ * no function key, or Alt). */
+[[nodiscard]] gates_err_t gates_shortcut_parse(gates_str_t text, gates_shortcut_t *out);
+
 /* Binds a button to a command: it shows the command's label, looks disabled
  * (and cannot be focused or pressed) while the command is disabled or gone,
  * and activating it invokes the command. id 0 unbinds. */

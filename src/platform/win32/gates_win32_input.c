@@ -142,8 +142,21 @@ bool gates_win32_handle_input(gates_window_t *win, UINT msg, WPARAM wparam, LPAR
         return true;
     }
 
+    case WM_SYSCHAR:
+        /* Alt+letter: a mnemonic (plan-0018); anything else stays with Windows
+         * (Alt+Space, Alt+F4 come as other messages or fail to match). */
+        if (gates_input_mnemonic(win->tree, (gates_u32)wparam)) {
+            gates_win32_after_input(win);
+            return true;
+        }
+        return false;
     case WM_SYSKEYDOWN:
     case WM_SYSKEYUP:
+        if (wparam == VK_MENU && msg == WM_SYSKEYDOWN) {
+            gates_input_show_cues(win->tree); /* underline mnemonics while Alt is used */
+            gates_win32_after_input(win);
+            return false;                     /* Windows still turns Alt alone into SC_KEYMENU */
+        }
         if (wparam == VK_DOWN || wparam == VK_UP) {
             /* Alt+Down opens a choice's list (plan-0010); unused, it goes to Windows. */
             gates_key_event_t akev = {

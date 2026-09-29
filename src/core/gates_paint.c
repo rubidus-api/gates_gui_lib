@@ -37,6 +37,16 @@ static gates_rect_t centered_text_rect(const paint_ctx_t *ctx, gates_rect_t box,
     };
 }
 
+/* A node's text at its rect's top-left: markup (mnemonics, plan-0018) or plain. */
+static void node_text_draw(paint_ctx_t *ctx, gates_u32 idx, gates_rect_t r, gates_str_t text,
+                           gates_i32 font, gates_color_t color) {
+    if (gates_i_mn_markup(ctx->tree, idx)) {
+        emit(ctx, gates_i_mn_draw(ctx->dl, ctx->text, r, text, font, color, gates_i_cues(ctx->tree)));
+    } else {
+        emit(ctx, gates_draw_text(ctx->dl, r, text, font, color));
+    }
+}
+
 static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
     gates_tree_t *tree = ctx->tree;
     gates_node_slot_t *s = gates_i_slot(tree, idx);
@@ -63,8 +73,7 @@ static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
             gates_color_token_t tok = st != nullptr && st->invalid ? GATES_COLOR_ERROR
                                       : disabled                   ? GATES_COLOR_CONTROL_DISABLED_FG
                                                                    : GATES_COLOR_PANEL_FG;
-            emit(ctx, gates_draw_text(ctx->dl, r, text, fsz,
-                                      gates_theme_color(ctx->theme, tok)));
+            node_text_draw(ctx, idx, r, text, fsz, gates_theme_color(ctx->theme, tok));
         }
         break;
     }
@@ -84,8 +93,11 @@ static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
         if (text.size > 0) {
             gates_color_token_t fg = disabled ? GATES_COLOR_CONTROL_DISABLED_FG
                                               : GATES_COLOR_CONTROL_FG;
-            emit(ctx, gates_draw_text(ctx->dl, centered_text_rect(ctx, r, text, fsz),
-                                      text, fsz, gates_theme_color(ctx->theme, fg)));
+            gates_rect_t tr = centered_text_rect(ctx, r, text, fsz);
+            gates_i32 w = gates_i_text_w(tree, idx, ctx->text, fsz, text);
+            tr.x = r.x + (r.w - w) / 2;
+            tr.w = w;
+            node_text_draw(ctx, idx, tr, text, fsz, gates_theme_color(ctx->theme, fg));
         }
         break;
     }
@@ -105,11 +117,11 @@ static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
         if (text.size > 0) {
             gates_size_t ts = ctx->text->measure(ctx->text->ctx, fsz, text);
             gates_rect_t tr = { r.x + GATES_CHECK_BOX + GATES_CHECK_GAP,
-                                r.y + (r.h - ts.h) / 2, ts.w, ts.h };
+                                r.y + (r.h - ts.h) / 2, gates_i_text_w(tree, idx, ctx->text, fsz, text),
+                                ts.h };
             gates_color_token_t fg = disabled ? GATES_COLOR_CONTROL_DISABLED_FG
                                               : GATES_COLOR_PANEL_FG;
-            emit(ctx, gates_draw_text(ctx->dl, tr, text, fsz,
-                                      gates_theme_color(ctx->theme, fg)));
+            node_text_draw(ctx, idx, tr, text, fsz, gates_theme_color(ctx->theme, fg));
         }
         if (has_focus) {
             emit(ctx, gates_draw_border(ctx->dl, r, gates_theme_focus_width(ctx->theme),
@@ -125,6 +137,9 @@ static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
         break; /* children (title, content) follow */
     case GATES_NODE_MENU:
         emit(ctx, gates_i_menu_paint(tree, idx, ctx->dl, ctx->theme, ctx->text));
+        break;
+    case GATES_NODE_MENUBAR:
+        emit(ctx, gates_i_menubar_paint(tree, idx, ctx->dl, ctx->theme, ctx->text));
         break;
     case GATES_NODE_RADIO:
     case GATES_NODE_CHOICE:
