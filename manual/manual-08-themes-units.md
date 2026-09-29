@@ -62,7 +62,7 @@ Text uses one of two fonts (`gates_font_t` in `gates/text.h`):
 under it that does not choose its own; `GATES_FONT_INHERIT` goes back to the parent's, and
 `gates_node_font` reads the effective one. Set it on a panel to switch a whole area, or on one
 view for a log. Dialogs and menus are not under the window's root: they start from the UI font
-unless you set one on them. Sizes follow the system and are not chosen per node in 0.5.0.
+unless you set one on them. Sizes follow the system and are not chosen per node in 0.6.0.
 
 ```c
 (void)gates_node_set_font(tree, log_view, GATES_FONT_MONO); /* aligned log lines */

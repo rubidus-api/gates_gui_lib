@@ -4,7 +4,7 @@ Headers: `gates/widget.h`, `gates/layout.h`, `gates/geometry.h`.
 
 ## The control matrix
 
-Every control is one node. The table is the whole finite set in 0.5.0: what the person does
+Every control is one node. The table is the whole finite set in 0.6.0: what the person does
 with it, the keys, the events the program receives, and what a screen reader hears (chapter 9).
 
 | Control | Create | The person | Keys | Events | Accessible as |
@@ -18,8 +18,9 @@ with it, the keys, the events the program receives, and what a screen reader hea
 | choice | `gates_choice_create` | picks one from a list | Space, Enter, Alt+Down open; arrows, Enter, Escape | VALUE_CHANGED | combo box (Selection, Expand) |
 | progress | `gates_progress_create` | sees how far work has come | - | - | progress bar (percent) |
 | separator | `gates_separator_create` | sees a division | - | - | separator |
-| view | `gates_view_create`, `gates_log_create` | chooses in a list, table, tree or log | arrows, PageUp/PageDown, Home, End, Enter; tree: Left/Right | SELECTION_CHANGED, ACTIVATED, SORT_REQUESTED, EXPAND_REQUESTED | list, table, tree (chapter 5) |
+| view | `gates_view_create`, `gates_log_create` | chooses in a list, table, tree or log | arrows, PageUp/PageDown, Home, End, Enter; tree: Left/Right; F2, Space in editable columns | SELECTION_CHANGED, ACTIVATED, SORT_REQUESTED, EXPAND_REQUESTED, CELL_EDITED | list, table, tree (chapter 5) |
 | form | `gates_form_create` | fills labelled fields | - | the editors' events | group of fields (chapter 3) |
+| property grid | `gates_propgrid_create` | edits a record's typed fields | Tab, the editors' keys | VALUE_CHANGED (result = property id) | groups of named editors (chapter 5) |
 | dialog, menu | `gates_dialog_open`, `gates_menu_open` | answers once, picks a command | Enter, Escape, arrows | DIALOG_CLOSED, MENU_CLOSED | window, menu (chapter 4) |
 | menu bar | `gates_menubar_create` | picks a command from a menu | F10 or Alt, arrows, letters, Escape | MENU_CLOSED, commands | menu bar (chapter 11) |
 | toolbar | `gates_toolbar_create` | runs a command with one click | arrows, Space, Enter | commands | tool bar (chapter 11) |

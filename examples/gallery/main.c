@@ -7,9 +7,13 @@
  * radio groups and a choice, a table in a split, progress and separators, a
  * dialog, and (0.4.0) spin boxes, a slider, a collapsible group in a grid,
  * wrapped chips and a total recomputed once per turn, and (0.5.0) pictures,
- * toolbar icons and the native file, folder, colour and message dialogs. The theme (system, light, dark) and the zoom are commands. The
- * arrangement - selected tab, split, table columns, window placement - is kept
- * in %LOCALAPPDATA%\gates-gallery.ini and comes back at the next start.
+ * toolbar icons and the native file, folder, colour and message dialogs, and
+ * (0.6.0) data: a table edited in place with check, progress and icon cells
+ * and a column menu, a property grid for the selected row, Undo/Redo in the
+ * Edit menu, and a background job with progress and Cancel. The theme
+ * (system, light, dark) and the zoom are commands. The arrangement - selected
+ * tab, split, table columns, window placement - is kept in
+ * %LOCALAPPDATA%\gates-gallery.ini and comes back at the next start.
  *
  * Use: Alt (or F10) enters the menu bar; Alt+letter opens a menu or activates a
  * control; Ctrl+Tab changes pages; rest the pointer on a control for its
@@ -28,12 +32,36 @@
 #define TRY(x) do { gates_err_t e_ = (x); if (!gates_is_ok(e_)) return e_; } while (0)
 
 enum {
+    CMD_UNDO = 60, CMD_REDO, CMD_COLUMNS,
     CMD_OPEN_PIC = 40, CMD_SAVE_AS, CMD_FOLDER, CMD_COLOUR, CMD_ASK,
     CMD_SAVE = 1, CMD_QUIT, CMD_SYSTEM, CMD_LIGHT, CMD_DARK, CMD_ZOOM_IN, CMD_ZOOM_OUT, CMD_ZOOM_RESET,
     CMD_ABOUT, CMD_ABOUT_OK, CMD_STEP,
 };
 
 #define ROWS 200
+#define ITEMS 12
+
+/* Data page (0.6.0): the program's own records. */
+enum { D_NAME = 1, D_DONE, D_CHECKED, D_FILE };          /* table columns */
+enum { P_NAME = 1, P_DONE, P_PRIORITY, P_ESTIMATE };    /* properties */
+
+typedef struct item_t {
+    gates_item_id_t id;
+    char name[24];
+    bool done;
+    gates_u32 checked;           /* per mille, set by the background job */
+    char file[24];
+    gates_u32 priority;          /* 1..3 */
+    gates_i64 estimate;          /* hours */
+} item_t;
+
+/* One undoable change of one field. */
+typedef struct change_t {
+    gates_item_id_t id;
+    int field;                   /* a property id */
+    char before[24], after[24];  /* text fields */
+    gates_i64 was, now;          /* the others */
+} change_t;
 
 typedef struct app_t {
     gates_app_t *app;
@@ -45,6 +73,16 @@ typedef struct app_t {
     gates_color_t colour;
     char path[512];
     char cell[64];
+    /* Data page */
+    item_t items[ITEMS];
+    gates_node_t dtable, props, job_bar, job_label, job_start, job_cancel;
+    gates_image_id_t file_icon;
+    gates_undo_t *undo;
+    change_t pending;            /* a table edit, pushed on CELL_EDITED */
+    bool have_pending;
+    gates_task_t *job;
+    char job_names[ITEMS][24];   /* the job's own copy: it never reads the live items */
+    char dcell[48];
 } app_t;
 
 static gates_str_t cs(const char *s) { return (gates_str_t){ .ptr = (const gates_u8 *)s, .size = strlen(s) }; }
@@ -134,6 +172,14 @@ static void on_command(gates_tree_t *tree, gates_command_id_t id, void *user) {
     case CMD_ZOOM_OUT: gates_window_set_zoom(a->win, gates_window_zoom(a->win) - 25); show_zoom(a); break;
     case CMD_ZOOM_RESET: gates_window_set_zoom(a->win, 100); show_zoom(a); break;
     case CMD_ABOUT: (void)open_about(a); break;
+    case CMD_UNDO: (void)gates_undo_undo(a->undo); break;
+    case CMD_REDO: (void)gates_undo_redo(a->undo); break;
+    case CMD_COLUMNS: {
+        (void)gates_tabs_set_selected(tree, a->tabs, 7); /* the Data page */
+        gates_rect_t h = gates_view_part_rect(tree, a->dtable, GATES_VIEW_PART_HEADER, 0);
+        (void)gates_view_open_column_menu(tree, a->dtable, (gates_point_t){ h.x, h.y + h.h }, nullptr);
+        break;
+    }
     case CMD_ABOUT_OK: (void)gates_dialog_close(tree, a->about, GATES_DIALOG_ACCEPTED); break;
     case CMD_STEP: {
         gates_i32 v = gates_progress_value(tree, a->progress) + 100;
@@ -202,7 +248,7 @@ static gates_err_t page_text(app_t *a, gates_node_t page) {
     gates_node_t l, box;
     static const struct { const char *label, *text, *tip; bool password; } fields[] = {
         { "&Name", "Ada", "A text box; Alt+N comes here from its label", false },
-        { "&Email", "", "Typed with the keyboard or an input method", false },
+        { "E&mail", "", "Typed with the keyboard or an input method", false },
         { "&Password", "secret", "Shown as stars, never copied", true },
     };
     for (int i = 0; i < 3; i++) {
@@ -461,6 +507,302 @@ static gates_err_t page_progress(app_t *a, gates_node_t page) {
     return GATES_OK;
 }
 
+
+/* -- Data (0.6.0): an editable table, a property grid, undo, a background job ------------------ */
+
+static item_t *item_of(app_t *a, gates_item_id_t id) {
+    return id >= 1 && id <= ITEMS ? &a->items[id - 1] : nullptr;
+}
+
+static gates_u64 d_count(void *u) { (void)u; return ITEMS; }
+static gates_item_id_t d_id_at(void *u, gates_u64 row) { (void)u; return row < ITEMS ? row + 1 : 0; }
+static bool d_index_of(void *u, gates_item_id_t id, gates_u64 *row) {
+    (void)u;
+    if (id == 0 || id > ITEMS) return false;
+    *row = id - 1;
+    return true;
+}
+
+static gates_err_t d_cell(void *u, gates_item_id_t id, gates_column_id_t col, gates_cell_t *out) {
+    app_t *a = u;
+    item_t *it = item_of(a, id);
+    if (it == nullptr) return PROVEN_ERR_INVALID_ARG;
+    int n = 0;
+    switch (col) {
+    case D_NAME:
+        n = (int)strlen(it->name);
+        memcpy(a->dcell, it->name, (size_t)n); /* both live in app_t: no snprintf between them */
+        break;
+    case D_DONE: out->checked = it->done; break;
+    case D_CHECKED:
+        out->permille = it->checked;
+        n = snprintf(a->dcell, sizeof a->dcell, "%u%%", it->checked / 10);
+        break;
+    default:
+        out->icon = a->file_icon;
+        n = (int)strlen(it->file);
+        memcpy(a->dcell, it->file, (size_t)n);
+        break;
+    }
+    out->text = (gates_str_t){ .ptr = (const gates_u8 *)a->dcell, .size = (gates_usize_t)n };
+    return GATES_OK;
+}
+
+/* A person changed a cell: the model checks it and keeps it; the change is
+ * recorded for Undo when CELL_EDITED arrives. */
+static gates_err_t d_set_cell(void *u, gates_item_id_t id, gates_column_id_t col, const gates_cell_t *v) {
+    app_t *a = u;
+    item_t *it = item_of(a, id);
+    if (it == nullptr) return PROVEN_ERR_INVALID_ARG;
+    change_t c = { .id = id };
+    if (col == D_DONE) {
+        c.field = P_DONE;
+        c.was = it->done;
+        c.now = v->checked;
+        it->done = v->checked;
+    } else {
+        char *field = col == D_NAME ? it->name : it->file;
+        if (v->text.size == 0 || v->text.size >= sizeof it->name) return PROVEN_ERR_INVALID_ARG;
+        c.field = col == D_NAME ? P_NAME : 100; /* 100: the file name (not a property) */
+        snprintf(c.before, sizeof c.before, "%s", field);
+        memcpy(field, v->text.ptr, v->text.size);
+        field[v->text.size] = '\0';
+        snprintf(c.after, sizeof c.after, "%s", field);
+    }
+    a->pending = c;
+    a->have_pending = true;
+    return GATES_OK;
+}
+
+/* Shows the selected item in the property grid (silently). */
+static void show_props(app_t *a) {
+    gates_tree_t *t = a->tree;
+    item_t *it = item_of(a, gates_view_selected(t, a->dtable));
+    if (it == nullptr) return;
+    gates_node_t name = gates_propgrid_editor(t, a->props, P_NAME);
+    if (!gates_node_eq(gates_tree_focus(t), name)) (void)gates_textbox_set_text(t, name, cs(it->name));
+    (void)gates_checkbox_set_checked(t, gates_propgrid_editor(t, a->props, P_DONE), it->done);
+    (void)gates_options_set_selected(t, gates_propgrid_editor(t, a->props, P_PRIORITY), it->priority);
+    (void)gates_range_set_value(t, gates_propgrid_editor(t, a->props, P_ESTIMATE), it->estimate);
+}
+
+static void data_changed(app_t *a) {
+    (void)gates_view_model_changed(a->tree, a->dtable);
+    show_props(a);
+}
+
+/* Puts one side of a change into the item. */
+static gates_err_t apply(app_t *a, const change_t *c, bool after) {
+    item_t *it = item_of(a, c->id);
+    if (it == nullptr) return PROVEN_ERR_NOT_FOUND;
+    const char *text = after ? c->after : c->before;
+    gates_i64 v = after ? c->now : c->was;
+    switch (c->field) {
+    case P_NAME: snprintf(it->name, sizeof it->name, "%s", text); break;
+    case 100: snprintf(it->file, sizeof it->file, "%s", text); break;
+    case P_DONE: it->done = v != 0; break;
+    case P_PRIORITY: it->priority = (gates_u32)v; break;
+    default: it->estimate = v; break;
+    }
+    (void)gates_view_set_selected(a->tree, a->dtable, c->id);
+    (void)gates_view_scroll_to(a->tree, a->dtable, c->id);
+    data_changed(a);
+    return GATES_OK;
+}
+
+static app_t *g_app;
+static gates_err_t undo_change(void *d) { return apply(g_app, d, false); }
+static gates_err_t redo_change(void *d) { return apply(g_app, d, true); }
+
+static void record(app_t *a, const change_t *c) {
+    static const char *const labels[] = { "", "Rename", "Done", "Priority", "Estimate" };
+    change_t *copy = malloc(sizeof *copy);
+    if (copy == nullptr) return;
+    *copy = *c;
+    const char *label = c->field == 100 ? "Rename file" : labels[c->field];
+    /* Typing into one property merges into one entry per item and field. */
+    gates_u32 merge = c->field == P_NAME || c->field == P_ESTIMATE ? (gates_u32)(c->id * 8 + (gates_u32)c->field) : 0;
+    gates_undo_entry_t e = { .label = cs(label), .undo = undo_change, .undo_data = copy, .redo = redo_change,
+                             .redo_data = copy, .drop = free, .merge_key = merge };
+    (void)gates_undo_push(a->undo, &e);
+}
+
+static void on_dtable(gates_tree_t *tree, const gates_event_t *ev, void *user) {
+    app_t *a = user;
+    (void)tree;
+    if (ev->kind == GATES_EVENT_SELECTION_CHANGED) {
+        gates_undo_break_merge(a->undo);
+        show_props(a);
+    } else if (ev->kind == GATES_EVENT_CELL_EDITED && a->have_pending) {
+        a->have_pending = false;
+        record(a, &a->pending);
+        show_props(a);
+    }
+}
+
+static void on_props(gates_tree_t *tree, const gates_event_t *ev, void *user) {
+    app_t *a = user;
+    item_t *it = item_of(a, gates_view_selected(tree, a->dtable));
+    if (it == nullptr || ev->kind != GATES_EVENT_VALUE_CHANGED) return;
+    change_t c = { .id = it->id, .field = (int)ev->result };
+    switch (ev->result) {
+    case P_NAME: {
+        gates_node_t box = gates_propgrid_editor(tree, a->props, P_NAME);
+        bool ok = ev->text.size > 0 && ev->text.size < sizeof it->name;
+        (void)gates_textbox_set_invalid(tree, box, !ok);
+        if (!ok) return; /* an empty name stays in the box, marked, and is not kept */
+        snprintf(c.before, sizeof c.before, "%s", it->name);
+        memcpy(it->name, ev->text.ptr, ev->text.size);
+        it->name[ev->text.size] = '\0';
+        snprintf(c.after, sizeof c.after, "%s", it->name);
+        break;
+    }
+    case P_DONE: c.was = it->done; c.now = ev->checked; it->done = ev->checked; break;
+    case P_PRIORITY: c.was = it->priority; c.now = ev->value; it->priority = (gates_u32)ev->value; break;
+    default: c.was = it->estimate; c.now = ev->value; it->estimate = ev->value; break;
+    }
+    record(a, &c);
+    (void)gates_view_model_changed(tree, a->dtable);
+}
+
+/* The background job: "checks" each item (a slow computation), reporting as it goes. */
+static bool slow_check(gates_task_t *task, gates_u32 seed) {
+    gates_u32 primes = 0;
+    for (gates_u32 n = 2; n < 2000000u; n++) { /* about half a second */
+        if (n % 20000u == 0 && gates_task_cancelled(task)) return false;
+        bool p = true;
+        for (gates_u32 d = 2; d * d <= n; d++) {
+            if (n % d == 0) { p = false; break; }
+        }
+        primes += p ? 1u : 0u;
+    }
+    return (primes ^ seed) != 0xFFFFFFFFu;
+}
+
+static gates_err_t job_work(gates_task_t *task, void *user) {
+    app_t *a = user;
+    for (gates_u32 i = 0; i < ITEMS; i++) {
+        if (!slow_check(task, i)) return PROVEN_ERR_EOF;
+        char text[64];
+        int n = snprintf(text, sizeof text, "Checked %s (%u of %u)", a->job_names[i], i + 1, ITEMS);
+        (void)gates_task_report(task, (i + 1) * 1000u / ITEMS, (gates_str_t){ (const gates_u8 *)text, (gates_usize_t)n });
+    }
+    return GATES_OK;
+}
+
+static void job_progress(gates_tree_t *tree, gates_task_t *task, gates_u32 permille, gates_str_t text, void *user) {
+    (void)task;
+    app_t *a = user;
+    (void)gates_progress_set_value(tree, a->job_bar, (gates_i32)permille);
+    (void)gates_widget_set_text(tree, a->job_label, text);
+    gates_u32 done = (permille * ITEMS + 500u) / 1000u; /* the nearest whole item */
+    for (gates_u32 i = 0; i < ITEMS; i++) a->items[i].checked = i < done ? 1000u : 0u;
+    (void)gates_view_model_changed(tree, a->dtable);
+}
+
+static void job_done(gates_tree_t *tree, gates_task_t *task, gates_err_t result, bool cancelled, void *user) {
+    (void)task;
+    app_t *a = user;
+    a->job = nullptr;
+    (void)gates_widget_set_text(tree, a->job_label, cs(cancelled ? "Cancelled" : gates_is_ok(result) ? "All items checked"
+                                                                                                    : "Stopped"));
+    (void)gates_widget_set_disabled(tree, a->job_cancel, true);
+    (void)gates_widget_set_disabled(tree, a->job_start, false);
+}
+
+static void on_job_start(gates_tree_t *tree, gates_node_t node, void *user) {
+    (void)node;
+    app_t *a = user;
+    if (a->job != nullptr) return;
+    for (int i = 0; i < ITEMS; i++) {
+        snprintf(a->job_names[i], sizeof a->job_names[i], "%s", a->items[i].name);
+        a->items[i].checked = 0;
+    }
+    gates_task_desc_t d = { .work = job_work, .work_user = a, .on_progress = job_progress, .on_done = job_done,
+                            .ui_user = a };
+    if (!gates_is_ok(gates_task_start(tree, &d, &a->job))) {
+        (void)gates_widget_set_text(tree, a->job_label, cs("Could not start the job"));
+        return;
+    }
+    (void)gates_progress_set_value(tree, a->job_bar, 0);
+    (void)gates_widget_set_text(tree, a->job_label, cs("Checking..."));
+    (void)gates_widget_set_disabled(tree, a->job_cancel, false);
+    gates_tree_set_focus(tree, a->job_cancel);
+    (void)gates_widget_set_disabled(tree, a->job_start, true);
+    (void)gates_view_model_changed(tree, a->dtable);
+}
+
+static void on_job_cancel(gates_tree_t *tree, gates_node_t node, void *user) {
+    (void)tree;
+    (void)node;
+    app_t *a = user;
+    if (a->job != nullptr) gates_task_cancel(a->job);
+}
+
+static gates_err_t page_data(app_t *a, gates_node_t page) {
+    gates_tree_t *t = a->tree;
+    static const char *const names[ITEMS] = { "Budget", "Roadmap", "Invoices", "Minutes", "Designs", "Contracts",
+                                              "Backlog", "Reports", "Photos", "Manual", "Payroll", "Archive" };
+    static const char *const files[ITEMS] = { "budget.xlsx", "roadmap.md", "invoices.pdf", "minutes.txt",
+                                              "designs.fig", "contracts.pdf", "backlog.csv", "reports.docx",
+                                              "photos.zip", "manual.pdf", "payroll.xlsx", "archive.tar" };
+    for (int i = 0; i < ITEMS; i++) {
+        a->items[i] = (item_t){ .id = (gates_item_id_t)(i + 1), .done = i % 3 == 0, .priority = 1u + (gates_u32)(i % 3),
+                                .estimate = 2 + i };
+        snprintf(a->items[i].name, sizeof a->items[i].name, "%s", names[i]);
+        snprintf(a->items[i].file, sizeof a->items[i].file, "%s", files[i]);
+    }
+    a->file_icon = make_image(t, 16, 16, 3, GATES_RGB(90, 120, 170));
+    gates_node_t split, row;
+    TRY(gates_layout_set_child_grow(t, page, 1));
+    TRY(gates_panel_create(t, page, &split));
+    TRY(gates_layout_set(t, split, GATES_LAYOUT_KIND_SPLIT));
+    TRY(gates_layout_set_split(t, split, GATES_SPLIT_HORIZONTAL, 620));
+    TRY(gates_layout_set_child_grow(t, split, 1));
+    TRY(gates_node_set_automation_id(t, split, cs("data.split")));
+    static const gates_column_desc_t cols[] = {
+        { .id = D_NAME, .label = GATES_STR_INIT("Name"), .width = 110, .editable = true },
+        { .id = D_DONE, .label = GATES_STR_INIT("Done"), .width = 60, .kind = GATES_CELL_CHECK, .editable = true },
+        { .id = D_CHECKED, .label = GATES_STR_INIT("Checked"), .width = 110, .kind = GATES_CELL_PROGRESS },
+        { .id = D_FILE, .label = GATES_STR_INIT("File"), .width = 140, .kind = GATES_CELL_ICON_TEXT, .editable = true },
+    };
+    TRY(gates_view_create(t, split, &(gates_view_desc_t){ .columns = cols, .column_count = 4, .header = true,
+                                                          .column_menu = true }, &a->dtable));
+    gates_rows_model_t model = { .user = a, .count = d_count, .id_at = d_id_at, .index_of = d_index_of,
+                                 .cell = d_cell, .set_cell = d_set_cell };
+    TRY(gates_view_set_model(t, a->dtable, &model));
+    TRY(gates_node_set_access_name(t, a->dtable, cs("Documents")));
+    TRY(gates_node_set_automation_id(t, a->dtable, cs("data.table")));
+    TRY(gates_widget_set_handler(t, a->dtable, on_dtable, a));
+    TRY(tip(a, a->dtable, "F2 or a double click edits a name; Space ticks Done; right-click the header for columns"));
+    TRY(gates_propgrid_create(t, split, &a->props));
+    static const gates_option_t prios[] = { { .id = 1, .label = GATES_STR_INIT("Low") },
+                                            { .id = 2, .label = GATES_STR_INIT("Normal") },
+                                            { .id = 3, .label = GATES_STR_INIT("High") } };
+    TRY(gates_propgrid_add_text(t, a->props, cs("Item"), P_NAME, cs("Name"), cs("")));
+    TRY(gates_propgrid_add_bool(t, a->props, cs("Item"), P_DONE, cs("Done"), false));
+    TRY(gates_propgrid_add_choice(t, a->props, cs("Schedule"), P_PRIORITY, cs("Priority"), prios, 3, 2));
+    TRY(gates_propgrid_add_number(t, a->props, cs("Schedule"), P_ESTIMATE, cs("Estimate (h)"),
+                                  &(gates_range_t){ .min = 0, .max = 999, .value = 1 }));
+    TRY(gates_propgrid_set_handler(t, a->props, on_props, a));
+    TRY(gates_view_set_selected(t, a->dtable, 1));
+    show_props(a);
+    TRY(gates_panel_create(t, page, &row));
+    TRY(gates_layout_set(t, row, GATES_LAYOUT_KIND_ROW));
+    TRY(gates_layout_set_gap(t, row, 8));
+    TRY(gates_button_create(t, row, cs("Chec&k all"), on_job_start, a, &a->job_start));
+    TRY(tip(a, a->job_start, "A background job: the window stays responsive while it runs"));
+    TRY(gates_button_create(t, row, cs("Ca&ncel"), on_job_cancel, a, &a->job_cancel));
+    TRY(gates_widget_set_disabled(t, a->job_cancel, true));
+    TRY(gates_progress_create(t, row, 0, &a->job_bar));
+    TRY(gates_layout_set_child_grow(t, a->job_bar, 1));
+    TRY(gates_layout_set_child_align(t, a->job_bar, GATES_ALIGN_CENTER_V));
+    TRY(gates_node_set_access_name(t, a->job_bar, cs("Job progress")));
+    TRY(gates_label_create(t, row, cs("Not started"), &a->job_label));
+    TRY(gates_node_set_live(t, a->job_label, GATES_LIVE_POLITE));
+    return GATES_OK;
+}
+
 static gates_err_t build(app_t *a) {
     gates_tree_t *t = a->tree;
     gates_node_t root = a->root = gates_tree_root(t), bar, tools, sb, page;
@@ -476,6 +818,9 @@ static gates_err_t build(app_t *a) {
         { CMD_ZOOM_RESET, "&Reset zoom", { .letter = '0', .ctrl = true } },
         { CMD_ABOUT, "&About", { .key = GATES_KEY_F1 } },
         { CMD_STEP, "Ste&p", { .letter = 'P', .ctrl = true } },
+        { CMD_UNDO, "&Undo", { .letter = 'Z', .ctrl = true } },
+        { CMD_REDO, "&Redo", { .letter = 'Y', .ctrl = true } },
+        { CMD_COLUMNS, "&Columns...", {0} },
     };
     for (size_t i = 0; i < sizeof cmds / sizeof cmds[0]; i++) {
         gates_command_desc_t d = { .id = cmds[i].id, .label = cs(cmds[i].label), .shortcut = cmds[i].k,
@@ -488,7 +833,9 @@ static gates_err_t build(app_t *a) {
     static const gates_command_id_t view[] = { CMD_SYSTEM, CMD_LIGHT, CMD_DARK, 0, CMD_ZOOM_IN, CMD_ZOOM_OUT,
                                                CMD_ZOOM_RESET };
     static const gates_command_id_t help[] = { CMD_ABOUT };
+    static const gates_command_id_t edit[] = { CMD_UNDO, CMD_REDO, 0, CMD_COLUMNS };
     TRY(gates_menubar_add(t, bar, cs("&File"), file, 3, nullptr));
+    TRY(gates_menubar_add(t, bar, cs("&Edit"), edit, 4, nullptr));
     TRY(gates_menubar_add(t, bar, cs("&View"), view, 7, nullptr));
     TRY(gates_menubar_add(t, bar, cs("&Help"), help, 1, nullptr));
 
@@ -520,6 +867,10 @@ static gates_err_t build(app_t *a) {
     TRY(page_inputs(a, page));
     TRY(gates_tabs_add(t, a->tabs, cs("Pict&ures"), &page));
     TRY(page_pictures(a, page));
+    TRY(gates_tabs_add(t, a->tabs, cs("Data && &jobs"), &page));
+    TRY(page_data(a, page));
+    TRY(gates_undo_create((gates_allocator_t){0}, 200, &a->undo));
+    TRY(gates_undo_bind(a->undo, t, root, CMD_UNDO, CMD_REDO, cs("Undo"), cs("Redo")));
 
     TRY(gates_statusbar_create(t, root, &sb));
     TRY(gates_statusbar_add(t, sb, cs("Ready - Alt shows the access keys"), 1, &a->status));
@@ -548,12 +899,14 @@ int main(void) {
         return 1;
     }
     a.tree = gates_window_tree(a.win);
+    g_app = &a;
     gates_err_t err = build(&a);
     if (gates_is_ok(err)) {
         load_state(&a);
         err = gates_app_run(a.app);
     }
-    gates_window_destroy(a.win);
+    gates_undo_destroy(a.undo); /* before its tree goes */
+    gates_window_destroy(a.win); /* a job still running is cancelled and waited for */
     gates_app_destroy(a.app);
     return gates_is_ok(err) ? 0 : 1;
 }

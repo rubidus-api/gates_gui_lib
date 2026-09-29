@@ -7,17 +7,22 @@
  * selected (or, when it was removed, its nearest neighbour takes over, which
  * the view announces with origin PROGRAM).
  *
- * Shows: 5 000 generated records (id, name, size, date) in a sortable table;
- * a read-only form with the selected record; commands shared by buttons and
- * keys: Add 1000 (F5), Shuffle (F6), Remove selected (F8); a status line with
- * the record count and any allocation failure.
+ * Shows: 5 000 generated records (id, name, size, date) in a sortable table
+ * whose names can be edited in place (0.6.0: F2 or a double click on a name;
+ * the model refuses an empty name) and whose columns can be hidden from the
+ * header menu (right press on the header, or Shift+F10); a read-only form
+ * with the selected record; commands shared by buttons and keys: Add 1000
+ * (F5), Shuffle (F6), Remove selected (F8); a status line with the record
+ * count and any allocation failure.
  *
  * Field check (T032 stage 1): select a record, press F6: the rows reorder,
  * the same record stays selected and in view; F5 adds 1000 records (the count
  * grows, the selection stays); F8 removes the selected record and the next
  * one is selected, the form follows; clicking "Size" sorts, clicking again
- * reverses; Enter or a double click on a row says "opened"; the window's close
- * button exits. */
+ * reverses; Enter or a double click on a row (outside the name) says
+ * "opened"; F2, a new name and Enter renames the record (the form follows),
+ * an empty name stays in the editor marked invalid until Escape; the window's
+ * close button exits. */
 #include <gates/app.h>
 #include <gates/window.h>
 #include <gates/widget.h>
@@ -93,7 +98,7 @@ static void date_text(gates_u32 day, char *buf, size_t cap) {
     snprintf(buf, cap, "%04d-%02d-%02d", y, m + 1, d + 1);
 }
 
-/* -- the model (reads only) --------------------------------------------------------- */
+/* -- the model ---------------------------------------------------------------------- */
 
 static gates_u64 m_revision(void *u) { return ((app_t *)u)->rev; }
 static gates_u64 m_count(void *u) { return ((app_t *)u)->count; }
@@ -124,6 +129,19 @@ static gates_err_t m_cell(void *u, gates_item_id_t id, gates_column_id_t col, ga
     default:       date_text(r->day, a->buf, sizeof a->buf); n = (int)strlen(a->buf); break;
     }
     out->text = (gates_str_t){ .ptr = (const gates_u8 *)a->buf, .size = (gates_usize_t)n };
+    return GATES_OK;
+}
+
+/* A person renamed a record in the table (0.6.0): an empty or too long name is refused. */
+static gates_err_t m_set_cell(void *u, gates_item_id_t id, gates_column_id_t col, const gates_cell_t *v) {
+    app_t *a = u;
+    gates_u64 row = 0;
+    if (col != COL_NAME || !m_index_of(a, id, &row)) return PROVEN_ERR_INVALID_ARG;
+    record_t *r = &a->recs[row];
+    if (v->text.size == 0 || v->text.size >= sizeof r->name) return PROVEN_ERR_INVALID_ARG;
+    memcpy(r->name, v->text.ptr, v->text.size);
+    r->name[v->text.size] = '\0';
+    a->rev++;
     return GATES_OK;
 }
 
@@ -225,6 +243,12 @@ static void on_table(gates_tree_t *tree, const gates_event_t *ev, void *user) {
     } else if (ev->kind == GATES_EVENT_SELECTION_CHANGED) {
         show_detail(a);
         set_status(a, ev->origin == GATES_ORIGIN_PROGRAM ? "selection moved to a neighbour" : "");
+    } else if (ev->kind == GATES_EVENT_CELL_EDITED) {
+        show_detail(a);
+        const record_t *r = find(a, ev->item);
+        char buf[64];
+        snprintf(buf, sizeof buf, "renamed to %s", r != nullptr ? r->name : "?");
+        set_status(a, buf);
     } else if (ev->kind == GATES_EVENT_ACTIVATED) {
         char buf[64];
         const record_t *r = find(a, ev->item);
@@ -243,16 +267,16 @@ static gates_err_t build_ui(app_t *a) {
 
     static const gates_column_desc_t cols[] = {
         { .id = COL_ID, .label = GATES_STR_INIT("Id"), .width = 60, .min_width = 40 },
-        { .id = COL_NAME, .label = GATES_STR_INIT("Name"), .width = 150, .min_width = 60 },
+        { .id = COL_NAME, .label = GATES_STR_INIT("Name"), .width = 150, .min_width = 60, .editable = true },
         { .id = COL_SIZE, .label = GATES_STR_INIT("Size"), .width = 80, .min_width = 50 },
         { .id = COL_DATE, .label = GATES_STR_INIT("Date"), .width = 100, .min_width = 60 },
     };
-    gates_view_desc_t vd = { .columns = cols, .column_count = 4, .header = true };
+    gates_view_desc_t vd = { .columns = cols, .column_count = 4, .header = true, .column_menu = true };
     TRY(gates_view_create(t, root, &vd, &a->table));
     TRY(gates_node_set_access_name(t, a->table, GATES_STR("Files")));
     TRY(gates_layout_set_child_grow(t, a->table, 1));
     gates_rows_model_t model = { .user = a, .revision = m_revision, .count = m_count,
-                                 .id_at = m_id_at, .index_of = m_index_of, .cell = m_cell };
+                                 .id_at = m_id_at, .index_of = m_index_of, .cell = m_cell, .set_cell = m_set_cell };
     TRY(gates_view_set_model(t, a->table, &model));
     TRY(gates_widget_set_handler(t, a->table, on_table, a));
 

@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 
 This project follows Keep a Changelog.
 
+## [0.6.0] - 2026-09-30
+
+Data controls (plan-0021, RFC-0005 group 5).
+
+### Added
+
+- Views: cell kinds (`gates_column_desc_t.kind`: check box, progress bar, icon and text) and
+  custom cell painting (`paint`, `gates_cell_paint_t`); editable columns with in-place editing
+  (F2, double click, Enter, Escape, focus leaving commits; Space or a click toggles a check
+  column) through the model's new optional `set_cell`; `gates_view_edit`, `_end_edit`,
+  `_editing`, `_editor`; GATES_EVENT_CELL_EDITED (row in ev->item, column in ev->result).
+- Views: hide, show and reorder columns (`gates_view_set_column_hidden`, `_column_hidden`,
+  `_move_column`, `_column_at`); a header menu (`column_menu`: right press on the header or
+  Shift+F10, `gates_view_open_column_menu`).
+- Property grid (`gates/propgrid.h`): typed fields (text, bool, choice, number) by stable id in
+  collapsible categories, built from the ordinary editors; one handler hears every change
+  (VALUE_CHANGED with the property id).
+- Undo stack (`gates/undo.h`): entries with undo/redo functions and labels, merge runs, a bound,
+  a clean mark, and two commands kept in step ("Undo Rename").
+- Background tasks (`gates/task.h`): work on a platform thread with progress (the latest report
+  wins), a result, cancellation and one on_done on the UI thread; closing the window cancels and
+  joins its tasks. The Win32 window supplies the threads. Message kinds from 0xFFFF0000 up are
+  reserved for them.
+- Manual: chapter 4 (undo), chapter 5 (cells people change, the property grid), chapter 7
+  (background tasks).
+- The gallery's Data & jobs page (an editable table, a property grid, Edit > Undo/Redo and
+  Columns, a background job with Cancel); app_inspector renames records in place.
+
+### Changed
+
+- Saved state lines for tables carry column ids, order and hidden marks
+  ("columns 5:80,1:150,3:120h ..."); the widths-only form still loads.
+- The Text page of the gallery labels its second field "E&mail" (Alt+E opens the new Edit menu).
+
+### Fixed
+
+- A label, button, check box, text box, image, tab page, menu bar, toolbar or status bar whose
+  creation failed for lack of memory could stay in the tree, and the rollback flushed other
+  pending destroys.
+- Commands whose scope node is destroyed are freed with it (a closed dialog no longer keeps its
+  command slots until the tree is destroyed).
+
 ## [0.5.0] - 2026-09-29
 
 Images and native dialogs (plan-0020, RFC-0005 group 4).

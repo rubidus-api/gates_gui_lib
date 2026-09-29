@@ -32,9 +32,9 @@ Windows programs built by `make win` (mingw-w64) into `build/win/`. Every exampl
 | `app_todo` | sample application: a to-do list - Enter adds, Enter or a double click marks done, Delete removes, a context menu, a live status line, saved in `%LOCALAPPDATA%\gates-todo.txt` |
 | `app_calculator` | sample application: a calculator - a grid of buttons with spoken names for the symbols, typed digits and operators, a live result |
 | `app_converter` | sample application: a unit converter - a form whose choices change with the quantity, converting as you type, an error instead of a result for text that is not a number |
-| `gallery` | every control in one window (0.3.0, Inputs page 0.4.0, Pictures page 0.5.0): a menu bar, a toolbar, tabs, a status bar with a clock, tooltips and access keys everywhere; theme and zoom commands; the page, split, columns and window placement kept in `%LOCALAPPDATA%\gates-gallery.ini` |
+| `gallery` | every control in one window (0.3.0, Inputs page 0.4.0, Pictures page 0.5.0, Data & jobs page 0.6.0): a menu bar, a toolbar, tabs, a status bar with a clock, tooltips and access keys everywhere; theme and zoom commands; the page, split, columns and window placement kept in `%LOCALAPPDATA%\gates-gallery.ini` |
 | `app_files` | sample application: a folder browser - a table filled by a worker thread, folders first, sorting by any column, Enter opens a folder, Backspace goes up (files are never opened or changed) |
-| `app_inspector` | reference application: a record table with a detail form; add, shuffle and remove records while the selection follows its record |
+| `app_inspector` | reference application: a record table with a detail form; add, shuffle and remove records while the selection follows its record; rename a record in place (0.6.0) |
 | `app_logview` | reference application: a live log fed by a worker thread - run, pause, flood (the producer skips batches when the queue is full), follow, the selected line in full, a clean exit while flooding |
 | `app_settings` | reference application: a settings form with validation on Save, messages under the fields, a revealed row, Save/Cancel as commands, and a progress bar for required fields |
 | `hello_window` | the smallest window: surface, present, input callbacks |
