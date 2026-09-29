@@ -27,6 +27,7 @@
 #include <gates/task.h>
 #include <gates/text.h>
 #include <gates/text_edit.h>
+#include <gates/text_buffer.h>
 #include <gates/theme.h>
 #include <gates/timer.h>
 #include <gates/tree.h>

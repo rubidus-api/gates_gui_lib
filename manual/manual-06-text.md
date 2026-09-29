@@ -100,3 +100,11 @@ text itself - tests, automation - `gates_input_commit` delivers text as an IME w
 The window provides the platform clipboard (`gates/clipboard.h`): text crosses it as UTF-8 and
 is converted at the edge. A tree without a clipboard provider (headless) makes copy, cut and
 paste do nothing.
+
+## Large texts
+
+`gates/text_buffer.h` holds UTF-8 text of any length a tool edits (up to 1 GiB): a gap buffer
+with an index of line starts, a style byte per byte, marks that move with edits, and search.
+Reading never moves the gap - a range comes back as at most two spans - so a program can read
+the lines it shows while editing elsewhere. The multi-line editor is built on it; a program can
+also use it alone to load, search and change a large text.
