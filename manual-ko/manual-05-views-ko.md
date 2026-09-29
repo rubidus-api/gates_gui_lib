@@ -105,6 +105,9 @@ int main(void) {
 - 표에는 열(`gates_column_desc_t`: id, 이름, 너비, 최소 너비)이 있고 머리줄을 보일 수 있다. 머리
   칸을 누르면 열 id 와 함께 SORT_REQUESTED 가 온다. 응용이 줄을 정렬하고
   `gates_view_model_changed` 를 부른다. 머리 칸의 가장자리를 끌면 열 너비가 바뀐다.
+  `gates_view_set_column_hidden` 과 `gates_view_move_column` 으로 열을 고르고 순서를 정한다. 설명에
+  `column_menu` 를 주면 머리줄을 오른쪽 단추로 누르거나(표에서는 Shift+F10) 열마다 체크 항목이 있는
+  메뉴가 열리고, 마지막으로 보이는 열은 숨길 수 없다. gates/state.h 는 너비, 순서, 숨긴 열을 저장한다.
 - 트리는 모델이 `row_info` 까지 답하는 목록이다. 깊이, 열 수 있는지, 열려 있는지, 불러오는 중인지
   오류인지를 답한다. 열기와 닫기는 요청(EXPAND_REQUESTED)이다. 응용이 펼친 줄들을 바꾸고
   `gates_view_model_changed` 를 부른다. gates 는 보이지 않는 줄을 훑지 않는다.

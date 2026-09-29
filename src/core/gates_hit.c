@@ -387,6 +387,10 @@ gates_node_t gates_input_pointer(gates_tree_t *tree, const gates_pointer_event_t
         return gates_i_handle(tree, was);
     }
 
+    if (ev->action == GATES_POINTER_DOWN && ev->button == GATES_BUTTON_RIGHT && hit != GATES_NONE &&
+        gates_i_slot(tree, hit)->kind == GATES_NODE_VIEW && gates_i_view_context(tree, hit, ev->pos)) {
+        return gates_i_handle(tree, hit); /* the header menu (plan-0021) */
+    }
     if (ev->action == GATES_POINTER_WHEEL) {
         if (hit != GATES_NONE && gates_i_slot(tree, hit)->kind == GATES_NODE_VIEW &&
             gates_i_view_wheel(tree, hit, ev->wheel)) {

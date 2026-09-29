@@ -107,6 +107,10 @@ int main(void) {
 - A table has columns (`gates_column_desc_t`: id, label, width, minimum) and may show a header.
   Clicking a header cell sends SORT_REQUESTED with the column id: the application sorts its
   rows and calls `gates_view_model_changed`. Dragging a header edge resizes a column.
+  `gates_view_set_column_hidden` and `gates_view_move_column` choose and order the columns; with
+  `column_menu` in the description a right press on the header (or Shift+F10 on the table)
+  opens a menu with a checked entry per column, and the last shown column cannot be hidden.
+  gates/state.h saves widths, order and hidden columns.
 - A tree is a list whose model also answers `row_info`: depth, whether the row can open, whether
   it is open, a loading or error state. Opening and closing are requests (EXPAND_REQUESTED):
   the application changes its flattened rows and calls `gates_view_model_changed`. gates never

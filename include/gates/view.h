@@ -145,6 +145,12 @@ typedef struct gates_view_desc_t {
      * changes its rows and calls gates_view_model_changed. Gates never walks
      * rows it does not show. Left/Right do not scroll sideways in a tree. */
     bool tree;
+    /* A header menu (plan-0021): a right press on the header, or Shift+F10 on
+     * the view, opens a menu with a checked entry per column to show or hide
+     * it (the last shown column cannot be hidden). Its entries are commands in
+     * the view's own scope, one per column, with the column ids; every column
+     * needs a label. */
+    bool column_menu;
 } gates_view_desc_t;
 
 /* INVALID_ARG for bad columns (id 0, duplicates); nothing is left on failure. */
@@ -175,6 +181,26 @@ gates_i32 gates_view_column_width(const gates_tree_t *tree, gates_node_t view,
                                   gates_column_id_t column);
 [[nodiscard]] gates_err_t gates_view_set_column_width(gates_tree_t *tree, gates_node_t view,
                                                       gates_column_id_t column, gates_i32 width);
+
+/* -- choosing and ordering columns (plan-0021) ---------------------------------------
+ *
+ * A hidden column takes no space, is not painted or asked for, and is left
+ * out of assistive technology's columns; hiding the column being edited
+ * cancels the edit. INVALID_STATE when the call would hide the last shown
+ * column. Positions count every column, hidden or not, from 0. Widths, order
+ * and hidden marks are saved and loaded by gates_state (gates/state.h). */
+[[nodiscard]] gates_err_t gates_view_set_column_hidden(gates_tree_t *tree, gates_node_t view,
+                                                       gates_column_id_t column, bool hidden);
+bool gates_view_column_hidden(const gates_tree_t *tree, gates_node_t view, gates_column_id_t column);
+/* Moves the column to `position` (the others keep their order). */
+[[nodiscard]] gates_err_t gates_view_move_column(gates_tree_t *tree, gates_node_t view,
+                                                 gates_column_id_t column, gates_u32 position);
+/* The column at `position`, or 0 past the end. */
+gates_column_id_t gates_view_column_at(const gates_tree_t *tree, gates_node_t view, gates_u32 position);
+/* Opens the header menu at `at` (window coordinates), as a right press on the
+ * header would; INVALID_ARG without column_menu. For a "Columns" command. */
+[[nodiscard]] gates_err_t gates_view_open_column_menu(gates_tree_t *tree, gates_node_t view,
+                                                      gates_point_t at, gates_node_t *out_menu);
 
 /* -- editing cells (plan-0021) -------------------------------------------------------
  *

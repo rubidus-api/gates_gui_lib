@@ -1462,7 +1462,7 @@ static void test_state(void) {
     GT_ASSERT(strncmp(text, "# gates state 1\n", 16) == 0);
     GT_ASSERT(strstr(text, "split 620 main split\n") != nullptr);
     GT_ASSERT(strstr(text, "tabs 2 settings.tabs\n") != nullptr);
-    GT_ASSERT(strstr(text, "columns 140,60 files=table\n") != nullptr);
+    GT_ASSERT(strstr(text, "columns 1:140,2:60 files=table\n") != nullptr); /* id:width (plan-0021) */
     GT_ASSERT(strstr(text, "scroll 40 help.scroll\n") != nullptr);
     gates_tree_destroy(t);
 

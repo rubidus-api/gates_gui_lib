@@ -66,9 +66,15 @@ gates_err_t gates_state_save(const gates_tree_t *tree, gates_u8 *buf, gates_usiz
             if (s->kind == GATES_NODE_TABS) {
                 put_num(&o, gates_i_tabs_selected(tree, p->index));
             } else if (s->kind == GATES_NODE_VIEW) {
-                for (gates_u32 k = 0; k < gates_i_view_ncol(tree, p->index); k++) {
+                gates_column_id_t id;
+                gates_i32 w;
+                bool hidden;
+                for (gates_u32 k = 0; gates_i_view_col_info(tree, p->index, k, &id, &w, &hidden); k++) {
                     if (k > 0) put(&o, ",", 1);
-                    put_num(&o, gates_i_view_col_width(tree, p->index, k));
+                    put_num(&o, (gates_i32)id);
+                    put(&o, ":", 1);
+                    put_num(&o, w);
+                    if (hidden) put(&o, "h", 1);
                 }
             } else if (s->layout_kind == GATES_LAYOUT_SPLIT) {
                 put_num(&o, s->split_ratio);
@@ -128,7 +134,33 @@ static bool apply(gates_tree_t *tree, const gates_u8 *line, gates_usize_t n) {
     if (have == nullptr || !word_is(kind, kn, have)) return false;
     gates_node_slot_t *s = gates_i_slot(tree, idx);
     gates_i32 v = 0;
+    if (s->kind == GATES_NODE_VIEW && memchr(val, ':', vn) != nullptr) {
+        /* id:width[h], in display order (plan-0021). */
+        gates_column_id_t ids[64];
+        gates_i32 w[64];
+        bool hid[64];
+        gates_u32 k = 0;
+        gates_usize_t start = 0;
+        for (gates_usize_t i = 0; i <= vn; i++) {
+            if (i < vn && val[i] != ',') continue;
+            const gates_u8 *e = val + start;
+            gates_usize_t en = i - start;
+            gates_usize_t colon = 0;
+            while (colon < en && e[colon] != ':') colon++;
+            hid[k < 64 ? k : 0] = en > 0 && e[en - 1] == 'h';
+            gates_usize_t wn = en - colon - 1 - (hid[k < 64 ? k : 0] ? 1 : 0);
+            gates_i32 id = 0;
+            if (k >= 64 || colon >= en || !parse_num(e, colon, &id) || colon + 1 + wn > en ||
+                !parse_num(e + colon + 1, wn, &w[k])) {
+                return false;
+            }
+            ids[k++] = (gates_column_id_t)id;
+            start = i + 1;
+        }
+        return gates_i_view_apply_cols(tree, idx, ids, w, hid, k);
+    }
     if (s->kind == GATES_NODE_VIEW) {
+        /* The 0.3 format: widths only, by position. */
         gates_u32 ncol = gates_i_view_ncol(tree, idx);
         gates_i32 w[64];
         gates_u32 k = 0;

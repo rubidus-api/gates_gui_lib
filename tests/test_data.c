@@ -8,6 +8,9 @@
 #include <gates/view.h>
 #include <gates/image.h>
 #include <gates/access.h>
+#include <gates/overlay.h>
+#include <gates/state.h>
+#include <gates/command.h>
 #include "gates_test.h"
 #include <proven/heap.h>
 
@@ -778,6 +781,317 @@ static void test_create_failures(void) {
     GT_ASSERT(succeeded);
 }
 
+/* -- choosing and ordering columns (stage 2) ------------------------------------------------ */
+
+static void test_hide_and_move(void) {
+    app_t a;
+    make_app(&a, 6, true);
+    gates_rect_t h_prog = gates_view_part_rect(a.t, a.view, GATES_VIEW_PART_HEADER, 2);
+    GT_ASSERT(gates_view_set_column_hidden(a.t, a.view, 77, true) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(!gates_view_column_hidden(a.t, a.view, C_DONE));
+    /* Hiding Done: no header cell, the columns after it move left by its width. */
+    GT_ASSERT_OK(gates_view_set_column_hidden(a.t, a.view, C_DONE, true));
+    GT_ASSERT_OK(gates_view_set_column_hidden(a.t, a.view, C_DONE, true)); /* again: no change */
+    GT_ASSERT(gates_view_column_hidden(a.t, a.view, C_DONE));
+    layout(a.t);
+    GT_ASSERT(gates_view_part_rect(a.t, a.view, GATES_VIEW_PART_HEADER, 1).w == 0);
+    GT_ASSERT(gates_view_part_rect(a.t, a.view, GATES_VIEW_PART_HEADER, 2).x == h_prog.x - 60);
+    gates_draw_list_t dl;
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    GT_ASSERT_OK(gates_paint_tree(a.t, &dl, theme, be));
+    GT_ASSERT(find_text(&dl, "Done", 0) == nullptr && find_text(&dl, "yes", 0) == nullptr);
+    GT_ASSERT(find_text(&dl, "Progress", 0) != nullptr);
+    /* Assistive technology sees five columns; the second cell is now Progress's text. */
+    gates_access_info_t info;
+    GT_ASSERT_OK(gates_access_info(a.t, a.view, 0, &info));
+    GT_ASSERT(info.column_count == 5);
+    GT_ASSERT_OK(gates_access_info(a.t, a.view, 101, &info));
+    GT_ASSERT(info.column_count == 5);
+    GT_ASSERT(str_is(info.name, "row1, pct, f1.txt, note, note")); /* Done's "yes" is left out */
+    /* A double click where Done was now lands on Progress (not editable): it activates. */
+    gates_rect_t pc = cell_rect(&a, 1, 2);
+    click(a.t, at(pc, 10), 1);
+    click(a.t, at(pc, 10), 2);
+    GT_ASSERT(!gates_view_editing(a.t, a.view, nullptr, nullptr));
+    /* Hiding Progress: a double click on File's cell edits File, not the hidden column before it. */
+    GT_ASSERT_OK(gates_view_set_column_hidden(a.t, a.view, C_PROG, true));
+    layout(a.t);
+    gates_rect_t fcell = cell_rect(&a, 1, 3);
+    click(a.t, at(fcell, 30), 2);
+    gates_column_id_t ecol = 0;
+    GT_ASSERT(gates_view_editing(a.t, a.view, nullptr, &ecol) && ecol == C_FILE);
+    GT_ASSERT_OK(gates_view_end_edit(a.t, a.view, false));
+    GT_ASSERT_OK(gates_view_set_column_hidden(a.t, a.view, C_PROG, false));
+    layout(a.t);
+    /* Space finds no shown check column. */
+    gates_tree_set_focus(a.t, a.view);
+    gates_key_event_t sp = { .key = GATES_KEY_SPACE, .down = true };
+    GT_ASSERT(!gates_input_key(a.t, &sp));
+    sp.down = false;
+    (void)gates_input_key(a.t, &sp);
+    /* The last shown column stays. */
+    GT_ASSERT_OK(gates_view_set_column_hidden(a.t, a.view, C_NAME, true));
+    GT_ASSERT_OK(gates_view_set_column_hidden(a.t, a.view, C_PROG, true));
+    GT_ASSERT_OK(gates_view_set_column_hidden(a.t, a.view, C_FILE, true));
+    GT_ASSERT_OK(gates_view_set_column_hidden(a.t, a.view, C_NOTE, true));
+    GT_ASSERT(gates_view_set_column_hidden(a.t, a.view, C_OWN, true) == PROVEN_ERR_INVALID_STATE);
+    GT_ASSERT(!gates_view_column_hidden(a.t, a.view, C_OWN));
+    GT_ASSERT(!key(a.t, GATES_KEY_F2)); /* no shown editable column */
+    GT_ASSERT(gates_view_edit(a.t, a.view, 101, C_NAME) == PROVEN_ERR_INVALID_ARG); /* hidden */
+    for (gates_column_id_t c = C_NAME; c <= C_NOTE; c++) GT_ASSERT_OK(gates_view_set_column_hidden(a.t, a.view, c, false));
+    /* Hiding the column being edited cancels the edit, without asking the model. */
+    GT_ASSERT_OK(gates_view_edit(a.t, a.view, 101, C_FILE));
+    type(a.t, "gone");
+    GT_ASSERT_OK(gates_view_set_column_hidden(a.t, a.view, C_FILE, true));
+    GT_ASSERT(!gates_view_editing(a.t, a.view, nullptr, nullptr) && a.m.sets == 0);
+    GT_ASSERT(focused(&a, a.view));
+    GT_ASSERT_OK(gates_view_set_column_hidden(a.t, a.view, C_FILE, false));
+    /* Moving: positions count every column; the others keep their order. */
+    GT_ASSERT(gates_view_move_column(a.t, a.view, C_NAME, 6) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_view_move_column(a.t, a.view, 77, 0) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT_OK(gates_view_move_column(a.t, a.view, C_FILE, 0));
+    GT_ASSERT_OK(gates_view_move_column(a.t, a.view, C_FILE, 0)); /* already there */
+    GT_ASSERT_OK(gates_view_move_column(a.t, a.view, C_NAME, 5));
+    gates_column_id_t want[6] = { C_FILE, C_DONE, C_PROG, C_NOTE, C_OWN, C_NAME };
+    for (gates_u32 i = 0; i < 6; i++) GT_ASSERT(gates_view_column_at(a.t, a.view, i) == want[i]);
+    GT_ASSERT(gates_view_column_at(a.t, a.view, 6) == 0);
+    GT_ASSERT(gates_view_column_at(a.t, gates_tree_root(a.t), 0) == 0);
+    layout(a.t);
+    gates_rect_t h0 = gates_view_part_rect(a.t, a.view, GATES_VIEW_PART_HEADER, 0);
+    gates_rect_t body = gates_view_part_rect(a.t, a.view, GATES_VIEW_PART_BODY, 0);
+    GT_ASSERT(h0.x == body.x && h0.w == 120);
+    /* F2 now edits File, the first editable text column in order; the editor follows a move. */
+    gates_tree_set_focus(a.t, a.view);
+    GT_ASSERT_OK(gates_view_set_selected(a.t, a.view, 100));
+    GT_ASSERT(key(a.t, GATES_KEY_F2));
+    gates_column_id_t col = 0;
+    GT_ASSERT(gates_view_editing(a.t, a.view, nullptr, &col) && col == C_FILE);
+    GT_ASSERT_OK(gates_view_move_column(a.t, a.view, C_FILE, 2));
+    GT_ASSERT(gates_view_editing(a.t, a.view, nullptr, nullptr));
+    layout(a.t);
+    gates_rect_t er = gates_node_layout_rect(a.t, gates_view_editor(a.t, a.view));
+    GT_ASSERT(er.x == cell_rect(&a, 0, 2).x + 4 + 16);
+    GT_ASSERT_OK(gates_view_end_edit(a.t, a.view, false));
+    /* A list has no columns to choose. */
+    gates_node_t list;
+    GT_ASSERT_OK(gates_view_create(a.t, gates_tree_root(a.t), &(gates_view_desc_t){0}, &list));
+    GT_ASSERT(gates_view_set_column_hidden(a.t, list, 0, true) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_view_move_column(a.t, list, 0, 0) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_view_open_column_menu(a.t, a.view, (gates_point_t){ 0, 0 }, nullptr) == PROVEN_ERR_INVALID_ARG);
+    gates_draw_list_deinit(&dl);
+    free_app(&a);
+}
+
+/* Trees: the marks and indentation live in the first shown column. */
+static gates_err_t t_row_info(void *u, gates_item_id_t id, gates_row_info_t *out) {
+    (void)u;
+    *out = (gates_row_info_t){ .depth = id == 101 ? 1u : 0u, .expandable = id == 100, .expanded = true,
+                               .parent = id == 101 ? 100 : 0 };
+    return GATES_OK;
+}
+
+static void test_tree_first_column(void) {
+    gates_tree_t *t = nullptr;
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &t));
+    model_t m;
+    fill(&m, 2);
+    gates_column_desc_t tc[] = { { .id = C_NAME, .label = GATES_STR_INIT("Name"), .width = 100, .editable = true },
+                                 { .id = C_NOTE, .label = GATES_STR_INIT("Note"), .width = 100, .editable = true } };
+    gates_node_t v;
+    GT_ASSERT_OK(gates_layout_set(t, gates_tree_root(t), GATES_LAYOUT_KIND_COLUMN));
+    GT_ASSERT_OK(gates_view_create(t, gates_tree_root(t), &(gates_view_desc_t){ .columns = tc, .column_count = 2, .header = true, .tree = true }, &v));
+    GT_ASSERT_OK(gates_layout_set_child_grow(t, v, 1));
+    gates_rows_model_t mb = bind(&m, true);
+    mb.row_info = t_row_info;
+    GT_ASSERT_OK(gates_view_set_model(t, v, &mb));
+    GT_ASSERT_OK(gates_view_set_column_hidden(t, v, C_NAME, true));
+    GT_ASSERT_OK(gates_layout_run(t, (gates_size_t){ VW, VH }, be));
+    gates_draw_list_t dl;
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    GT_ASSERT_OK(gates_paint_tree(t, &dl, theme, be));
+    gates_rect_t r1 = gates_view_part_rect(t, v, GATES_VIEW_PART_ROW, 1);
+    const gates_draw_cmd_t *note = find_text(&dl, "note", r1.y);
+    GT_ASSERT(note != nullptr && note->rect.x == r1.x + 4 + GATES_VIEW_INDENT * 2); /* depth 1, now in Note */
+    /* The editor on the tree column starts after the indentation too. */
+    GT_ASSERT_OK(gates_view_edit(t, v, 101, C_NOTE));
+    GT_ASSERT_OK(gates_layout_run(t, (gates_size_t){ VW, VH }, be));
+    gates_rect_t er = gates_node_layout_rect(t, gates_view_editor(t, v));
+    GT_ASSERT(er.x == r1.x + GATES_VIEW_INDENT * 2 && er.w == 100 - GATES_VIEW_INDENT * 2);
+    /* A press on the mark in the shown first column asks to close the row. */
+    rec_t rec = {0};
+    GT_ASSERT_OK(gates_widget_set_handler(t, v, record, &rec));
+    gates_rect_t r0 = gates_view_part_rect(t, v, GATES_VIEW_PART_ROW, 0);
+    pointer(t, GATES_POINTER_DOWN, (gates_point_t){ r0.x + 4 + 8, r0.y + r0.h / 2 }, 1);
+    pointer(t, GATES_POINTER_UP, (gates_point_t){ r0.x + 4 + 8, r0.y + r0.h / 2 }, 1);
+    (void)gates_tree_dispatch_events(t, 0);
+    GT_ASSERT(count_kind(&rec, GATES_EVENT_EXPAND_REQUESTED) == 1);
+    gates_draw_list_deinit(&dl);
+    gates_tree_destroy(t);
+}
+
+/* -- the header menu ------------------------------------------------------------------------ */
+
+typedef struct count_alloc_t {
+    gates_allocator_t inner;
+    long live;
+} count_alloc_t;
+
+static proven_result_mem_mut_t ca_alloc(void *ctx, proven_size_t size, proven_size_t align) {
+    count_alloc_t *c = ctx;
+    proven_result_mem_mut_t r = c->inner.alloc_fn(c->inner.ctx, size, align);
+    if (proven_is_ok(r.err)) c->live++;
+    return r;
+}
+static proven_result_mem_mut_t ca_realloc(void *ctx, void *p, proven_size_t os, proven_size_t ns, proven_size_t align) {
+    count_alloc_t *c = ctx;
+    proven_result_mem_mut_t r = c->inner.realloc_fn(c->inner.ctx, p, os, ns, align);
+    if (proven_is_ok(r.err) && p == nullptr) c->live++;
+    return r;
+}
+static void ca_free(void *ctx, void *p) {
+    count_alloc_t *c = ctx;
+    if (p != nullptr) c->live--;
+    c->inner.free_fn(c->inner.ctx, p);
+}
+
+static void test_column_menu(void) {
+    make_cols(nullptr);
+    gates_tree_t *t = nullptr;
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &t));
+    gates_node_t root = gates_tree_root(t), v;
+    GT_ASSERT_OK(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN));
+    /* Every column needs a label for its entry. */
+    gates_column_desc_t nolabel[] = { { .id = 1 } };
+    GT_ASSERT(gates_view_create(t, root, &(gates_view_desc_t){ .columns = nolabel, .column_count = 1, .column_menu = true }, &v) ==
+              PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT_OK(gates_view_create(t, root, &(gates_view_desc_t){ .columns = cols, .column_count = 6, .header = true, .column_menu = true }, &v));
+    GT_ASSERT_OK(gates_layout_set_child_grow(t, v, 1));
+    model_t m;
+    fill(&m, 4);
+    gates_rows_model_t mb = bind(&m, true);
+    GT_ASSERT_OK(gates_view_set_model(t, v, &mb));
+    layout(t);
+    /* A right press in the rows opens nothing; on the header, the menu with an entry per column. */
+    gates_rect_t row = gates_view_part_rect(t, v, GATES_VIEW_PART_ROW, 0);
+    gates_pointer_event_t rp = { .action = GATES_POINTER_DOWN, .button = GATES_BUTTON_RIGHT, .pos = at(row, 10) };
+    (void)gates_input_pointer(t, &rp);
+    GT_ASSERT(gates_tree_overlay_count(t) == 0);
+    rp.pos = at(gates_view_part_rect(t, v, GATES_VIEW_PART_HEADER, 1), 5);
+    GT_ASSERT(gates_node_eq(gates_input_pointer(t, &rp), v));
+    GT_ASSERT(gates_tree_overlay_count(t) == 1);
+    gates_tree_dismiss_menus(t); /* the same menu, reopened to get its node */
+    (void)gates_tree_dispatch_events(t, 0);
+    gates_node_t menu = GATES_NODE_NULL;
+    GT_ASSERT_OK(gates_view_open_column_menu(t, v, rp.pos, &menu));
+    GT_ASSERT(gates_access_item_count(t, menu) == 6);
+    for (gates_u32 i = 0; i < 6; i++) GT_ASSERT(gates_access_item_at(t, menu, i) == cols[i].id);
+    GT_ASSERT(gates_command_checked(t, v, C_DONE));
+    /* Choosing Done hides it; its entry is unchecked next time. */
+    GT_ASSERT_OK(gates_access_invoke(t, menu, C_DONE));
+    (void)gates_tree_dispatch_events(t, 0);
+    GT_ASSERT(gates_view_column_hidden(t, v, C_DONE));
+    GT_ASSERT(!gates_command_checked(t, v, C_DONE));
+    GT_ASSERT(gates_tree_overlay_count(t) == 0);
+    /* The last shown column's entry is disabled. */
+    for (gates_column_id_t c = C_NAME; c <= C_NOTE; c++) (void)gates_view_set_column_hidden(t, v, c, true);
+    GT_ASSERT(gates_view_column_hidden(t, v, C_NOTE) && !gates_view_column_hidden(t, v, C_OWN));
+    GT_ASSERT(!gates_command_enabled(t, v, C_OWN) && gates_command_enabled(t, v, C_NAME));
+    GT_ASSERT_OK(gates_view_set_column_hidden(t, v, C_NAME, false));
+    GT_ASSERT(gates_command_enabled(t, v, C_OWN));
+    /* Shift+F10 on the view opens it too (F10 alone does not). */
+    gates_tree_set_focus(t, v);
+    gates_key_event_t f10 = { .key = GATES_KEY_F10, .down = true };
+    GT_ASSERT(!gates_input_key(t, &f10));
+    GT_ASSERT(gates_tree_overlay_count(t) == 0);
+    gates_key_event_t sf10 = { .key = GATES_KEY_F10, .down = true, .shift = true };
+    GT_ASSERT(gates_input_key(t, &sf10));
+    GT_ASSERT(gates_tree_overlay_count(t) == 1);
+    gates_tree_dismiss_menus(t);
+    (void)gates_tree_dispatch_events(t, 0);
+    /* The program opens it for a "Columns" command. */
+    gates_node_t opened = GATES_NODE_NULL;
+    GT_ASSERT_OK(gates_view_open_column_menu(t, v, (gates_point_t){ 10, 10 }, &opened));
+    GT_ASSERT(gates_node_kind(t, opened) == GATES_NODE_MENU);
+    gates_tree_dismiss_menus(t);
+    (void)gates_tree_dispatch_events(t, 0);
+    /* Disabled: a right press on the header opens nothing. */
+    GT_ASSERT_OK(gates_widget_set_disabled(t, v, true));
+    (void)gates_input_pointer(t, &rp);
+    GT_ASSERT(gates_tree_overlay_count(t) == 0);
+    gates_tree_destroy(t);
+
+    /* Without column_menu: Shift+F10 is not the view's, a right press opens nothing. */
+    app_t a;
+    make_app(&a, 3, true);
+    gates_tree_set_focus(a.t, a.view);
+    GT_ASSERT(!gates_input_key(a.t, &sf10));
+    rp.pos = at(gates_view_part_rect(a.t, a.view, GATES_VIEW_PART_HEADER, 0), 5);
+    (void)gates_input_pointer(a.t, &rp);
+    GT_ASSERT(gates_tree_overlay_count(a.t) == 0);
+    free_app(&a);
+
+    /* The menu's commands go with the view: nothing stays allocated after it is destroyed. */
+    count_alloc_t ca = { .inner = proven_heap_allocator() };
+    gates_allocator_t al = { .ctx = &ca, .alloc_fn = ca_alloc, .realloc_fn = ca_realloc, .free_fn = ca_free };
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){ .allocator = al }, &t));
+    long base = -1;
+    for (int round = 0; round < 3; round++) {
+        GT_ASSERT_OK(gates_view_create(t, gates_tree_root(t), &(gates_view_desc_t){ .columns = cols, .column_count = 6, .column_menu = true }, &v));
+        GT_ASSERT_OK(gates_node_destroy(t, v));
+        GT_ASSERT_OK(gates_tree_flush_destroys(t));
+        if (round == 0) base = ca.live; /* the pools have grown once */
+    }
+    GT_ASSERT(ca.live == base);
+    gates_tree_destroy(t);
+    GT_ASSERT(ca.live == 0);
+}
+
+/* -- saved columns -------------------------------------------------------------------------- */
+
+static void test_column_state(void) {
+    app_t a;
+    make_app(&a, 3, true);
+    GT_ASSERT_OK(gates_node_set_automation_id(a.t, a.view, GATES_STR("files")));
+    GT_ASSERT_OK(gates_view_move_column(a.t, a.view, C_NOTE, 0));
+    GT_ASSERT_OK(gates_view_set_column_hidden(a.t, a.view, C_PROG, true));
+    GT_ASSERT_OK(gates_view_set_column_width(a.t, a.view, C_NAME, 150));
+    char text[512];
+    gates_usize_t need = 0;
+    GT_ASSERT_OK(gates_state_save(a.t, (gates_u8 *)text, sizeof text - 1, &need));
+    text[need] = 0;
+    GT_ASSERT(strstr(text, "columns 5:80,1:150,2:60,3:120h,4:120,6:60 files\n") != nullptr);
+    free_app(&a);
+    /* A fresh start takes back order, widths and hidden marks. */
+    make_app(&a, 3, true);
+    GT_ASSERT_OK(gates_node_set_automation_id(a.t, a.view, GATES_STR("files")));
+    gates_u32 applied = 0;
+    GT_ASSERT_OK(gates_state_load(a.t, (gates_str_t){ (const gates_u8 *)text, need }, &applied));
+    GT_ASSERT(applied == 1);
+    GT_ASSERT(gates_view_column_at(a.t, a.view, 0) == C_NOTE && gates_view_column_at(a.t, a.view, 1) == C_NAME);
+    GT_ASSERT(gates_view_column_hidden(a.t, a.view, C_PROG) && gates_view_column_width(a.t, a.view, C_NAME) == 150);
+    /* Damaged or foreign lines are skipped; a partial line moves the named columns first. */
+    const char *junk = "columns 99:50 files\n"            /* no such column */
+                       "columns 1:50h,2:50h,3:50h,4:50h,5:50h,6:50h files\n" /* every column hidden */
+                       "columns 1:x files\n"
+                       "columns 0:50 files\n"
+                       "columns 1:50,2 files\n"
+                       "columns 1: files\n"
+                       "columns 1:h files\n"
+                       "columns 6:77,99:10,6:1 files\n";   /* applied: Own first, unknown and repeats skipped */
+    GT_ASSERT_OK(gates_state_load(a.t, (gates_str_t){ (const gates_u8 *)junk, strlen(junk) }, &applied));
+    GT_ASSERT(applied == 1);
+    GT_ASSERT(gates_view_column_at(a.t, a.view, 0) == C_OWN && gates_view_column_width(a.t, a.view, C_OWN) == 77);
+    GT_ASSERT(gates_view_column_at(a.t, a.view, 1) == C_NOTE && gates_view_column_at(a.t, a.view, 2) == C_NAME);
+    GT_ASSERT(gates_view_column_hidden(a.t, a.view, C_PROG)); /* not named: kept */
+    /* The 0.5 format (widths by position) still loads. */
+    const char *old = "columns 10,20,30,40,50,60 files\n";
+    GT_ASSERT_OK(gates_state_load(a.t, (gates_str_t){ (const gates_u8 *)old, strlen(old) }, &applied));
+    GT_ASSERT(applied == 1); /* order Own, Note, Name, Done, Progress, File */
+    GT_ASSERT(gates_view_column_width(a.t, a.view, C_NAME) == 30 && gates_view_column_width(a.t, a.view, C_FILE) == 60);
+    GT_ASSERT(gates_view_column_hidden(a.t, a.view, C_PROG)); /* widths only */
+    free_app(&a);
+}
+
 int main(void) {
     be = gates_text_backend_builtin();
     theme = gates_theme_light();
@@ -790,5 +1104,9 @@ int main(void) {
     test_checks();
     test_scroll_and_model();
     test_create_failures();
+    test_hide_and_move();
+    test_tree_first_column();
+    test_column_menu();
+    test_column_state();
     return gt_report("test_data");
 }

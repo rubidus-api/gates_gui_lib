@@ -7,6 +7,8 @@
 #include <gates/layout.h>
 #include <gates/widget.h>
 #include <gates/access.h>
+#include <gates/overlay.h>
+#include <gates/command.h>
 #include "gates_tree_internal.h"
 
 #include <string.h>
@@ -28,6 +30,7 @@ typedef struct gates_i_column {
     bool editable;
     gates_cell_paint_fn paint;
     void *paint_user;
+    bool hidden;                 /* takes no space, not painted, not in accessibility */
 } gates_i_column_t;
 
 /* Log view ring (stage 2): lines in arrival order, ids consecutive. */
@@ -71,6 +74,8 @@ struct gates_i_view {
     gates_item_id_t edit_id;
     gates_column_id_t edit_col;
     gates_u32 edit_rev;          /* the editor's revision when it opened */
+    bool column_menu;            /* the header menu: commands in the view's own scope */
+    gates_node_t self;
 };
 
 typedef struct view_geom_t {
@@ -87,6 +92,7 @@ typedef struct view_geom_t {
 } view_geom_t;
 
 static gates_err_t end_edit(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v, bool commit, bool left);
+static void on_column_command(gates_tree_t *tree, gates_command_id_t id, void *user);
 
 /* -- state -------------------------------------------------------------------------- */
 
@@ -154,11 +160,37 @@ static gates_i32 row_height(gates_i32 line_height) {
     return h < GATES_ACCESS_MIN_TARGET ? GATES_ACCESS_MIN_TARGET : h; /* WCAG 2.5.8 */
 }
 
+/* A column's width on screen: 0 while hidden. */
+static gates_i32 shown_w(const gates_i_column_t *c) {
+    return c->hidden ? 0 : c->width;
+}
+
 static gates_i32 content_width(const struct gates_i_view *v, gates_i32 body_w) {
     if (v->ncol == 0) return body_w;
     gates_i32 w = 0;
-    for (gates_u32 i = 0; i < v->ncol; i++) w += v->cols[i].width;
+    for (gates_u32 i = 0; i < v->ncol; i++) w += shown_w(&v->cols[i]);
     return w;
+}
+
+/* Visible columns: how many, and the position of the k-th (or -1). */
+static gates_u32 nvisible(const struct gates_i_view *v) {
+    gates_u32 n = 0;
+    for (gates_u32 i = 0; i < v->ncol; i++) n += v->cols[i].hidden ? 0u : 1u;
+    return n;
+}
+
+static gates_i32 visible_at(const struct gates_i_view *v, gates_u32 k) {
+    for (gates_u32 i = 0; i < v->ncol; i++) {
+        if (v->cols[i].hidden) continue;
+        if (k-- == 0) return (gates_i32)i;
+    }
+    return -1;
+}
+
+/* A tree's marks and indentation go in the first visible column. */
+static gates_u32 tree_col(const struct gates_i_view *v) {
+    gates_i32 c = visible_at(v, 0);
+    return c > 0 ? (gates_u32)c : 0;
 }
 
 static void geom(const gates_tree_t *tree, gates_u32 idx, const struct gates_i_view *v,
@@ -222,12 +254,12 @@ static void geom(const gates_tree_t *tree, gates_u32 idx, const struct gates_i_v
 /* Left edge of column position c (window x), after horizontal scrolling. */
 static gates_i32 col_left(const struct gates_i_view *v, const view_geom_t *g, gates_u32 c) {
     gates_i32 x = g->body.x - g->scroll_x;
-    for (gates_u32 i = 0; i < c && i < v->ncol; i++) x += v->cols[i].width;
+    for (gates_u32 i = 0; i < c && i < v->ncol; i++) x += shown_w(&v->cols[i]);
     return x;
 }
 
 static gates_i32 col_width(const struct gates_i_view *v, const view_geom_t *g, gates_u32 c) {
-    return v->ncol == 0 ? g->body.w : v->cols[c].width;
+    return v->ncol == 0 ? g->body.w : shown_w(&v->cols[c]);
 }
 
 static void geom_now(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v, view_geom_t *g) {
@@ -251,7 +283,8 @@ gates_err_t gates_view_create(gates_tree_t *tree, gates_node_t parent, const gat
         const gates_column_desc_t *c = &desc->columns[i];
         if (c->id == 0 || (c->label.size > 0 && c->label.ptr == nullptr) ||
             (gates_u32)c->kind > (gates_u32)GATES_CELL_ICON_TEXT ||
-            (c->editable && c->kind == GATES_CELL_PROGRESS)) {
+            (c->editable && c->kind == GATES_CELL_PROGRESS) ||
+            (desc->column_menu && c->label.size == 0)) {
             return PROVEN_ERR_INVALID_ARG;
         }
         for (gates_u32 k = 0; k < i; k++) {
@@ -271,6 +304,7 @@ gates_err_t gates_view_create(gates_tree_t *tree, gates_node_t parent, const gat
     v->tree = desc->tree;
     v->press_col = -1;
     v->editor = GATES_NONE;
+    v->column_menu = desc->column_menu && desc->column_count > 0;
     bool wants_editor = false;
     gates_err_t err = GATES_OK;
     if (desc->column_count > 0) {
@@ -313,6 +347,13 @@ gates_err_t gates_view_create(gates_tree_t *tree, gates_node_t parent, const gat
             gates_i_state(tree, state)->view = v;
             owned = true;
         }
+    }
+    if (gates_is_ok(err)) v->self = node;
+    for (gates_u32 i = 0; gates_is_ok(err) && v->column_menu && i < v->ncol; i++) {
+        gates_command_desc_t cd = { .id = v->cols[i].id,
+                                    .label = (gates_str_t){ .ptr = v->cols[i].label, .size = v->cols[i].label_len },
+                                    .enabled = true, .checked = true, .invoke = on_column_command, .user = v };
+        err = gates_command_register(tree, node, &cd); /* freed with the node */
     }
     if (gates_is_ok(err) && wants_editor) {
         gates_node_t box = GATES_NODE_NULL;
@@ -519,7 +560,7 @@ gates_rect_t gates_view_part_rect(const gates_tree_t *tree, gates_node_t view,
         return (gates_rect_t){ g.body.x, g.body.y + (gates_i32)(index - g.first) * g.row_h,
                                g.body.w, g.row_h };
     case GATES_VIEW_PART_HEADER:
-        if (g.header.h == 0 || index >= v->ncol) return none;
+        if (g.header.h == 0 || index >= v->ncol || v->cols[index].hidden) return none;
         return (gates_rect_t){ col_left(v, &g, (gates_u32)index), g.header.y,
                                v->cols[index].width, g.header.h };
     case GATES_VIEW_PART_VTHUMB:
@@ -588,6 +629,7 @@ gates_err_t gates_i_view_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
         TRY_DRAW(gates_draw_rect(dl, g.header, gates_theme_color(theme, GATES_COLOR_PANEL_BG)));
         TRY_DRAW(gates_draw_clip_push(dl, g.header));
         for (gates_u32 c = 0; c < v->ncol; c++) {
+            if (v->cols[c].hidden) continue;
             gates_rect_t hc = { col_left(v, &g, c), g.header.y, v->cols[c].width, g.header.h };
             TRY_DRAW(gates_draw_rect(dl, (gates_rect_t){ hc.x + hc.w - 1, hc.y, 1, hc.h },
                                      gates_theme_color(theme, GATES_COLOR_CONTROL_BORDER)));
@@ -628,7 +670,7 @@ gates_err_t gates_i_view_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
     for (gates_u32 c = 0; c < ncol; c++) {
         gates_rect_t cr = { col_left(v, &g, c), g.body.y, col_width(v, &g, c), g.body.h };
         gates_rect_t clip = gates_rect_intersect(cr, g.body);
-        if (gates_rect_is_empty(clip)) continue; /* scrolled out: not asked for */
+        if (gates_rect_is_empty(clip)) continue; /* scrolled out or hidden: not asked for */
         gates_column_id_t cid = v->ncol > 0 ? v->cols[c].id : 0;
         const gates_i_column_t *col = v->ncol > 0 ? &v->cols[c] : nullptr;
         TRY_DRAW(gates_draw_clip_push(dl, clip));
@@ -652,7 +694,7 @@ gates_err_t gates_i_view_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
                                      : infos[k].state == GATES_ROW_LOADING ? GATES_COLOR_CONTROL_DISABLED_FG
                                      : infos[k].state == GATES_ROW_ERROR   ? GATES_COLOR_ERROR
                                                                            : GATES_COLOR_CONTROL_FG;
-            gates_i32 indent = v->tree && c == 0 ? tree_text_indent(&infos[k]) : 0;
+            gates_i32 indent = v->tree && c == tree_col(v) ? tree_text_indent(&infos[k]) : 0;
             gates_i32 x = cr.x + VIEW_CELL_PAD + indent;
             gates_i32 right = cr.x + cr.w - VIEW_CELL_PAD;
             gates_cell_kind_t kind = col != nullptr ? col->kind : GATES_CELL_TEXT;
@@ -697,7 +739,7 @@ gates_err_t gates_i_view_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
                                                          right - x, m.line_height },
                                      cell.text, font, gates_theme_color(theme, fg)));
         }
-        if (v->tree && c == 0) {
+        if (v->tree && c == tree_col(v)) {
             for (gates_u32 k = 0; k < g.painted; k++) {
                 if (!infos[k].expandable) continue;
                 gates_color_token_t mt = (gates_i32)k == sel_k ? GATES_COLOR_SELECTION_FG
@@ -830,7 +872,7 @@ static gates_i32 col_pos(const struct gates_i_view *v, gates_column_id_t id) {
 /* Column position `c` can be edited as text, or toggled as a check. */
 static bool can_edit(const struct gates_i_view *v, gates_i32 c, bool text) {
     return c >= 0 && (gates_u32)c < v->ncol && v->has_model && v->model.set_cell != nullptr &&
-           v->cols[c].editable && (text ? text_kind(v->cols[c].kind) && v->editor != GATES_NONE
+           v->cols[c].editable && !v->cols[c].hidden && (text ? text_kind(v->cols[c].kind) && v->editor != GATES_NONE
                                         : v->cols[c].kind == GATES_CELL_CHECK);
 }
 
@@ -845,7 +887,9 @@ static gates_i32 first_editable(const struct gates_i_view *v, bool text) {
 /* Where a tree row's first cell starts its content (0 elsewhere). */
 static gates_i32 row_indent(const struct gates_i_view *v, gates_i32 c, gates_item_id_t id) {
     gates_row_info_t info = {0};
-    if (!v->tree || c != 0 || !gates_is_ok(v->model.row_info(v->model.user, id, &info))) return 0;
+    if (!v->tree || (gates_u32)c != tree_col(v) || !gates_is_ok(v->model.row_info(v->model.user, id, &info))) {
+        return 0;
+    }
     return tree_text_indent(&info);
 }
 
@@ -958,7 +1002,7 @@ bool gates_i_view_editor_key(gates_tree_t *tree, gates_u32 idx, const gates_key_
 /* Scrolls sideways so column position c is in view (as much of it as fits). */
 static void column_into_view(struct gates_i_view *v, const view_geom_t *g, gates_i32 c) {
     gates_i32 left = 0;
-    for (gates_i32 i = 0; i < c; i++) left += v->cols[i].width;
+    for (gates_i32 i = 0; i < c; i++) left += shown_w(&v->cols[i]);
     gates_i32 x = g->scroll_x;
     if (left + v->cols[c].width > x + g->body.w) x = left + v->cols[c].width - g->body.w;
     if (left < x) x = left;
@@ -1100,6 +1144,14 @@ bool gates_i_view_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t
         if (err == PROVEN_ERR_NOMEM) tree->input_error = err;
         return true;
     }
+    case GATES_KEY_F10:
+        if (!ev->shift || !v->column_menu) return false;
+        {
+            gates_err_t err = gates_view_open_column_menu(tree, gates_i_handle(tree, idx),
+                                                          (gates_point_t){ g.header.x, g.header.y + g.header.h }, nullptr);
+            if (!gates_is_ok(err)) tree->input_error = err;
+        }
+        return true;
     case GATES_KEY_SPACE: {
         gates_i32 c = first_editable(v, false);
         if (ev->shift || c < 0 || v->sel == 0) return false;
@@ -1148,7 +1200,7 @@ bool gates_i_view_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t
 static gates_i32 body_col_at(const struct gates_i_view *v, const view_geom_t *g, gates_point_t p) {
     for (gates_u32 c = 0; c < v->ncol; c++) {
         gates_i32 x0 = col_left(v, g, c);
-        if (p.x >= x0 && p.x < x0 + v->cols[c].width) return (gates_i32)c;
+        if (!v->cols[c].hidden && p.x >= x0 && p.x < x0 + v->cols[c].width) return (gates_i32)c;
     }
     return -1;
 }
@@ -1159,6 +1211,7 @@ static gates_i32 header_col_at(const struct gates_i_view *v, const view_geom_t *
     *edge = false;
     if (g->header.h == 0 || !gates_rect_contains(g->header, p)) return -1;
     for (gates_u32 c = 0; c < v->ncol; c++) {
+        if (v->cols[c].hidden) continue;
         gates_i32 x0 = col_left(v, g, c), x1 = x0 + v->cols[c].width;
         if (p.x >= x1 - VIEW_EDGE && p.x <= x1 + VIEW_EDGE) {
             *edge = true;
@@ -1225,7 +1278,7 @@ bool gates_i_view_pointer_down(gates_tree_t *tree, gates_u32 idx, gates_point_t 
             gates_row_info_t info = {0};
             if (id != 0 && gates_is_ok(v->model.row_info(v->model.user, id, &info)) &&
                 info.expandable) {
-                gates_i32 mx = col_left(v, &g, 0) + tree_mark_x(&info);
+                gates_i32 mx = col_left(v, &g, tree_col(v)) + tree_mark_x(&info);
                 if (p.x >= mx && p.x < mx + GATES_VIEW_INDENT) {
                     request_expand(tree, idx, id, !info.expanded);
                     return true;
@@ -1577,7 +1630,7 @@ bool gates_i_view_item(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id, ga
     out->count = g.count;
     out->shown = shown;
     out->selected = id == v->sel;
-    out->columns = v->ncol > 0 ? v->ncol : 1;
+    out->columns = v->ncol > 0 ? nvisible(v) : 1;
     if (shown) {
         out->rect = (gates_rect_t){ g.body.x, g.body.y + (gates_i32)(row - g.first) * g.row_h, g.body.w, g.row_h };
     }
@@ -1592,8 +1645,9 @@ gates_str_t gates_i_view_cell(gates_tree_t *tree, gates_u32 idx, gates_item_id_t
     gates_i_view_item_t it;
     if (v == nullptr || !gates_i_view_item(tree, idx, id, &it) || !it.shown) return (gates_str_t){0};
     gates_cell_t cell = {0};
-    gates_column_id_t cid = v->ncol > 0 ? (col < v->ncol ? v->cols[col].id : 0) : 0;
-    if (v->ncol > 0 && col >= v->ncol) return (gates_str_t){0};
+    gates_i32 pos = v->ncol > 0 ? visible_at(v, col) : 0; /* the col-th visible column */
+    if (pos < 0) return (gates_str_t){0};
+    gates_column_id_t cid = v->ncol > 0 ? v->cols[pos].id : 0;
     return gates_is_ok(v->model.cell(v->model.user, id, cid, &cell)) ? cell.text : (gates_str_t){0};
 }
 
@@ -1701,4 +1755,153 @@ void gates_i_view_set_col_width(gates_tree_t *tree, gates_u32 idx, gates_u32 k, 
     gates_i_column_t *c = &st->view->cols[k];
     c->width = width < c->min_width ? c->min_width : width;
     gates_i_mark_dirty(tree, idx, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
+}
+
+/* The saved state (plan-0021): each column's id, width and hidden mark, in order. */
+bool gates_i_view_col_info(const gates_tree_t *tree, gates_u32 idx, gates_u32 k, gates_column_id_t *id,
+                           gates_i32 *width, bool *hidden) {
+    const gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
+    if (st == nullptr || st->view == nullptr || k >= st->view->ncol) return false;
+    const gates_i_column_t *c = &st->view->cols[k];
+    *id = c->id;
+    *width = c->width;
+    *hidden = c->hidden;
+    return true;
+}
+
+static void sync_menu(gates_tree_t *tree, struct gates_i_view *v) {
+    if (!v->column_menu) return;
+    bool last = nvisible(v) == 1;
+    for (gates_u32 i = 0; i < v->ncol; i++) {
+        (void)gates_command_set_checked(tree, v->self, v->cols[i].id, !v->cols[i].hidden);
+        (void)gates_command_set_enabled(tree, v->self, v->cols[i].id, !(last && !v->cols[i].hidden));
+    }
+}
+
+/* After columns moved or were hidden: the edit follows its column, or ends with it. */
+static void columns_changed(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v) {
+    v->press_col = -1;
+    if (tree->drag_node == idx && tree->drag_kind == GATES_DRAG_VIEW_COLUMN) {
+        tree->drag_kind = GATES_DRAG_NONE;
+        tree->drag_node = GATES_NONE;
+    }
+    if (v->editing && v->cols[col_pos(v, v->edit_col)].hidden) {
+        (void)end_edit(tree, idx, v, false, false); /* never a model call from here */
+    }
+    sync_menu(tree, v);
+    gates_i_mark_dirty(tree, idx, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
+}
+
+/* Applies saved columns: those named take the first places in the given
+ * order with their widths and marks; the rest follow as they were. false when
+ * nothing matched or every column would be hidden. */
+bool gates_i_view_apply_cols(gates_tree_t *tree, gates_u32 idx, const gates_column_id_t *ids, const gates_i32 *widths,
+                             const bool *hidden, gates_u32 n) {
+    struct gates_i_view *v = view_at(tree, idx);
+    if (v == nullptr || v->ncol == 0) return false;
+    gates_u32 matched = 0, shown = 0;
+    for (gates_u32 i = 0; i < v->ncol; i++) {
+        bool named = false, hide = v->cols[i].hidden;
+        for (gates_u32 k = 0; k < n; k++) {
+            if (ids[k] == v->cols[i].id) {
+                named = true;
+                hide = hidden[k];
+            }
+        }
+        matched += named ? 1u : 0u;
+        shown += hide ? 0u : 1u;
+    }
+    if (matched == 0 || shown == 0) return false;
+    gates_u32 place = 0;
+    for (gates_u32 k = 0; k < n; k++) {
+        gates_i32 c = col_pos(v, ids[k]);
+        if (c < 0 || (gates_u32)c < place) continue; /* unknown, or named twice */
+        gates_i_column_t moved = v->cols[c];
+        memmove(&v->cols[place + 1], &v->cols[place], (gates_usize_t)((gates_u32)c - place) * sizeof moved);
+        moved.width = widths[k] < moved.min_width ? moved.min_width : widths[k];
+        moved.hidden = hidden[k];
+        v->cols[place++] = moved;
+    }
+    columns_changed(tree, idx, v);
+    return true;
+}
+
+static struct gates_i_view *table_of(const gates_tree_t *tree, gates_node_t view) {
+    struct gates_i_view *v = view_of(tree, view);
+    return v != nullptr && v->ncol > 0 ? v : nullptr;
+}
+
+gates_err_t gates_view_set_column_hidden(gates_tree_t *tree, gates_node_t view, gates_column_id_t column,
+                                         bool hidden) {
+    struct gates_i_view *v = table_of(tree, view);
+    gates_i32 c = v != nullptr ? col_pos(v, column) : -1;
+    if (c < 0) return PROVEN_ERR_INVALID_ARG;
+    if (v->cols[c].hidden == hidden) return GATES_OK;
+    if (hidden && nvisible(v) == 1) return PROVEN_ERR_INVALID_STATE; /* one column stays */
+    v->cols[c].hidden = hidden;
+    columns_changed(tree, view.index, v);
+    return GATES_OK;
+}
+
+bool gates_view_column_hidden(const gates_tree_t *tree, gates_node_t view, gates_column_id_t column) {
+    struct gates_i_view *v = table_of(tree, view);
+    gates_i32 c = v != nullptr ? col_pos(v, column) : -1;
+    return c >= 0 && v->cols[c].hidden;
+}
+
+gates_err_t gates_view_move_column(gates_tree_t *tree, gates_node_t view, gates_column_id_t column,
+                                   gates_u32 position) {
+    struct gates_i_view *v = table_of(tree, view);
+    gates_i32 c = v != nullptr ? col_pos(v, column) : -1;
+    if (c < 0 || position >= v->ncol) return PROVEN_ERR_INVALID_ARG;
+    if ((gates_u32)c == position) return GATES_OK;
+    gates_i_column_t moved = v->cols[c];
+    if ((gates_u32)c < position) {
+        memmove(&v->cols[c], &v->cols[c + 1], (gates_usize_t)(position - (gates_u32)c) * sizeof moved);
+    } else {
+        memmove(&v->cols[position + 1], &v->cols[position], (gates_usize_t)((gates_u32)c - position) * sizeof moved);
+    }
+    v->cols[position] = moved;
+    columns_changed(tree, view.index, v);
+    return GATES_OK;
+}
+
+gates_column_id_t gates_view_column_at(const gates_tree_t *tree, gates_node_t view, gates_u32 position) {
+    struct gates_i_view *v = table_of(tree, view);
+    return v != nullptr && position < v->ncol ? v->cols[position].id : 0;
+}
+
+gates_err_t gates_view_open_column_menu(gates_tree_t *tree, gates_node_t view, gates_point_t at,
+                                        gates_node_t *out_menu) {
+    struct gates_i_view *v = table_of(tree, view);
+    if (out_menu != nullptr) *out_menu = GATES_NODE_NULL;
+    if (v == nullptr || !v->column_menu) return PROVEN_ERR_INVALID_ARG;
+    gates_command_id_t ids[64];
+    gates_u32 n = 0;
+    for (gates_u32 i = 0; i < v->ncol && n < 64; i++) ids[n++] = v->cols[i].id; /* in their order */
+    sync_menu(tree, v);
+    gates_node_t menu = GATES_NODE_NULL;
+    gates_err_t err = gates_menu_open(tree, at, view, ids, n, &menu);
+    if (gates_is_ok(err) && out_menu != nullptr) *out_menu = menu;
+    return err;
+}
+
+/* A header menu entry: show or hide its column. */
+static void on_column_command(gates_tree_t *tree, gates_command_id_t id, void *user) {
+    struct gates_i_view *v = user;
+    (void)gates_view_set_column_hidden(tree, v->self, id, !gates_view_column_hidden(tree, v->self, id));
+}
+
+/* A right press on the header opens the column menu there. */
+bool gates_i_view_context(gates_tree_t *tree, gates_u32 idx, gates_point_t p) {
+    struct gates_i_view *v = view_at(tree, idx);
+    if (v == nullptr || !v->column_menu || gates_i_state(tree, gates_i_slot(tree, idx)->state_index)->disabled) {
+        return false;
+    }
+    view_geom_t g;
+    geom_now(tree, idx, v, &g);
+    if (!gates_rect_contains(g.header, p)) return false;
+    gates_err_t err = gates_view_open_column_menu(tree, v->self, p, nullptr);
+    if (!gates_is_ok(err)) tree->input_error = err;
+    return true;
 }

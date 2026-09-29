@@ -217,6 +217,7 @@ static gates_err_t pool_alloc(gates_tree_t *tree, gates_u32 *out_idx) {
 static void pool_free_slot(gates_tree_t *tree, gates_u32 idx) {
     gates_node_slot_t *s = gates_i_slot(tree, idx);
     gates_i_state_release(tree, s->state_index);
+    gates_i_commands_drop_scope(tree, idx, s->generation);
     if (tree->hover == idx) {
         tree->hover = GATES_NONE;
     }

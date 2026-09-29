@@ -139,6 +139,16 @@ gates_err_t gates_command_register(gates_tree_t *tree, gates_node_t scope,
     return GATES_OK;
 }
 
+void gates_i_commands_drop_scope(gates_tree_t *tree, gates_u32 idx, gates_u32 generation) {
+    for (gates_u32 i = 0; i < tree->command_count; i++) {
+        gates_i_command_t *c = &tree->commands[i];
+        if (c->alive && c->scope_index == idx && c->scope_generation == generation) {
+            if (c->label != nullptr) tree->alloc.free_fn(tree->alloc.ctx, c->label);
+            *c = (gates_i_command_t){0}; /* its scope is gone: nothing can reach it again */
+        }
+    }
+}
+
 gates_err_t gates_command_unregister(gates_tree_t *tree, gates_node_t scope,
                                      gates_command_id_t id) {
     gates_i_command_t *c = tree != nullptr ? find_h(tree, scope, id) : nullptr;

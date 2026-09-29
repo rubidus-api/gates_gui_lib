@@ -680,6 +680,14 @@ gates_u32 gates_i_view_of_editor(const gates_tree_t *tree, gates_u32 box);
 void gates_i_view_editor_left(gates_tree_t *tree, gates_u32 box);
 bool gates_i_view_editor_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t *ev);
 void gates_i_view_cancel_edit(gates_tree_t *tree, gates_u32 idx);
+/* Columns for the saved state (all columns, in order) and the header menu's right press. */
+bool gates_i_view_col_info(const gates_tree_t *tree, gates_u32 idx, gates_u32 k, gates_column_id_t *id,
+                           gates_i32 *width, bool *hidden);
+bool gates_i_view_apply_cols(gates_tree_t *tree, gates_u32 idx, const gates_column_id_t *ids, const gates_i32 *widths,
+                             const bool *hidden, gates_u32 n);
+bool gates_i_view_context(gates_tree_t *tree, gates_u32 idx, gates_point_t p);
+/* Frees the commands whose scope is the node in slot idx (its slot is being released). */
+void gates_i_commands_drop_scope(gates_tree_t *tree, gates_u32 idx, gates_u32 generation);
 
 /* Posting and timers: freed with the tree (gates_post.c / gates_timer.c). */
 void gates_i_post_tree_free(gates_tree_t *tree);
