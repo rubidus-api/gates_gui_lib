@@ -117,6 +117,10 @@ typedef void (*gates_editor_styler_fn)(void *user, gates_text_buffer_t *buffer, 
  * it. false when there is none. Silent. */
 bool gates_editor_find(gates_tree_t *tree, gates_node_t editor, gates_str_t needle, gates_u32 flags, bool wrap_around);
 
+/* Options that can change later (the description's wrap and line_numbers). */
+[[nodiscard]] gates_err_t gates_editor_set_wrap(gates_tree_t *tree, gates_node_t editor, bool wrap);
+[[nodiscard]] gates_err_t gates_editor_set_line_numbers(gates_tree_t *tree, gates_node_t editor, bool on);
+
 [[nodiscard]] gates_err_t gates_editor_set_read_only(gates_tree_t *tree, gates_node_t editor, bool read_only);
 bool gates_editor_read_only(const gates_tree_t *tree, gates_node_t editor);
 

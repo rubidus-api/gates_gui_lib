@@ -10,7 +10,8 @@
  * toolbar icons and the native file, folder, colour and message dialogs, and
  * (0.6.0) data: a table edited in place with check, progress and icon cells
  * and a column menu, a property grid for the selected row, Undo/Redo in the
- * Edit menu, and a background job with progress and Cancel. The theme
+ * Edit menu, and a background job with progress and Cancel, and (0.7.0) a
+ * multi-line editor with C highlighting, wrap, line numbers and find. The theme
  * (system, light, dark) and the zoom are commands. The arrangement - selected
  * tab, split, table columns, window placement - is kept in
  * %LOCALAPPDATA%\gates-gallery.ini and comes back at the next start.
@@ -83,6 +84,8 @@ typedef struct app_t {
     gates_task_t *job;
     char job_names[ITEMS][24];   /* the job's own copy: it never reads the live items */
     char dcell[48];
+    /* Editor page */
+    gates_node_t code, find_box, code_status;
 } app_t;
 
 static gates_str_t cs(const char *s) { return (gates_str_t){ .ptr = (const gates_u8 *)s, .size = strlen(s) }; }
@@ -803,6 +806,153 @@ static gates_err_t page_data(app_t *a, gates_node_t page) {
     return GATES_OK;
 }
 
+/* -- Text editor (0.7.0): a multi-line editor with C highlighting ------------------------------ */
+
+enum { ST_PLAIN, ST_KEYWORD, ST_COMMENT, ST_STRING, ST_NUMBER, ST_LINE_COMMENT };
+
+static bool ident_char(gates_u8 c) {
+    return c == '_' || (c >= '0' && c <= '9') || ((c | 0x20) >= 'a' && (c | 0x20) <= 'z');
+}
+
+/* A small C highlighter. It is asked for whole lines from a stale line on; a
+ * block comment still open at `from` is found by looking back for its start. */
+static void c_styler(void *user, gates_text_buffer_t *b, gates_u32 from, gates_u32 to) {
+    (void)user;
+    static const char *const kw[] = { "int", "char", "void", "return", "if", "else", "for", "while", "static",
+                                      "const", "struct", "typedef", "bool", "true", "false", "nullptr", "include" };
+    bool in_comment = from > 1 && gates_text_buffer_style(b, from - 2) == ST_COMMENT &&
+                      !(gates_text_buffer_byte(b, from - 3) == '*' && gates_text_buffer_byte(b, from - 2) == '/');
+    gates_text_buffer_set_style(b, from, to, ST_PLAIN);
+    for (gates_u32 i = from; i < to;) {
+        gates_u8 c = gates_text_buffer_byte(b, i);
+        if (in_comment) {
+            gates_u32 s = i;
+            while (i < to && !(gates_text_buffer_byte(b, i) == '*' && gates_text_buffer_byte(b, i + 1) == '/')) i++;
+            if (i < to) i += 2, in_comment = false;
+            gates_text_buffer_set_style(b, s, i, ST_COMMENT);
+        } else if (c == '/' && gates_text_buffer_byte(b, i + 1) == '*') {
+            in_comment = true;
+        } else if (c == '/' && gates_text_buffer_byte(b, i + 1) == '/') {
+            gates_u32 s = i;
+            while (i < to && gates_text_buffer_byte(b, i) != '\n') i++;
+            gates_text_buffer_set_style(b, s, i, ST_LINE_COMMENT); /* never carries to the next line */
+        } else if (c == '"') {
+            gates_u32 s = i++;
+            while (i < to && gates_text_buffer_byte(b, i) != '"' && gates_text_buffer_byte(b, i) != '\n') {
+                i += gates_text_buffer_byte(b, i) == '\\' ? 2 : 1;
+            }
+            if (i < to && gates_text_buffer_byte(b, i) == '"') i++;
+            gates_text_buffer_set_style(b, s, i, ST_STRING);
+        } else if (c >= '0' && c <= '9') {
+            gates_u32 s = i;
+            while (i < to && ident_char(gates_text_buffer_byte(b, i))) i++;
+            gates_text_buffer_set_style(b, s, i, ST_NUMBER);
+        } else if (ident_char(c)) {
+            gates_u32 s = i;
+            char word[16];
+            gates_u32 n = 0;
+            while (i < to && ident_char(gates_text_buffer_byte(b, i))) {
+                if (n < sizeof word - 1) word[n++] = (char)gates_text_buffer_byte(b, i);
+                i++;
+            }
+            word[n] = 0;
+            for (size_t k = 0; k < sizeof kw / sizeof kw[0]; k++) {
+                if (strcmp(word, kw[k]) == 0) gates_text_buffer_set_style(b, s, i, ST_KEYWORD);
+            }
+        } else {
+            i++;
+        }
+    }
+}
+
+static void show_position(app_t *a) {
+    const gates_text_buffer_t *b = gates_editor_buffer(a->tree, a->code);
+    gates_u32 caret = 0;
+    gates_editor_selection(a->tree, a->code, nullptr, &caret);
+    gates_u32 line = gates_text_buffer_line_of(b, caret);
+    char text[80];
+    snprintf(text, sizeof text, "Line %u, column %u%s", line + 1, caret - gates_text_buffer_line_start(b, line) + 1,
+             gates_editor_modified(a->tree, a->code) ? " - modified" : "");
+    (void)gates_widget_set_text(a->tree, a->code_status, cs(text));
+}
+
+static void on_code(gates_tree_t *tree, const gates_event_t *ev, void *user) {
+    (void)tree;
+    (void)ev;
+    show_position(user);
+}
+
+static void on_wrap(gates_tree_t *tree, gates_node_t node, bool checked, void *user) {
+    (void)node;
+    (void)gates_editor_set_wrap(tree, ((app_t *)user)->code, checked);
+}
+
+static void on_numbers(gates_tree_t *tree, gates_node_t node, bool checked, void *user) {
+    (void)node;
+    (void)gates_editor_set_line_numbers(tree, ((app_t *)user)->code, checked);
+}
+
+static void on_find(gates_tree_t *tree, gates_node_t node, void *user) {
+    (void)node;
+    app_t *a = user;
+    gates_str_t needle = gates_textbox_text(tree, a->find_box);
+    bool found = needle.size > 0 && gates_editor_find(tree, a->code, needle, GATES_FIND_IGNORE_CASE, true);
+    if (found) gates_tree_set_focus(tree, a->code);
+    (void)gates_textbox_set_invalid(tree, a->find_box, needle.size > 0 && !found);
+    show_position(a);
+}
+
+static gates_err_t page_editor(app_t *a, gates_node_t page) {
+    gates_tree_t *t = a->tree;
+    static const char sample[] =
+        "/* A tiny program - edit me. Tab indents, Shift+Tab unindents,\n"
+        " * Ctrl+Tab leaves the editor. */\n"
+        "#include <stdio.h>\n"
+        "\n"
+        "static int square(int n) {\n"
+        "\treturn n * n; // a comment\n"
+        "}\n"
+        "\n"
+        "int main(void) {\n"
+        "\tfor (int i = 1; i <= 10; i++) {\n"
+        "\t\tprintf(\"%d squared is %d\\n\", i, square(i));\n"
+        "\t}\n"
+        "\treturn 0;\n"
+        "}\n";
+    gates_node_t row, l, next, wrap, numbers;
+    TRY(gates_layout_set_child_grow(t, page, 1));
+    TRY(gates_panel_create(t, page, &row));
+    TRY(gates_layout_set(t, row, GATES_LAYOUT_KIND_ROW));
+    TRY(gates_layout_set_gap(t, row, 8));
+    TRY(gates_checkbox_create(t, row, cs("Word wra&p"), false, on_wrap, a, &wrap));
+    TRY(gates_checkbox_create(t, row, cs("Line nu&mbers"), true, on_numbers, a, &numbers));
+    TRY(gates_label_create(t, row, cs("Fin&d"), &l));
+    TRY(gates_textbox_create(t, row, cs("square"), 12, &a->find_box));
+    TRY(gates_label_set_target(t, l, a->find_box));
+    TRY(gates_node_set_labelled_by(t, a->find_box, l));
+    TRY(gates_layout_set_child_align(t, a->find_box, GATES_ALIGN_CENTER_V));
+    TRY(gates_button_create(t, row, cs("&Next"), on_find, a, &next));
+    TRY(tip(a, next, "Selects the next match (wrapping to the start)"));
+    gates_editor_desc_t d = { .tab_inserts = true, .auto_indent = true, .line_numbers = true, .rows = 12, .cols = 50 };
+    TRY(gates_editor_create(t, page, &d, &a->code));
+    TRY(gates_layout_set_child_grow(t, a->code, 1));
+    TRY(gates_node_set_access_name(t, a->code, cs("Code")));
+    TRY(gates_editor_set_text(t, a->code, (gates_str_t){ (const gates_u8 *)sample, sizeof sample - 1 }));
+    static const gates_editor_style_t styles[] = {
+        { .token = GATES_COLOR_CONTROL_FG }, { .token = GATES_COLOR_FOCUS_RING },
+        { .token = GATES_COLOR_CONTROL_DISABLED_FG }, { .token = GATES_COLOR_ERROR }, { .token = GATES_COLOR_FOCUS_RING },
+        { .token = GATES_COLOR_CONTROL_DISABLED_FG },
+    };
+    TRY(gates_editor_set_styles(t, a->code, styles, sizeof styles / sizeof styles[0]));
+    TRY(gates_editor_set_styler(t, a->code, c_styler, nullptr));
+    TRY(gates_widget_set_handler(t, a->code, on_code, a));
+    TRY(tip(a, a->code, "A multi-line editor: C highlighting, Tab indents, Ctrl+Z undoes"));
+    TRY(gates_label_create(t, page, cs(""), &a->code_status));
+    TRY(gates_node_set_live(t, a->code_status, GATES_LIVE_POLITE));
+    show_position(a);
+    return GATES_OK;
+}
+
 static gates_err_t build(app_t *a) {
     gates_tree_t *t = a->tree;
     gates_node_t root = a->root = gates_tree_root(t), bar, tools, sb, page;
@@ -869,6 +1019,8 @@ static gates_err_t build(app_t *a) {
     TRY(page_pictures(a, page));
     TRY(gates_tabs_add(t, a->tabs, cs("Data && &jobs"), &page));
     TRY(page_data(a, page));
+    TRY(gates_tabs_add(t, a->tabs, cs("Te&xt editor"), &page));
+    TRY(page_editor(a, page));
     TRY(gates_undo_create((gates_allocator_t){0}, 200, &a->undo));
     TRY(gates_undo_bind(a->undo, t, root, CMD_UNDO, CMD_REDO, cs("Undo"), cs("Redo")));
 

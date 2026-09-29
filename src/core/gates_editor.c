@@ -1723,3 +1723,28 @@ gates_err_t gates_i_editor_user_set(gates_tree_t *tree, gates_u32 idx, gates_str
     e->run_open = false;
     return user_edit(tree, idx, e, 0, len_of(e), text, RUN_OTHER); /* PERMISSION when read-only */
 }
+
+gates_err_t gates_editor_set_wrap(gates_tree_t *tree, gates_node_t editor, bool wrap) {
+    struct gates_i_editor *e = ed_of(tree, editor);
+    if (e == nullptr) return PROVEN_ERR_INVALID_ARG;
+    if (e->wrap != wrap) {
+        e->wrap = wrap;
+        e->top_row = 0;
+        e->scroll_x = 0;
+        e->pref_x = -1;
+        keep_caret(tree, editor.index, e);
+        gates_i_mark_dirty(tree, editor.index, GATES_DIRTY_PAINT);
+    }
+    return GATES_OK;
+}
+
+gates_err_t gates_editor_set_line_numbers(gates_tree_t *tree, gates_node_t editor, bool on) {
+    struct gates_i_editor *e = ed_of(tree, editor);
+    if (e == nullptr) return PROVEN_ERR_INVALID_ARG;
+    if (e->line_numbers != on) {
+        e->line_numbers = on;
+        keep_caret(tree, editor.index, e);
+        gates_i_mark_dirty(tree, editor.index, GATES_DIRTY_PAINT);
+    }
+    return GATES_OK;
+}

@@ -839,6 +839,18 @@ static void test_wrap(void) {
     GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, (gates_str_t){ (const gates_u8 *)shortrow, strlen(shortrow) }));
     GT_ASSERT_OK(gates_editor_set_selection(a.t, a.ed, 5 + 20, 5 + 20));
     GT_ASSERT(key(a.t, GATES_KEY_UP) && caret(&a) == 4);
+    /* Wrap can be turned off and on later: off, the long word is one row again. */
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, (gates_str_t){ (const gates_u8 *)word, 299 }));
+    GT_ASSERT_OK(gates_editor_set_wrap(a.t, a.ed, false));
+    GT_ASSERT_OK(gates_editor_set_wrap(a.t, a.ed, false));
+    paint(&a, &dl);
+    n = texts(&dl, tc, 64);
+    GT_ASSERT(n == 1 && gates_draw_cmd_text(&dl, tc[0]).size == 299);
+    GT_ASSERT_OK(gates_editor_set_wrap(a.t, a.ed, true));
+    paint(&a, &dl);
+    n = texts(&dl, tc, 64);
+    GT_ASSERT(n > 1);
+    GT_ASSERT(gates_editor_set_wrap(a.t, gates_tree_root(a.t), true) == PROVEN_ERR_INVALID_ARG);
     /* A narrower view wraps again. */
     GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, (gates_str_t){ (const gates_u8 *)word, 299 }));
     GT_ASSERT_OK(gates_layout_run(a.t, (gates_size_t){ 200, 300 }, be));
@@ -871,6 +883,16 @@ static void test_gutter(void) {
     GT_ASSERT_OK(gates_editor_set_selection(a.t, a.ed, 0, 0));
     for (gates_u32 i = 0; i < gates_editor_visible_lines(a.t, a.ed); i++) GT_ASSERT(key(a.t, GATES_KEY_DOWN));
     GT_ASSERT(gates_editor_first_line(a.t, a.ed) == 1);
+    /* The gutter can go and come back. */
+    GT_ASSERT_OK(gates_editor_set_line_numbers(a.t, a.ed, false));
+    GT_ASSERT_OK(gates_editor_set_line_numbers(a.t, a.ed, false));
+    paint(&a, &dl);
+    const gates_draw_cmd_t *l1 = text_cmd(&dl, "l1"); /* the view starts at line 1 here */
+    GT_ASSERT(text_cmd(&dl, "2") == nullptr && l1 != nullptr && l1->rect.x == er.x + 1 + 3);
+    GT_ASSERT_OK(gates_editor_set_line_numbers(a.t, a.ed, true));
+    paint(&a, &dl);
+    GT_ASSERT(text_cmd(&dl, "2") != nullptr);
+    GT_ASSERT(gates_editor_set_line_numbers(a.t, gates_tree_root(a.t), true) == PROVEN_ERR_INVALID_ARG);
     /* Ctrl+End: the caret on the bottom row. */
     GT_ASSERT(key_mods(a.t, GATES_KEY_END, true, false));
     GT_ASSERT(gates_editor_first_line(a.t, a.ed) == 1201 - gates_editor_visible_lines(a.t, a.ed));
