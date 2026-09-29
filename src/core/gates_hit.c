@@ -9,6 +9,7 @@ static bool interactive(const gates_tree_t *tree, const gates_node_slot_t *s) {
     if (s->kind != GATES_NODE_BUTTON && s->kind != GATES_NODE_CHECKBOX &&
         s->kind != GATES_NODE_TEXTBOX && s->kind != GATES_NODE_RADIO &&
         s->kind != GATES_NODE_CHOICE && s->kind != GATES_NODE_VIEW && s->kind != GATES_NODE_SLIDER &&
+        s->kind != GATES_NODE_EDITOR &&
         !(s->kind == GATES_NODE_GROUPHEAD && s->parent != GATES_NONE && gates_i_group_foldable(tree, s->parent))) {
         return false;
     }
@@ -174,6 +175,9 @@ static bool drag_begin(gates_tree_t *tree, gates_u32 idx, gates_point_t p, gates
     if (s->kind == GATES_NODE_VIEW) {
         return gates_i_view_pointer_down(tree, idx, p, clicks); /* rows, header, bars */
     }
+    if (s->kind == GATES_NODE_EDITOR) {
+        return gates_i_editor_press(tree, idx, p, clicks, false); /* plan-0022 */
+    }
     if (s->layout_kind == GATES_LAYOUT_SPLIT &&
         gates_rect_contains(gates_i_split_handle(tree, idx), p)) {
         gates_rect_t a = gates_i_slot(tree, s->first_child)->layout_rect;
@@ -240,6 +244,11 @@ static void drag_update(gates_tree_t *tree, gates_point_t p) {
 
     if (tree->drag_kind == GATES_DRAG_SLIDER) {
         gates_i_slider_drag(tree, p, false);
+        return;
+    }
+    if (tree->drag_kind == GATES_DRAG_EDITOR_SELECT || tree->drag_kind == GATES_DRAG_EDITOR_VTHUMB ||
+        tree->drag_kind == GATES_DRAG_EDITOR_HTHUMB) {
+        gates_i_editor_drag(tree, p); /* plan-0022 */
         return;
     }
 
@@ -395,6 +404,10 @@ gates_node_t gates_input_pointer(gates_tree_t *tree, const gates_pointer_event_t
         if (hit != GATES_NONE && gates_i_slot(tree, hit)->kind == GATES_NODE_VIEW &&
             gates_i_view_wheel(tree, hit, ev->wheel)) {
             return gates_i_handle(tree, hit); /* a view scrolls itself */
+        }
+        if (hit != GATES_NONE && gates_i_slot(tree, hit)->kind == GATES_NODE_EDITOR &&
+            gates_i_editor_wheel(tree, hit, ev->wheel)) {
+            return gates_i_handle(tree, hit); /* so does an editor (plan-0022) */
         }
         wheel_scroll(tree, hit, ev->wheel);
         return hit == GATES_NONE ? GATES_NODE_NULL : gates_i_handle(tree, hit);

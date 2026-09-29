@@ -270,6 +270,7 @@ static bool has_events(gates_node_kind_t kind) {
            kind == GATES_NODE_BUTTON || kind == GATES_NODE_DIALOG || kind == GATES_NODE_MENU ||
            kind == GATES_NODE_RADIO || kind == GATES_NODE_CHOICE || kind == GATES_NODE_VIEW ||
            kind == GATES_NODE_TABS || kind == GATES_NODE_SPIN || kind == GATES_NODE_SLIDER ||
+           kind == GATES_NODE_EDITOR ||
            kind == GATES_NODE_GROUP;
 }
 
@@ -405,7 +406,9 @@ gates_u32 gates_tree_dispatch_events(gates_tree_t *tree, gates_u32 max_events) {
                          e.kind == GATES_EVENT_CELL_EDITED) ? e.aux
                                                                : 0,
             /* A selection is read at delivery (latest); an activation keeps its row. */
-            .item = e.kind == GATES_EVENT_SELECTION_CHANGED ? gates_i_view_selected(st) : e.item,
+            .item = e.kind == GATES_EVENT_SELECTION_CHANGED
+                        ? (st->editor != nullptr ? gates_i_editor_caret(st) : gates_i_view_selected(st))
+                        : e.item,
             .value = st->rng != nullptr ? gates_i_range_value(tree, node.index) : 0,
         };
         if (ev.kind == GATES_EVENT_LIMIT_EXCEEDED) {

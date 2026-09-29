@@ -40,7 +40,7 @@ static gates_u32 put_utf8(gates_u8 *out, gates_u32 cp) {
     return 4;
 }
 
-gates_err_t gates_i_paste_normalize(gates_allocator_t alloc, gates_str_t in, gates_u8 **out,
+gates_err_t gates_i_paste_normalize(gates_allocator_t alloc, gates_str_t in, bool keep_lines, gates_u8 **out,
                                     gates_u32 *out_len) {
     *out = nullptr;
     *out_len = 0;
@@ -64,7 +64,11 @@ gates_err_t gates_i_paste_normalize(gates_allocator_t alloc, gates_str_t in, gat
             step = 2; /* CR LF is one line break */
         }
         at += step;
-        if (cp == '\r' || cp == '\n' || cp == '\t') {
+        if (keep_lines && (cp == '\r' || cp == '\n')) {
+            dst[n++] = '\n'; /* an editor keeps line breaks (plan-0022) */
+        } else if (keep_lines && cp == '\t') {
+            dst[n++] = '\t';
+        } else if (cp == '\r' || cp == '\n' || cp == '\t') {
             dst[n++] = ' ';
         } else if (cp < 0x20 || cp == 0x7F) {
             continue; /* other control characters are not text */

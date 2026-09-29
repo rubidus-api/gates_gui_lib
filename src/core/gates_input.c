@@ -106,7 +106,7 @@ static void paste(gates_tree_t *tree, gates_widget_state_t *st) {
     gates_u8 *text = nullptr;
     gates_u32 len = 0;
     if (raw_len > 0) {
-        err = gates_i_paste_normalize(tree->alloc, (gates_str_t){ .ptr = raw, .size = raw_len },
+        err = gates_i_paste_normalize(tree->alloc, (gates_str_t){ .ptr = raw, .size = raw_len }, false,
                                       &text, &len);
     }
     if (raw != nullptr) {
@@ -354,6 +354,9 @@ static bool input_key(gates_tree_t *tree, const gates_key_event_t *ev) {
     if (focus_ok && is_kind(tree, f, GATES_NODE_TOOLBAR) && gates_i_toolbar_key(tree, f, ev)) {
         return true; /* buttons, Enter/Space invoke (plan-0018) */
     }
+    if (focus_ok && is_kind(tree, f, GATES_NODE_EDITOR) && gates_i_editor_key(tree, f, ev)) {
+        return true; /* the multi-line editor (plan-0022) */
+    }
     if (focus_ok && is_kind(tree, f, GATES_NODE_VIEW) && gates_i_view_key(tree, f, ev)) {
         return true; /* rows, paging, Enter activates the row */
     }
@@ -411,12 +414,18 @@ gates_input_result_t gates_input_char(gates_tree_t *tree, gates_u32 codepoint) {
     if (codepoint < 0x20 || codepoint == 0x7F) {
         return GATES_INPUT_IGNORED; /* control characters are not text */
     }
+    gates_u8 buf[4];
+    gates_u32 n = encode_utf8(codepoint, buf);
+    if (tree != nullptr && tree->focus != GATES_NONE && is_kind(tree, tree->focus, GATES_NODE_EDITOR) &&
+        gates_i_focus_eligible(tree, tree->focus)) {
+        if (n == 0 || (codepoint >= 0xD800 && codepoint <= 0xDFFF)) return GATES_INPUT_IGNORED;
+        return gates_i_editor_char(tree, tree->focus, (gates_str_t){ .ptr = buf, .size = n }) ? GATES_INPUT_CONSUMED
+                                                                                           : GATES_INPUT_IGNORED;
+    }
     gates_widget_state_t *st = focused_box(tree);
     if (st == nullptr || st->read_only) {
         return GATES_INPUT_IGNORED;
     }
-    gates_u8 buf[4];
-    gates_u32 n = encode_utf8(codepoint, buf);
     if (n == 0) {
         return GATES_INPUT_IGNORED;
     }

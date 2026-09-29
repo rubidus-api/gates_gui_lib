@@ -6,6 +6,7 @@
 #include <gates/layout.h>
 #include <gates/ui.h>
 #include <gates/frame.h>
+#include <gates/editor.h>
 #include "gates_tree_internal.h"
 
 #include <string.h>
@@ -399,7 +400,7 @@ static gates_str_t label_text(const gates_tree_t *tree, gates_node_t n) {
 static bool is_interactive(gates_node_kind_t k) {
     return k == GATES_NODE_BUTTON || k == GATES_NODE_CHECKBOX || k == GATES_NODE_TEXTBOX ||
            k == GATES_NODE_RADIO || k == GATES_NODE_CHOICE || k == GATES_NODE_VIEW ||
-           k == GATES_NODE_TOOLBAR || k == GATES_NODE_TABSTRIP || k == GATES_NODE_SLIDER;
+           k == GATES_NODE_TOOLBAR || k == GATES_NODE_TABSTRIP || k == GATES_NODE_SLIDER || k == GATES_NODE_EDITOR;
 }
 
 static gates_role_t role_of(const gates_tree_t *tree, gates_u32 idx) {
@@ -410,6 +411,7 @@ static gates_role_t role_of(const gates_tree_t *tree, gates_u32 idx) {
     case GATES_NODE_BUTTON: return GATES_ROLE_BUTTON;
     case GATES_NODE_CHECKBOX: return GATES_ROLE_CHECK_BOX;
     case GATES_NODE_TEXTBOX: return GATES_ROLE_EDIT;
+    case GATES_NODE_EDITOR: return GATES_ROLE_EDIT; /* multi-line (plan-0022) */
     case GATES_NODE_RADIO: return GATES_ROLE_RADIO_GROUP;
     case GATES_NODE_CHOICE: return GATES_ROLE_COMBO_BOX;
     case GATES_NODE_SEPARATOR: return GATES_ROLE_SEPARATOR;
@@ -1024,6 +1026,21 @@ gates_err_t gates_access_info(gates_tree_t *tree, gates_node_t node, gates_u64 i
                 out->anchor = st->edit->anchor;
             }
             if (!inert && !st->read_only) actions |= GATES_ACCESS_SET_VALUE;
+        }
+        break;
+    case GATES_NODE_EDITOR:
+        if (st != nullptr && st->editor != nullptr) {
+            /* The text (both spans of the buffer), caret and selection (plan-0022). */
+            gates_node_t h = gates_i_handle(tree, idx);
+            const gates_text_buffer_t *tb = gates_editor_buffer(tree, h);
+            gates_str_t s1, s2;
+            gates_text_buffer_span(tb, 0, gates_text_buffer_length(tb), &s1, &s2);
+            gates_u32 v0 = put(&b, s1);
+            (void)put(&b, s2);
+            bind(&b, &out->value, v0, s1.size + s2.size);
+            gates_editor_selection(tree, h, &out->anchor, &out->caret);
+            if (gates_editor_read_only(tree, h)) states |= GATES_ACCESS_READ_ONLY;
+            else if (!inert) actions |= GATES_ACCESS_SET_VALUE;
         }
         break;
     case GATES_NODE_RADIO:

@@ -147,6 +147,7 @@ void gates_i_state_release(gates_tree_t *tree, gates_u32 state_index) {
     gates_i_tabs_free(tree, st);
     gates_i_range_free(tree, st);
     gates_i_propgrid_free(tree, st);
+    gates_i_editor_free(tree, st);
     memset(st, 0, sizeof *st);
     st->next_free = tree->state_first_free;
     tree->state_first_free = state_index;
@@ -531,6 +532,7 @@ void gates_tree_destroy(gates_tree_t *tree) {
             gates_i_tabs_free(tree, &tree->states[i]);
             gates_i_range_free(tree, &tree->states[i]);
             gates_i_propgrid_free(tree, &tree->states[i]);
+            gates_i_editor_free(tree, &tree->states[i]);
         }
         alloc.free_fn(alloc.ctx, tree->states);
     }

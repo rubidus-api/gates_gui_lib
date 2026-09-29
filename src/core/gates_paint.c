@@ -168,6 +168,9 @@ static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
     case GATES_NODE_SLIDER:
         emit(ctx, gates_i_slider_paint(tree, idx, ctx->dl, ctx->theme));
         break;
+    case GATES_NODE_EDITOR:
+        emit(ctx, gates_i_editor_paint(tree, idx, ctx->dl, ctx->theme, ctx->text));
+        break;
     case GATES_NODE_TABSTRIP:
         emit(ctx, gates_i_tabstrip_paint(tree, idx, ctx->dl, ctx->theme, ctx->text));
         break;

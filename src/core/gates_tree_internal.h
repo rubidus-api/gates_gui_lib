@@ -148,6 +148,9 @@ typedef enum gates_drag_kind_i {
     GATES_DRAG_VIEW_HTHUMB,
     GATES_DRAG_VIEW_COLUMN,
     GATES_DRAG_SLIDER,           /* plan-0019: a slider's thumb */
+    GATES_DRAG_EDITOR_SELECT,    /* plan-0022: selecting text in an editor, its scrollbar thumbs */
+    GATES_DRAG_EDITOR_VTHUMB,
+    GATES_DRAG_EDITOR_HTHUMB,
 } gates_drag_kind_i;
 
 typedef enum gates_align_i {
@@ -230,6 +233,8 @@ typedef struct gates_widget_state_t {
     struct gates_i_toolbar *tbar;
     /* Property grid (plan-0021): its properties and categories. */
     struct gates_i_propgrid *pgrid;
+    /* Multi-line editor (plan-0022): its buffer, caret, view and history. */
+    struct gates_i_editor *editor;
     /* Tabs (plan-0018): the titles; the pages are the stack's children. */
     struct gates_i_tabs *tabs;
     /* Spin box and slider (plan-0019): the range. */
@@ -547,7 +552,7 @@ gates_u32 gates_i_box_offset_at_x(const gates_text_backend_t *be, gates_i32 font
 /* Clipboard helpers (gates_clipboard.c). normalize: single-line paste policy
  * (CRLF/CR/LF/TAB -> one space, other controls dropped, invalid UTF-8 ->
  * U+FFFD) into a new block from `alloc`. */
-gates_err_t gates_i_paste_normalize(gates_allocator_t alloc, gates_str_t in, gates_u8 **out,
+gates_err_t gates_i_paste_normalize(gates_allocator_t alloc, gates_str_t in, bool keep_lines, gates_u8 **out,
                                     gates_u32 *out_len);
 
 /* Focus (gates_focus.c, plan-0009). */
@@ -881,6 +886,18 @@ typedef struct gates_i_range {
 } gates_i_range;
 void gates_i_range_free(gates_tree_t *tree, gates_widget_state_t *st);
 void gates_i_propgrid_free(gates_tree_t *tree, gates_widget_state_t *st);
+/* Multi-line editor (plan-0022). */
+void gates_i_editor_free(gates_tree_t *tree, gates_widget_state_t *st);
+gates_u32 gates_i_editor_caret(const gates_widget_state_t *st);
+gates_size_t gates_i_editor_measure(const gates_tree_t *tree, const gates_node_slot_t *s,
+                                    const gates_text_backend_t *text);
+gates_err_t gates_i_editor_paint(const gates_tree_t *tree, gates_u32 idx, gates_draw_list_t *dl,
+                                 const gates_theme_t *theme, const gates_text_backend_t *text);
+bool gates_i_editor_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t *ev);
+bool gates_i_editor_char(gates_tree_t *tree, gates_u32 idx, gates_str_t utf8);
+bool gates_i_editor_press(gates_tree_t *tree, gates_u32 idx, gates_point_t p, gates_u32 clicks, bool shift);
+void gates_i_editor_drag(gates_tree_t *tree, gates_point_t p);
+bool gates_i_editor_wheel(gates_tree_t *tree, gates_u32 idx, gates_vec2_t wheel);
 void gates_i_node_undo(gates_tree_t *tree, gates_node_t node);
 /* Background tasks (plan-0021): message kinds from GATES_I_TASK_KIND_BASE are
  * the tasks' own, handled by gates_i_task_message before node handlers; tree

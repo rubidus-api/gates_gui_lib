@@ -326,6 +326,8 @@ static gates_size_t widget_intrinsic(const gates_tree_t *tree, const gates_node_
         return gates_i_slider_measure(tree, s);
     case GATES_NODE_IMAGE:
         return gates_i_image_measure(tree, s);
+    case GATES_NODE_EDITOR:
+        return gates_i_editor_measure(tree, s, text);
     case GATES_NODE_BUTTON: {
         gates_i32 h = ts.h + 2 * (GATES_BUTTON_PAD_Y + GATES_BUTTON_BORDER);
         gates_i32 w = ts.w + 2 * (GATES_BUTTON_PAD_X + GATES_BUTTON_BORDER);
