@@ -104,6 +104,8 @@ static void strict_audit(gates_window_t *win) {
 }
 
 static void paint_window(gates_window_t *win, HDC dc) {
+    bool perf = gates_win32_perf_on();
+    gates_u64 p0 = perf ? gates_win32_perf_now_us() : 0, p1 = p0, p2 = p0;
     gates_size_t size = client_px_of(win->hwnd);
     gates_size_t logical = client_size_of(win);
     if (!ensure_dib(win, dc, size)) {
@@ -130,7 +132,10 @@ static void paint_window(gates_window_t *win, HDC dc) {
                 if (win->strict) strict_audit(win);
             }
         }
+        if (perf) p1 = gates_win32_perf_now_us();
         (void)gates_paint_tree(win->tree, &win->draw_list, win->theme, win->text);
+    } else if (perf) {
+        p1 = gates_win32_perf_now_us();
     }
     if (win->cb.on_paint != nullptr) {
         win->cb.on_paint(win, &win->draw_list, win->cb.user_data);
@@ -142,10 +147,26 @@ static void paint_window(gates_window_t *win, HDC dc) {
         .h = size.h,
         .stride_bytes = (gates_u32)size.w * 4u,
     };
+    if (perf) p2 = gates_win32_perf_now_us();
     gates_err_t err = gates_render_soft_scaled(&win->draw_list, px, win->text, win->dpi);
     (void)err; /* an invalid list presents the plain background */
+    gates_u64 p3 = perf ? gates_win32_perf_now_us() : 0;
 
     BitBlt(dc, 0, 0, size.w, size.h, win->mem_dc, 0, 0, SRCCOPY);
+    if (perf) {
+        GdiFlush();
+        gates_u64 p4 = gates_win32_perf_now_us();
+        long long in_to_present = win->perf_input_us != 0 ? (long long)(p4 - win->perf_input_us) : -1;
+        gates_win32_perf_log("frame,%llu,%lld,%llu,%llu,%llu,%llu,%d,%d,%u,%u", (unsigned long long)p4, in_to_present,
+                             (unsigned long long)(p1 - p0), (unsigned long long)(p2 - p1), (unsigned long long)(p3 - p2),
+                             (unsigned long long)(p4 - p3), size.w, size.h, win->dpi, gates_draw_list_len(&win->draw_list));
+        win->perf_input_us = 0;
+        if (!win->perf_first_done) {
+            win->perf_first_done = true;
+            gates_win32_perf_log("first_frame,%llu,%llu", (unsigned long long)p4,
+                                 (unsigned long long)gates_win32_perf_process_ms());
+        }
+    }
 }
 
 static void resolve_theme(gates_window_t *win);
@@ -209,11 +230,13 @@ LRESULT CALLBACK gates_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM 
         }
         return DefWindowProcW(hwnd, msg, wparam, lparam);
     case GATES_WM_DISPATCH:
+        if (gates_win32_perf_on()) gates_win32_perf_log("wake,%llu,dispatch", (unsigned long long)gates_win32_perf_now_us());
         win->dispatch_posted = false;
         gates_win32_after_input(win);
         return 0;
     case WM_TIMER:
         if (wparam == GATES_WIN32_TIMER_ID) {
+            if (gates_win32_perf_on()) gates_win32_perf_log("wake,%llu,timer", (unsigned long long)gates_win32_perf_now_us());
             win->timer_armed = false;
             (void)gates_tree_run_timers(win->tree);
             gates_win32_after_input(win);
@@ -265,14 +288,26 @@ LRESULT CALLBACK gates_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM 
         }
         return 0;
     default: {
-        LRESULT ime_result = 0;
-        if (gates_win32_handle_ime(win, msg, wparam, lparam, &ime_result)) {
-            return ime_result;
+        /* plan-0017: the first input since the last frame that invalidates the window starts
+         * the input-to-present clock; input that changes nothing (a key release, a mouse move
+         * over nothing) does not, so idle time between keys is not counted. */
+        bool stamped = false;
+        if (win->perf_input_us == 0 && ((msg >= WM_KEYFIRST && msg <= WM_KEYLAST) ||
+                                        (msg >= WM_MOUSEFIRST && msg <= WM_MOUSELAST) ||
+                                        (msg >= WM_IME_STARTCOMPOSITION && msg <= WM_IME_KEYLAST)) &&
+            gates_win32_perf_on()) {
+            win->perf_input_us = gates_win32_perf_now_us();
+            stamped = true;
         }
-        if (gates_win32_handle_input(win, msg, wparam, lparam)) {
-            return 0;
+        LRESULT result = 0;
+        bool handled = gates_win32_handle_ime(win, msg, wparam, lparam, &result);
+        if (!handled && gates_win32_handle_input(win, msg, wparam, lparam)) {
+            handled = true;
+            result = 0;
         }
-        return DefWindowProcW(hwnd, msg, wparam, lparam);
+        /* IsWindow first: the input may have closed the window (and freed win). */
+        if (stamped && IsWindow(hwnd) && !GetUpdateRect(hwnd, nullptr, FALSE)) win->perf_input_us = 0;
+        return handled ? result : DefWindowProcW(hwnd, msg, wparam, lparam);
     }
     }
 }

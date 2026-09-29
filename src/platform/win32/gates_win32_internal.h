@@ -96,6 +96,8 @@ struct gates_window {
     gates_u32 monitor_dpi;
     gates_u32 zoom;              /* percent, 100 = none */
     bool strict;                 /* GATES_ACCESS_STRICT: audit after every layout */
+    gates_u64 perf_input_us;     /* plan-0017: first input since the last frame, 0 = none */
+    bool perf_first_done;
     gates_u32 strict_issues;     /* the count last reported */
 };
 
@@ -144,6 +146,11 @@ void gates_win32_caret_follow(gates_window_t *win);
 void gates_win32_caret_drop(gates_window_t *win);
 /* gates_win32_window.c: the window's drawing DPI from its monitor, zoom and text size. */
 void gates_win32_rescale(gates_window_t *win);
+/* gates_win32_perf.c (plan-0017): GATES_PERF=<file> field measurements. */
+bool gates_win32_perf_on(void);
+gates_u64 gates_win32_perf_now_us(void);
+void gates_win32_perf_log(const char *fmt, ...);
+gates_u64 gates_win32_perf_process_ms(void);
 /* gates_win32_clipboard.c: CF_UNICODETEXT provider for the window's tree. */
 void gates_win32_install_clipboard(gates_window_t *win);
 /* Capture lost or mode cancelled: forget held buttons, press and drags. */

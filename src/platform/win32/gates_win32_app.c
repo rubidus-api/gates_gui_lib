@@ -37,6 +37,7 @@ static LRESULT CALLBACK post_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM 
     }
     gates_app_t *app = (gates_app_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
     bool turn = msg == GATES_WM_POST || (msg == WM_TIMER && wparam == GATES_WIN32_POST_TIMER_ID);
+    if (turn && gates_win32_perf_on()) gates_win32_perf_log("wake,%llu,post", (unsigned long long)gates_win32_perf_now_us());
     if (turn && app != nullptr && app->sender != nullptr) {
         if (msg == WM_TIMER) {
             KillTimer(hwnd, GATES_WIN32_POST_TIMER_ID);

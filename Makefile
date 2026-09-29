@@ -118,7 +118,8 @@ WIN32_SRC := \
   src/platform/win32/gates_win32_input.c \
   src/platform/win32/gates_win32_text_gdi.c \
   src/platform/win32/gates_win32_clipboard.c \
-  src/platform/win32/gates_win32_uia.c
+  src/platform/win32/gates_win32_uia.c \
+  src/platform/win32/gates_win32_perf.c
 
 # Sample applications (0.1.0 release): small complete programs.
 SAMPLE_APPS := app_todo app_calculator app_converter app_files
@@ -225,6 +226,13 @@ install: dist
 	cp $(PKG)/lib/host/*.a $(PREFIX)/lib/
 	$(if $(HAVE_WIN),mkdir -p $(PREFIX)/lib/win64 && cp $(PKG)/lib/win64/*.a $(PREFIX)/lib/win64/)
 
+# plan-0017: performance evidence (not a test). Built against the -O2 libraries.
+bench: lib-host
+	@mkdir -p $(BUILD)/bench
+	$(CC) $(CPPFLAGS) $(LIBFLAGS) -pthread tests/bench_core.c -L$(LIB_HOST) -lgates_core -lproven -lm \
+		-o $(BUILD)/bench/bench_core
+	$(BUILD)/bench/bench_core $(BENCH_ITERS)
+
 # T041: the manual. manual-sync copies every example file into the blocks that print it;
 # manual-check fails when a block, the Korean edition or an example build disagrees.
 manual-sync:
@@ -251,4 +259,4 @@ $(WIN_BUILD)/%.exe: examples/%/main.c $(CORE_SRC) $(WIN32_SRC) $(PROVEN_SRC)
 		-lgdi32 -luser32 -limm32 -ldwmapi -ladvapi32 \
 		-luiautomationcore -lole32 -loleaut32 -luuid -mwindows -o $@
 
-.PHONY: all test check-core clean win lib lib-host lib-win dist dist-bin install package-check manual-sync manual-check
+.PHONY: all test check-core clean win lib lib-host lib-win dist dist-bin install package-check bench manual-sync manual-check
