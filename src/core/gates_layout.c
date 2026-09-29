@@ -13,7 +13,7 @@ static gates_node_slot_t *slot_checked(gates_tree_t *tree, gates_node_t node) {
 
 gates_err_t gates_layout_set(gates_tree_t *tree, gates_node_t node, gates_layout_t kind) {
     gates_node_slot_t *s = slot_checked(tree, node);
-    if (s == nullptr || kind > GATES_LAYOUT_KIND_FORM) {
+    if (s == nullptr || kind > GATES_LAYOUT_KIND_WRAP) {
         return PROVEN_ERR_INVALID_ARG;
     }
     s->layout_kind = (gates_u8)kind;
@@ -129,6 +129,169 @@ gates_err_t gates_layout_set_abs_rect(gates_tree_t *tree, gates_node_t node, gat
     return GATES_OK;
 }
 
+/* -- GRID and WRAP settings (plan-0019) ------------------------------------------ */
+
+static gates_i_grid_grow *grow_of(const gates_tree_t *tree, gates_u32 idx) {
+    gates_u32 gen = gates_i_slot(tree, idx)->generation;
+    for (gates_u32 i = 0; i < tree->grid_grow_count; i++) {
+        if (tree->grid_grows[i].index == idx && tree->grid_grows[i].generation == gen) return &tree->grid_grows[i];
+    }
+    return nullptr;
+}
+
+gates_err_t gates_layout_set_grid(gates_tree_t *tree, gates_node_t node, gates_u32 columns) {
+    gates_node_slot_t *s = slot_checked(tree, node);
+    if (s == nullptr || columns == 0 || columns > GATES_GRID_MAX_COLUMNS) return PROVEN_ERR_INVALID_ARG;
+    s->grid_cols = (gates_u8)columns;
+    gates_i_mark_dirty(tree, node.index, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
+    return GATES_OK;
+}
+
+static gates_u32 grid_columns(const gates_node_slot_t *s) {
+    return s->grid_cols != 0 ? s->grid_cols : 2u;
+}
+
+gates_err_t gates_layout_set_grid_column_grow(gates_tree_t *tree, gates_node_t node, gates_u32 column,
+                                              gates_u8 weight) {
+    gates_node_slot_t *s = slot_checked(tree, node);
+    if (s == nullptr || column >= grid_columns(s)) return PROVEN_ERR_INVALID_ARG;
+    gates_i_grid_grow *g = grow_of(tree, node.index);
+    if (g == nullptr) {
+        for (gates_u32 i = 0; i < tree->grid_grow_count && g == nullptr; i++) {
+            gates_node_t n = { .index = tree->grid_grows[i].index, .generation = tree->grid_grows[i].generation };
+            if (!gates_i_valid(tree, n)) g = &tree->grid_grows[i]; /* reuse a dead node's entry */
+        }
+    }
+    if (g == nullptr) {
+        if (tree->grid_grow_count == tree->grid_grow_cap) {
+            gates_u32 cap = tree->grid_grow_cap == 0 ? 4u : tree->grid_grow_cap * 2u;
+            gates_allocator_t a = tree->alloc;
+            proven_result_mem_mut_t m =
+                tree->grid_grows == nullptr
+                    ? a.alloc_fn(a.ctx, cap * sizeof *tree->grid_grows, alignof(gates_i_grid_grow))
+                    : a.realloc_fn(a.ctx, tree->grid_grows, tree->grid_grow_cap * sizeof *tree->grid_grows,
+                                   cap * sizeof *tree->grid_grows, alignof(gates_i_grid_grow));
+            if (!proven_is_ok(m.err)) return m.err;
+            tree->grid_grows = (gates_i_grid_grow *)m.value.ptr;
+            tree->grid_grow_cap = cap;
+        }
+        g = &tree->grid_grows[tree->grid_grow_count++];
+    }
+    if (g->index != node.index || g->generation != s->generation) {
+        *g = (gates_i_grid_grow){ .index = node.index, .generation = s->generation };
+    }
+    g->weight[column] = weight;
+    gates_i_mark_dirty(tree, node.index, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
+    return GATES_OK;
+}
+
+gates_err_t gates_layout_set_child_span(gates_tree_t *tree, gates_node_t child, gates_u32 columns) {
+    gates_node_slot_t *s = slot_checked(tree, child);
+    if (s == nullptr || columns == 0 || columns > GATES_GRID_MAX_COLUMNS) return PROVEN_ERR_INVALID_ARG;
+    s->span = (gates_u8)columns;
+    gates_i_mark_dirty(tree, child.index, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
+    return GATES_OK;
+}
+
+void gates_i_grid_free(gates_tree_t *tree) {
+    if (tree->grid_grows != nullptr) tree->alloc.free_fn(tree->alloc.ctx, tree->grid_grows);
+    tree->grid_grows = nullptr;
+    tree->grid_grow_count = tree->grid_grow_cap = 0;
+}
+
+/* GRID rows are walked one at a time: a row is the shown children that fit
+ * its columns (with their spans), so no per-row storage is needed. */
+static gates_u32 span_of(const gates_node_slot_t *cs, gates_u32 cols) {
+    gates_u32 span = cs->span != 0 ? cs->span : 1u;
+    return span > cols ? cols : span;
+}
+
+static gates_u32 next_shown(const gates_tree_t *tree, gates_u32 c) {
+    while (c != GATES_NONE && gates_i_slot(tree, c)->hidden) c = gates_i_slot(tree, c)->next_sibling;
+    return c;
+}
+
+/* The row starting at `start`: returns the first child of the next row and the
+ * row's height. */
+static gates_u32 grid_row(const gates_tree_t *tree, gates_u32 start, gates_u32 cols, gates_i32 *height) {
+    gates_u32 col = 0, c = next_shown(tree, start);
+    *height = 0;
+    while (c != GATES_NONE) {
+        const gates_node_slot_t *cs = gates_i_slot(tree, c);
+        gates_u32 span = span_of(cs, cols);
+        if (col + span > cols) break; /* (a span is at most cols: only after the first cell) */
+        if (cs->pref.h > *height) *height = cs->pref.h;
+        col += span;
+        c = next_shown(tree, cs->next_sibling);
+        if (col >= cols) break;
+    }
+    return c;
+}
+
+/* Column widths: single-column children first, then spans widen their last column. */
+static void grid_columns_w(const gates_tree_t *tree, const gates_node_slot_t *s, gates_i32 *col_w) {
+    gates_u32 cols = grid_columns(s);
+    for (int pass = 0; pass < 2; pass++) {
+        gates_u32 col = 0;
+        for (gates_u32 c = next_shown(tree, s->first_child); c != GATES_NONE;
+             c = next_shown(tree, gates_i_slot(tree, c)->next_sibling)) {
+            const gates_node_slot_t *cs = gates_i_slot(tree, c);
+            gates_u32 span = span_of(cs, cols);
+            if (col + span > cols) col = 0;
+            if (pass == 0 && span == 1 && cs->pref.w > col_w[col]) col_w[col] = cs->pref.w;
+            if (pass == 1 && span > 1) {
+                gates_i32 have = s->gap * (gates_i32)(span - 1);
+                for (gates_u32 k = 0; k < span; k++) have += col_w[col + k];
+                if (cs->pref.w > have) col_w[col + span - 1] += cs->pref.w - have;
+            }
+            col += span;
+            if (col >= cols) col = 0;
+        }
+    }
+}
+
+static gates_size_t grid_measure(const gates_tree_t *tree, const gates_node_slot_t *s) {
+    gates_i32 col_w[GATES_GRID_MAX_COLUMNS] = {0};
+    grid_columns_w(tree, s, col_w);
+    gates_u32 cols = grid_columns(s);
+    gates_size_t content = { s->gap * (gates_i32)(cols - 1), 0 };
+    for (gates_u32 k = 0; k < cols; k++) content.w += col_w[k];
+    gates_u32 rows = 0;
+    for (gates_u32 c = next_shown(tree, s->first_child); c != GATES_NONE; rows++) {
+        gates_i32 h;
+        c = grid_row(tree, c, cols, &h);
+        content.h += h;
+    }
+    if (rows > 0) content.h += s->gap * (gates_i32)(rows - 1);
+    return content;
+}
+
+/* WRAP: lays children into lines of at most `width`; returns the total size.
+ * With `place`, sets their rects from `origin`. */
+static gates_size_t wrap_lines(gates_tree_t *tree, gates_node_slot_t *s, gates_i32 width, bool place,
+                               gates_point_t origin) {
+    gates_i32 x = 0, y = 0, line_h = 0, max_w = 0;
+    bool first_in_line = true;
+    for (gates_u32 c = s->first_child; c != GATES_NONE; c = gates_i_slot(tree, c)->next_sibling) {
+        gates_node_slot_t *cs = gates_i_slot(tree, c);
+        if (cs->hidden) continue;
+        gates_size_t p = cs->pref;
+        if (!first_in_line && x + s->gap + p.w > width) {
+            y += line_h + s->gap;
+            x = 0;
+            line_h = 0;
+            first_in_line = true;
+        }
+        if (!first_in_line) x += s->gap;
+        if (place) cs->layout_rect = (gates_rect_t){ origin.x + x, origin.y + y, p.w, p.h };
+        x += p.w;
+        if (x > max_w) max_w = x;
+        if (p.h > line_h) line_h = p.h;
+        first_in_line = false;
+    }
+    return (gates_size_t){ max_w, y + line_h };
+}
+
 /* -- measure (bottom-up) ------------------------------------------------------ */
 
 static gates_size_t widget_intrinsic(const gates_tree_t *tree, const gates_node_slot_t *s,
@@ -157,6 +320,8 @@ static gates_size_t widget_intrinsic(const gates_tree_t *tree, const gates_node_
         return gates_i_tabstrip_measure(tree, s, text);
     case GATES_NODE_SPINARROWS:
         return gates_i_spin_arrows_measure();
+    case GATES_NODE_GROUPHEAD:
+        return gates_i_group_head_measure(tree, s, text);
     case GATES_NODE_SLIDER:
         return gates_i_slider_measure(tree, s);
     case GATES_NODE_BUTTON: {
@@ -323,6 +488,16 @@ static void measure_node(gates_tree_t *tree, gates_u32 idx, const gates_text_bac
             s->form_label_w = label_w;
             content = (gates_size_t){ label_w + GATES_FORM_COLUMN_GAP + editor_w,
                                       total_h + s->gap * (gates_i32)(n - 1) };
+            break;
+        }
+        case GATES_LAYOUT_GRID:
+            content = grid_measure(tree, s);
+            break;
+        case GATES_LAYOUT_WRAP: {
+            /* At the width of the last arrange (one line before the first). */
+            gates_i32 w = s->wrap_w > 0 ? s->wrap_w - 2 * s->padding : INT32_MAX / 2;
+            content = wrap_lines(tree, s, w, false, (gates_point_t){ 0, 0 });
+            if (s->wrap_w > 0 && content.w > w) content.w = w > 0 ? w : 0;
             break;
         }
         case GATES_LAYOUT_ABSOLUTE:
@@ -548,6 +723,64 @@ static void arrange_form(gates_tree_t *tree, gates_node_slot_t *s, gates_rect_t 
     }
 }
 
+static void grid_place(gates_node_slot_t *cs, gates_i32 x, gates_i32 w, gates_i32 row_y, gates_i32 rh) {
+    gates_i32 h = cs->pref.h < rh ? cs->pref.h : rh;
+    gates_i32 cw = w;
+    switch ((gates_align_i)cs->align) {
+    case GATES_ALIGN_START: cw = cs->pref.w < w ? cs->pref.w : w; break;
+    case GATES_ALIGN_CENTER: cw = cs->pref.w < w ? cs->pref.w : w; x += (w - cw) / 2; break;
+    case GATES_ALIGN_END: cw = cs->pref.w < w ? cs->pref.w : w; x += w - cw; break;
+    case GATES_ALIGN_STRETCH:
+    default: break;
+    }
+    cs->layout_rect = (gates_rect_t){ x, row_y + (rh - h) / 2, cw, h }; /* centred in its row */
+}
+
+static void arrange_grid(gates_tree_t *tree, gates_node_slot_t *s, gates_rect_t content) {
+    gates_u32 cols = grid_columns(s);
+    gates_i32 col_w[GATES_GRID_MAX_COLUMNS] = {0}, col_x[GATES_GRID_MAX_COLUMNS];
+    grid_columns_w(tree, s, col_w);
+    /* Spare width by the columns' grow weights. */
+    gates_i32 used = s->gap * (gates_i32)(cols - 1);
+    for (gates_u32 k = 0; k < cols; k++) used += col_w[k];
+    const gates_i_grid_grow *gw = grow_of(tree, (gates_u32)(s - tree->slots));
+    gates_i32 total_w = 0;
+    for (gates_u32 k = 0; gw != nullptr && k < cols; k++) total_w += gw->weight[k];
+    gates_i32 spare = content.w - used;
+    if (spare > 0 && total_w > 0) {
+        gates_i32 given = 0, last = -1;
+        for (gates_u32 k = 0; k < cols; k++) {
+            if (gw->weight[k] == 0) continue;
+            gates_i32 add = (gates_i32)((gates_i64)spare * gw->weight[k] / total_w);
+            col_w[k] += add;
+            given += add;
+            last = (gates_i32)k;
+        }
+        col_w[last] += spare - given; /* rounding goes to the last growing column */
+    }
+    gates_i32 x = content.x;
+    for (gates_u32 k = 0; k < cols; k++) {
+        col_x[k] = x;
+        x += col_w[k] + s->gap;
+    }
+    gates_i32 row_y = content.y;
+    for (gates_u32 c = next_shown(tree, s->first_child); c != GATES_NONE;) {
+        gates_i32 rh;
+        gates_u32 next = grid_row(tree, c, cols, &rh);
+        gates_u32 col = 0;
+        for (gates_u32 k = c; k != next; k = next_shown(tree, gates_i_slot(tree, k)->next_sibling)) {
+            gates_node_slot_t *cs = gates_i_slot(tree, k);
+            gates_u32 span = span_of(cs, cols);
+            gates_i32 w = s->gap * (gates_i32)(span - 1);
+            for (gates_u32 j = 0; j < span; j++) w += col_w[col + j];
+            grid_place(cs, col_x[col], w, row_y, rh);
+            col += span;
+        }
+        row_y += rh + s->gap;
+        c = next;
+    }
+}
+
 static void arrange_node(gates_tree_t *tree, gates_u32 idx) {
     gates_node_slot_t *s = gates_i_slot(tree, idx);
     if (s->hidden) {
@@ -594,6 +827,16 @@ static void arrange_node(gates_tree_t *tree, gates_u32 idx) {
     case GATES_LAYOUT_FORM:
         arrange_form(tree, s, content);
         break;
+    case GATES_LAYOUT_GRID:
+        arrange_grid(tree, s, content);
+        break;
+    case GATES_LAYOUT_WRAP:
+        if (s->layout_rect.w != s->wrap_w) {
+            s->wrap_w = s->layout_rect.w;
+            tree->wrap_changed = true; /* measured for another width: one more pass */
+        }
+        (void)wrap_lines(tree, s, content.w, true, (gates_point_t){ content.x, content.y });
+        break;
     case GATES_LAYOUT_ABSOLUTE:
     case GATES_LAYOUT_NONE:
     default:
@@ -624,9 +867,17 @@ gates_err_t gates_layout_run(gates_tree_t *tree, gates_size_t viewport,
     tree->line_height = root_metrics.line_height; /* wheel step unit */
     tree->advance = root_metrics.advance;         /* average width: sizing hints */
     tree->text_backend = text;                    /* for hit testing between layouts */
+    tree->wrap_changed = false;
     measure_node(tree, tree->root, text);
     gates_i_slot(tree, tree->root)->layout_rect = (gates_rect_t){ 0, 0, viewport.w, viewport.h };
     arrange_node(tree, tree->root);
+    if (tree->wrap_changed) {
+        /* A wrap container got another width than it was measured for: measure
+         * again with that width (its height follows it), once. */
+        tree->wrap_changed = false;
+        measure_node(tree, tree->root, text);
+        arrange_node(tree, tree->root);
+    }
     /* Overlays (plan-0009 stage 2): measured on their own, placed in the viewport. */
     for (gates_u32 i = 0; i < tree->overlay_count; i++) {
         gates_u32 idx = tree->overlays[i].index;
@@ -769,7 +1020,8 @@ static bool validate_idx(const gates_tree_t *tree, gates_u32 idx) {
     }
     if (s->layout_kind == GATES_LAYOUT_ROW || s->layout_kind == GATES_LAYOUT_COLUMN ||
         s->layout_kind == GATES_LAYOUT_SPLIT || s->layout_kind == GATES_LAYOUT_SCROLL ||
-        s->layout_kind == GATES_LAYOUT_FORM) {
+        s->layout_kind == GATES_LAYOUT_FORM || s->layout_kind == GATES_LAYOUT_GRID ||
+        s->layout_kind == GATES_LAYOUT_WRAP) {
         for (gates_u32 a = s->first_child; a != GATES_NONE;
              a = gates_i_slot(tree, a)->next_sibling) {
             for (gates_u32 b = gates_i_slot(tree, a)->next_sibling; b != GATES_NONE;

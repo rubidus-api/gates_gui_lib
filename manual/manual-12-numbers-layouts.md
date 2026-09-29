@@ -1,6 +1,6 @@
 # Chapter 12 - Numbers, groups and layouts
 
-Headers: `gates/inputs.h`, `gates/event.h`.
+Headers: `gates/inputs.h`, `gates/event.h`, `gates/widget.h`, `gates/layout.h`.
 
 ## One handler for many controls
 
@@ -114,8 +114,83 @@ int main(void) {
 }
 ```
 
+## Group box
+
+`gates_group_create(tree, parent, title, collapsible, &group, &content)` draws a titled frame
+around a column panel; put related controls in `content`. The title takes mnemonic markup: in a
+plain group Alt+x goes to the first control inside, like a label with a target. A collapsible
+group's title is a Tab stop with an open/closed mark: Space, Enter, a click or its mnemonic
+shows or hides the content, whose controls then take no room and cannot be reached. A person's
+toggle reports VALUE_CHANGED on the group with `ev->checked` = expanded;
+`gates_group_set_expanded` is silent.
+
+## Grid and wrap layouts
+
+`GATES_LAYOUT_KIND_GRID` puts children in rows of `gates_layout_set_grid` columns (two by
+default): each column as wide as its widest child, each row as tall as its tallest, children
+centred in their row and filling the cell's width unless their align asks for their own width.
+`gates_layout_set_grid_column_grow` gives spare width to columns - the usual choice is labels
+in a fixed column and fields in a growing one - and `gates_layout_set_child_span` lets a child
+cover several columns. `GATES_LAYOUT_KIND_WRAP` places children left to right at their own size
+and starts a new line when the next does not fit, like words on a page; its height follows the
+width it is given. The gap applies both ways in both.
+
+<!-- example: manual/examples/ex_12_layouts.c -->
+```c
+/* manual example (host): a grid form inside a collapsible group, and wrapped chips.
+ * expect: labels in column 1, fields in column 2 at x 40; 7 chips on 3 lines; folded: 0 fields reachable */
+#include <gates/gates.h>
+
+#include <stdio.h>
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&(gates_tree_desc_t){0}, &t))) return 1;
+    gates_node_t root = gates_tree_root(t), group, content, grid, chips, field[2], chip[7];
+    const gates_text_backend_t *be = gates_text_backend_builtin(); /* 8 units a character */
+    bool ok = gates_is_ok(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN)) &&
+              gates_is_ok(gates_group_create(t, root, GATES_STR("&Connection"), true, &group, &content)) &&
+              gates_is_ok(gates_panel_create(t, content, &grid)) &&
+              gates_is_ok(gates_layout_set(t, grid, GATES_LAYOUT_KIND_GRID)) &&   /* two columns */
+              gates_is_ok(gates_layout_set_gap(t, grid, 8)) &&
+              gates_is_ok(gates_layout_set_grid_column_grow(t, grid, 1, 1));    /* fields take the rest */
+    static const char *names[2] = { "Host", "Port" };
+    for (int i = 0; ok && i < 2; i++) {
+        gates_node_t l;
+        ok = gates_is_ok(gates_label_create(t, grid, (gates_str_t){ .ptr = (const gates_u8 *)names[i], .size = 4 }, &l)) &&
+             gates_is_ok(gates_textbox_create(t, grid, GATES_STR(""), 12, &field[i])) &&
+             gates_is_ok(gates_node_set_labelled_by(t, field[i], l));
+    }
+    ok = ok && gates_is_ok(gates_panel_create(t, root, &chips)) &&
+         gates_is_ok(gates_layout_set(t, chips, GATES_LAYOUT_KIND_WRAP)) &&
+         gates_is_ok(gates_layout_set_gap(t, chips, 4));
+    for (int i = 0; ok && i < 7; i++) {
+        ok = gates_is_ok(gates_button_create(t, chips, GATES_STR("tag"), nullptr, nullptr, &chip[i]));
+    }
+    if (!ok || !gates_is_ok(gates_layout_run(t, (gates_size_t){ 160, 400 }, be))) return 1;
+
+    gates_rect_t g = gates_node_layout_rect(t, grid), f = gates_node_layout_rect(t, field[0]);
+    int lines = 1;
+    for (int i = 1; i < 7; i++) {
+        lines += gates_node_layout_rect(t, chip[i]).y > gates_node_layout_rect(t, chip[i - 1]).y;
+    }
+    /* Folding the group hides its content: nothing inside takes room or focus. */
+    if (!gates_is_ok(gates_group_set_expanded(t, group, false)) ||
+        !gates_is_ok(gates_layout_run(t, (gates_size_t){ 160, 400 }, be))) {
+        return 1;
+    }
+    int shown = gates_widget_focusable(t, field[0]) + gates_widget_focusable(t, field[1]);
+    printf("labels in column 1, fields in column 2 at x %d; 7 chips on %d lines; folded: %d fields reachable\n",
+           f.x - g.x, lines, shown);
+    gates_tree_destroy(t);
+    return 0;
+}
+```
+
 ## Accessibility
 
 A spin box is a Spinner with a RangeValue in its integer units, and its text box is an edit
 named after it; a slider is a Slider with a RangeValue. Screen readers and automation can set
-either value; it is clamped into the range and reported like a person's change.
+either value; it is clamped into the range and reported like a person's change. A group box is
+a Group named by its title; a collapsible one has ExpandCollapse, and its title's focus is the
+group's.

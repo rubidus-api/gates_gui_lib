@@ -268,7 +268,8 @@ static bool has_events(gates_node_kind_t kind) {
     return kind == GATES_NODE_TEXTBOX || kind == GATES_NODE_CHECKBOX ||
            kind == GATES_NODE_BUTTON || kind == GATES_NODE_DIALOG || kind == GATES_NODE_MENU ||
            kind == GATES_NODE_RADIO || kind == GATES_NODE_CHOICE || kind == GATES_NODE_VIEW ||
-           kind == GATES_NODE_TABS || kind == GATES_NODE_SPIN || kind == GATES_NODE_SLIDER;
+           kind == GATES_NODE_TABS || kind == GATES_NODE_SPIN || kind == GATES_NODE_SLIDER ||
+           kind == GATES_NODE_GROUP;
 }
 
 gates_err_t gates_widget_set_handler(gates_tree_t *tree, gates_node_t node, gates_event_fn fn,

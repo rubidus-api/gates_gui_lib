@@ -1,6 +1,6 @@
 # 12장 - 숫자, 묶음, 배치
 
-헤더: `gates/inputs.h`, `gates/event.h`.
+헤더: `gates/inputs.h`, `gates/event.h`, `gates/widget.h`, `gates/layout.h`.
 
 ## 여러 컨트롤에 처리기 하나
 
@@ -93,6 +93,66 @@ int main(void) {
 }
 ```
 
+## 그룹 상자
+
+`gates_group_create(tree, parent, title, collapsible, &group, &content)`는 세로 패널 둘레에 제목이 있는 틀을 그린다. 관련된 컨트롤을 `content`에 넣는다. 제목은 니모닉 표시를 받는다. 보통 그룹에서 Alt+x는 대상이 있는 레이블처럼 안의 첫 컨트롤로 간다. 접을 수 있는 그룹의 제목은 열림/닫힘 표시가 있는 Tab 정지 위치이다. Space, Enter, 클릭, 니모닉이 내용을 보이거나 숨기며, 숨은 내용의 컨트롤은 자리를 차지하지 않고 닿을 수도 없다. 사람이 바꾸면 그룹에 VALUE_CHANGED가 오고 `ev->checked`는 펼쳐졌는지이다. `gates_group_set_expanded`는 조용히 바꾼다.
+
+## 격자와 줄바꿈 배치
+
+`GATES_LAYOUT_KIND_GRID`는 자식을 `gates_layout_set_grid` 개의 열로 된 행에 놓는다(기본 두 열). 열은 가장 넓은 자식만큼 넓고, 행은 가장 높은 자식만큼 높으며, 자식은 행 안에서 세로 가운데에 놓이고 정렬이 자기 너비를 청하지 않으면 칸의 너비를 채운다. `gates_layout_set_grid_column_grow`는 남는 너비를 열에 나눠 준다. 흔히 레이블은 고정 열에, 필드는 늘어나는 열에 둔다. `gates_layout_set_child_span`은 자식이 여러 열을 덮게 한다. `GATES_LAYOUT_KIND_WRAP`는 자식을 제 크기로 왼쪽에서 오른쪽으로 놓고, 다음 자식이 들어가지 않으면 종이 위의 낱말처럼 새 줄을 시작한다. 그 높이는 받은 너비를 따른다. 두 배치 모두 간격은 두 방향에 쓰인다.
+
+<!-- example: manual/examples/ex_12_layouts.c -->
+```c
+/* manual example (host): a grid form inside a collapsible group, and wrapped chips.
+ * expect: labels in column 1, fields in column 2 at x 40; 7 chips on 3 lines; folded: 0 fields reachable */
+#include <gates/gates.h>
+
+#include <stdio.h>
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&(gates_tree_desc_t){0}, &t))) return 1;
+    gates_node_t root = gates_tree_root(t), group, content, grid, chips, field[2], chip[7];
+    const gates_text_backend_t *be = gates_text_backend_builtin(); /* 8 units a character */
+    bool ok = gates_is_ok(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN)) &&
+              gates_is_ok(gates_group_create(t, root, GATES_STR("&Connection"), true, &group, &content)) &&
+              gates_is_ok(gates_panel_create(t, content, &grid)) &&
+              gates_is_ok(gates_layout_set(t, grid, GATES_LAYOUT_KIND_GRID)) &&   /* two columns */
+              gates_is_ok(gates_layout_set_gap(t, grid, 8)) &&
+              gates_is_ok(gates_layout_set_grid_column_grow(t, grid, 1, 1));    /* fields take the rest */
+    static const char *names[2] = { "Host", "Port" };
+    for (int i = 0; ok && i < 2; i++) {
+        gates_node_t l;
+        ok = gates_is_ok(gates_label_create(t, grid, (gates_str_t){ .ptr = (const gates_u8 *)names[i], .size = 4 }, &l)) &&
+             gates_is_ok(gates_textbox_create(t, grid, GATES_STR(""), 12, &field[i])) &&
+             gates_is_ok(gates_node_set_labelled_by(t, field[i], l));
+    }
+    ok = ok && gates_is_ok(gates_panel_create(t, root, &chips)) &&
+         gates_is_ok(gates_layout_set(t, chips, GATES_LAYOUT_KIND_WRAP)) &&
+         gates_is_ok(gates_layout_set_gap(t, chips, 4));
+    for (int i = 0; ok && i < 7; i++) {
+        ok = gates_is_ok(gates_button_create(t, chips, GATES_STR("tag"), nullptr, nullptr, &chip[i]));
+    }
+    if (!ok || !gates_is_ok(gates_layout_run(t, (gates_size_t){ 160, 400 }, be))) return 1;
+
+    gates_rect_t g = gates_node_layout_rect(t, grid), f = gates_node_layout_rect(t, field[0]);
+    int lines = 1;
+    for (int i = 1; i < 7; i++) {
+        lines += gates_node_layout_rect(t, chip[i]).y > gates_node_layout_rect(t, chip[i - 1]).y;
+    }
+    /* Folding the group hides its content: nothing inside takes room or focus. */
+    if (!gates_is_ok(gates_group_set_expanded(t, group, false)) ||
+        !gates_is_ok(gates_layout_run(t, (gates_size_t){ 160, 400 }, be))) {
+        return 1;
+    }
+    int shown = gates_widget_focusable(t, field[0]) + gates_widget_focusable(t, field[1]);
+    printf("labels in column 1, fields in column 2 at x %d; 7 chips on %d lines; folded: %d fields reachable\n",
+           f.x - g.x, lines, shown);
+    gates_tree_destroy(t);
+    return 0;
+}
+```
+
 ## 접근성
 
-스핀 상자는 정수 단위의 RangeValue가 있는 Spinner이고, 그 글상자는 스핀 상자의 이름을 가진 편집기이다. 슬라이더는 RangeValue가 있는 Slider이다. 화면 낭독기와 자동화는 어느 쪽 값이든 정할 수 있으며, 그 값은 범위 안으로 맞춰지고 사람의 변경처럼 알려진다.
+스핀 상자는 정수 단위의 RangeValue가 있는 Spinner이고, 그 글상자는 스핀 상자의 이름을 가진 편집기이다. 슬라이더는 RangeValue가 있는 Slider이다. 화면 낭독기와 자동화는 어느 쪽 값이든 정할 수 있으며, 그 값은 범위 안으로 맞춰지고 사람의 변경처럼 알려진다. 그룹 상자는 제목을 이름으로 가진 Group이다. 접을 수 있는 그룹에는 ExpandCollapse가 있고, 그 제목의 초점은 그룹의 초점이다.

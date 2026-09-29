@@ -18,7 +18,7 @@ settings panels, inspectors, log viewers, build tools. Every chapter is one file
 - [Chapter 9 - Accessibility](manual-09-accessibility.md): the model, the rules, UI Automation
 - [Chapter 10 - Deployment and troubleshooting](manual-10-deployment.md)
 - [Chapter 11 - The application frame](manual-11-application-frame.md): mnemonics, the menu bar, the keymap, toolbar, status bar, tooltips, tabs, saved state
-- [Chapter 12 - Numbers, groups and layouts](manual-12-numbers-layouts.md): bubbling, deferred calls, spin box, slider
+- [Chapter 12 - Numbers, groups and layouts](manual-12-numbers-layouts.md): bubbling, deferred calls, spin box, slider, group box, grid and wrap layouts
 
 ## How to read it
 

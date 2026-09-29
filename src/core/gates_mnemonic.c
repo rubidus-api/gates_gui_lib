@@ -138,6 +138,7 @@ bool gates_i_mn_markup(const gates_tree_t *tree, gates_u32 idx) {
     case GATES_NODE_BUTTON:
     case GATES_NODE_CHECKBOX:
     case GATES_NODE_MENUBAR:
+    case GATES_NODE_GROUPHEAD:
         return true;
     case GATES_NODE_LABEL: {
         const gates_widget_state_t *st = gates_i_state(tree, s->state_index);
@@ -228,6 +229,10 @@ static gates_u32 candidate(const gates_tree_t *tree, gates_u32 idx, gates_u8 let
     const gates_widget_state_t *st = gates_i_state(tree, s->state_index);
     if (st == nullptr || gates_mnemonic_of(gates_i_widget_label(tree, st)) != letter) {
         return GATES_NONE;
+    }
+    if (s->kind == GATES_NODE_GROUPHEAD && s->parent != GATES_NONE && !gates_i_group_foldable(tree, s->parent)) {
+        /* A plain group's title: its first control (plan-0019). */
+        return gates_i_reachable(tree, idx) ? gates_i_group_first(tree, s->parent) : GATES_NONE;
     }
     if (s->kind == GATES_NODE_LABEL) {
         gates_node_t t = { .index = st->mn_target_index, .generation = st->mn_target_generation };
@@ -321,8 +326,9 @@ bool gates_input_mnemonic(gates_tree_t *tree, gates_u32 codepoint) {
     gates_node_kind_t kind = gates_i_slot(tree, src)->kind;
     gates_tree_set_focus(tree, gates_i_handle(tree, to));
     gates_i_scroll_into_view(tree, to);
-    if (kind == GATES_NODE_BUTTON || kind == GATES_NODE_CHECKBOX) {
-        gates_i_activate(tree, src);
+    if (kind == GATES_NODE_BUTTON || kind == GATES_NODE_CHECKBOX ||
+        (kind == GATES_NODE_GROUPHEAD && to == src)) {
+        gates_i_activate(tree, src); /* a collapsible group's title toggles */
     }
     return true;
 }

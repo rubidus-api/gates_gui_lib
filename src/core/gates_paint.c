@@ -144,6 +144,12 @@ static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
     case GATES_NODE_TOOLBAR:
         emit(ctx, gates_i_toolbar_paint(tree, idx, ctx->dl, ctx->theme, ctx->text));
         break;
+    case GATES_NODE_GROUP:
+        emit(ctx, gates_i_group_paint(tree, idx, ctx->dl, ctx->theme));
+        break; /* the title and the content follow */
+    case GATES_NODE_GROUPHEAD:
+        emit(ctx, gates_i_group_head_paint(tree, idx, ctx->dl, ctx->theme, ctx->text));
+        break;
     case GATES_NODE_SPINARROWS:
         emit(ctx, gates_i_spin_arrows_paint(tree, idx, ctx->dl, ctx->theme));
         break;

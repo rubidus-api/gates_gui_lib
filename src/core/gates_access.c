@@ -422,6 +422,7 @@ static gates_role_t role_of(const gates_tree_t *tree, gates_u32 idx) {
     case GATES_NODE_STATUSBAR: return GATES_ROLE_STATUS_BAR;
     case GATES_NODE_TABSTRIP: return GATES_ROLE_TAB;
     case GATES_NODE_SPIN: return GATES_ROLE_SPINNER;
+    case GATES_NODE_GROUP: return GATES_ROLE_GROUP;
     case GATES_NODE_SLIDER: return GATES_ROLE_SLIDER;
     case GATES_NODE_VIEW: {
         gates_u32 k = gates_i_view_kind(tree, idx);
@@ -695,6 +696,9 @@ gates_access_ref_t gates_access_focus_ref(gates_tree_t *tree) {
         gates_i_option_find(st, st->opt_sel) != nullptr) {
         return ref_of(tree, tree->focus, st->opt_sel);
     }
+    if (gates_i_slot(tree, tree->focus)->kind == GATES_NODE_GROUPHEAD) {
+        return ref_of(tree, gates_i_slot(tree, tree->focus)->parent, 0); /* the group (plan-0019) */
+    }
     if (gates_i_slot(tree, tree->focus)->kind == GATES_NODE_TABSTRIP) {
         gates_u32 tabs = gates_i_slot(tree, tree->focus)->parent;
         return ref_of(tree, tree->focus, (gates_u64)gates_i_tabs_selected(tree, tabs) + 1);
@@ -926,6 +930,9 @@ gates_err_t gates_access_info(gates_tree_t *tree, gates_node_t node, gates_u64 i
         markup = gates_i_valid(tree, field.label) && gates_i_mn_markup(tree, field.label.index);
     } else if (s->kind == GATES_NODE_DIALOG && s->first_child != GATES_NONE) {
         name = label_text(tree, gates_i_handle(tree, s->first_child));
+    } else if (s->kind == GATES_NODE_GROUP && s->first_child != GATES_NONE) {
+        name = own_text(tree, s->first_child); /* its title (plan-0019) */
+        markup = true;
     } else if (s->kind == GATES_NODE_TABSTRIP && s->parent != GATES_NONE) {
         name = gates_i_tabs_title(tree, s->parent, gates_i_tabs_selected(tree, s->parent));
         markup = true; /* the selected tab names the strip */
@@ -943,7 +950,8 @@ gates_err_t gates_access_info(gates_tree_t *tree, gates_node_t node, gates_u64 i
     gates_u32 at = put_shown(&b, name, markup, &name_n);
     bind(&b, &out->name, at, name_n);
     /* Access key: the node's own mnemonic, or that of the label that targets it. */
-    if (markup && gates_node_eq(key_label, GATES_NODE_NULL) && gates_i_mn_markup(tree, idx)) {
+    if (markup && gates_node_eq(key_label, GATES_NODE_NULL) &&
+        (gates_i_mn_markup(tree, idx) || s->kind == GATES_NODE_GROUP)) {
         key_str(&b, &out->access_key, gates_mnemonic_of(name), true);
     } else if (gates_i_valid(tree, key_label) && gates_node_eq(gates_label_target(tree, key_label), node)) {
         key_str(&b, &out->access_key, gates_mnemonic_of(label_text(tree, key_label)), true);
@@ -1035,6 +1043,13 @@ gates_err_t gates_access_info(gates_tree_t *tree, gates_node_t node, gates_u64 i
         out->range_min = 0;
         out->range_max = 1000;
         out->range_value = st != nullptr ? st->value : 0;
+        break;
+    case GATES_NODE_GROUP:
+        if (gates_i_group_foldable(tree, idx)) {
+            states |= GATES_ACCESS_EXPANDABLE | (st->checked ? GATES_ACCESS_EXPANDED : 0u);
+            if (!inert) actions |= GATES_ACCESS_EXPAND;
+            if (tree->focus != GATES_NONE && tree->focus == s->first_child) states |= GATES_ACCESS_FOCUSED;
+        }
         break;
     case GATES_NODE_SPIN:
     case GATES_NODE_SLIDER: {
@@ -1158,6 +1173,10 @@ gates_err_t gates_access_expand(gates_tree_t *tree, gates_node_t node, gates_u64
     if (!gates_is_ok(err)) return err;
     if (gates_i_slot(tree, node.index)->kind == GATES_NODE_VIEW && item != 0) {
         return gates_i_view_expand_id(tree, node.index, item, expand); /* a request */
+    }
+    if (gates_i_slot(tree, node.index)->kind == GATES_NODE_GROUP && item == 0) {
+        if (!gates_i_group_foldable(tree, node.index)) return PROVEN_ERR_INVALID_ARG;
+        return gates_i_group_toggle(tree, node.index, expand);
     }
     if (gates_i_slot(tree, node.index)->kind == GATES_NODE_MENUBAR && item != 0) {
         if (st->mbar == nullptr || item > st->mbar->count) return PROVEN_ERR_INVALID_ARG;

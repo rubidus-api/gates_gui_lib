@@ -13,7 +13,8 @@ gates_u32 gates_i_scope_root(const gates_tree_t *tree) {
 static bool focusable_kind(gates_node_kind_t k) {
     return k == GATES_NODE_BUTTON || k == GATES_NODE_CHECKBOX || k == GATES_NODE_TEXTBOX ||
            k == GATES_NODE_RADIO || k == GATES_NODE_CHOICE || k == GATES_NODE_VIEW ||
-           k == GATES_NODE_TOOLBAR || k == GATES_NODE_TABSTRIP || k == GATES_NODE_SLIDER;
+           k == GATES_NODE_TOOLBAR || k == GATES_NODE_TABSTRIP || k == GATES_NODE_SLIDER ||
+           k == GATES_NODE_GROUPHEAD;
 }
 
 /* Reachable: nothing on the way up is hidden, every stack ancestor shows the

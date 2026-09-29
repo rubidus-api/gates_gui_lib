@@ -8,7 +8,8 @@
 static bool interactive(const gates_tree_t *tree, const gates_node_slot_t *s) {
     if (s->kind != GATES_NODE_BUTTON && s->kind != GATES_NODE_CHECKBOX &&
         s->kind != GATES_NODE_TEXTBOX && s->kind != GATES_NODE_RADIO &&
-        s->kind != GATES_NODE_CHOICE && s->kind != GATES_NODE_VIEW && s->kind != GATES_NODE_SLIDER) {
+        s->kind != GATES_NODE_CHOICE && s->kind != GATES_NODE_VIEW && s->kind != GATES_NODE_SLIDER &&
+        !(s->kind == GATES_NODE_GROUPHEAD && s->parent != GATES_NONE && gates_i_group_foldable(tree, s->parent))) {
         return false;
     }
     const gates_widget_state_t *st = gates_i_state(tree, s->state_index);
@@ -86,6 +87,10 @@ void gates_i_activate(gates_tree_t *tree, gates_u32 idx) {
     }
     if (s->kind == GATES_NODE_CHOICE) {
         gates_i_choice_open(tree, idx);
+        return;
+    }
+    if (s->kind == GATES_NODE_GROUPHEAD) {
+        gates_i_group_head_activate(tree, idx); /* plan-0019 */
         return;
     }
     if (s->kind != GATES_NODE_BUTTON && s->kind != GATES_NODE_CHECKBOX) {

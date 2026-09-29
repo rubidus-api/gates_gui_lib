@@ -18,6 +18,7 @@
 #include <gates/timer.h>
 #include <gates/access.h>
 #include <gates/input.h>
+#include <gates/layout.h>
 
 /* One queued notification: kind/origin plus the source's handle. The payload
  * is read from the widget when the event is delivered (latest state). */
@@ -130,6 +131,8 @@ typedef enum gates_layout_kind_i {
     GATES_LAYOUT_SPLIT,
     GATES_LAYOUT_SCROLL,
     GATES_LAYOUT_FORM,
+    GATES_LAYOUT_GRID,
+    GATES_LAYOUT_WRAP,
 } gates_layout_kind_i;
 
 /* Non-widget drag targets (split handle, scroll thumb). */
@@ -226,6 +229,8 @@ typedef struct gates_widget_state_t {
     struct gates_i_tabs *tabs;
     /* Spin box and slider (plan-0019): the range. */
     struct gates_i_range *rng;
+    /* Group box (plan-0019): collapsible (checked = expanded). */
+    bool group_fold;
     /* Form (plan-0010 stage 2): its field table. */
     struct gates_i_field *fields;
     gates_u32 field_count;
@@ -278,6 +283,11 @@ typedef struct gates_node_slot_t {
     gates_size_t content_size;
     /* FORM: the label column width found by the last measure. */
     gates_i32 form_label_w;
+    /* GRID (plan-0019): columns (0 = 2); a child's span (0 = 1). WRAP: the
+     * width the last measure used (the line breaks depend on it). */
+    gates_u8 grid_cols;
+    gates_u8 span;
+    gates_i32 wrap_w;
 
     gates_u32 dirty;         /* GATES_DIRTY_* */
     bool hidden;             /* plan-0010: no space, no paint, no hit, no focus */
@@ -391,6 +401,11 @@ struct gates_tree {
     bool cues_always;            /* the platform always underlines access keys */
     bool eat_char;               /* a menu took the last key: drop the character it makes */
     gates_u32 tb_hover;          /* toolbar under the pointer (its hover entry), GATES_NONE */
+    /* GRID column grow weights (plan-0019), per grid node. */
+    struct gates_i_grid_grow *grid_grows;
+    gates_u32 grid_grow_count;
+    gates_u32 grid_grow_cap;
+    bool wrap_changed;           /* a wrap container was arranged at a new width */
     /* Bubble handlers and deferred calls (plan-0019). */
     struct gates_i_bubble *bubbles;
     gates_u32 bubble_count;
@@ -418,6 +433,14 @@ struct gates_tree {
 #define GATES_I_MB_OFF 0u
 #define GATES_I_MB_HIGHLIGHT 1u
 #define GATES_I_MB_OPEN 2u
+
+/* GRID grow weights (gates_layout.c, plan-0019). */
+typedef struct gates_i_grid_grow {
+    gates_u32 index;
+    gates_u32 generation;
+    gates_u8 weight[GATES_GRID_MAX_COLUMNS];
+} gates_i_grid_grow;
+void gates_i_grid_free(gates_tree_t *tree);
 
 /* Bubble handlers and deferred calls (gates_event.c, plan-0019). */
 typedef struct gates_i_bubble {
@@ -827,6 +850,18 @@ gates_err_t gates_i_slider_paint(const gates_tree_t *tree, gates_u32 idx, gates_
 bool gates_i_slider_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t *ev);
 bool gates_i_slider_press(gates_tree_t *tree, gates_u32 idx, gates_point_t p);
 void gates_i_slider_drag(gates_tree_t *tree, gates_point_t p, bool end);
+
+/* Group box (gates_group.c, plan-0019). */
+bool gates_i_group_foldable(const gates_tree_t *tree, gates_u32 group);
+gates_err_t gates_i_group_toggle(gates_tree_t *tree, gates_u32 group, bool expanded);
+void gates_i_group_head_activate(gates_tree_t *tree, gates_u32 head);
+gates_u32 gates_i_group_first(const gates_tree_t *tree, gates_u32 group);
+gates_size_t gates_i_group_head_measure(const gates_tree_t *tree, const gates_node_slot_t *s,
+                                        const gates_text_backend_t *text);
+gates_err_t gates_i_group_paint(const gates_tree_t *tree, gates_u32 group, gates_draw_list_t *dl,
+                                const gates_theme_t *theme);
+gates_err_t gates_i_group_head_paint(const gates_tree_t *tree, gates_u32 head, gates_draw_list_t *dl,
+                                     const gates_theme_t *theme, const gates_text_backend_t *text);
 
 /* Tooltips (gates_tooltip.c, plan-0018). */
 gates_str_t gates_i_tooltip_of(const gates_tree_t *tree, gates_u32 idx);

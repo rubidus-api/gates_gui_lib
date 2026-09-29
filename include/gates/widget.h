@@ -176,6 +176,19 @@ bool gates_choice_list_open(const gates_tree_t *tree, gates_node_t choice);
                                                    gates_i32 permille);
 gates_i32 gates_progress_value(const gates_tree_t *tree, gates_node_t node);
 
+/* -- group box (plan-0019) -------------------------------------------------------
+ * A titled frame around a column panel (*out_content) for related controls.
+ * The title takes mnemonic markup: Alt+x focuses the first control inside, or
+ * for a collapsible group toggles it. A collapsible group's title is a Tab stop
+ * with an open/closed mark; Space, Enter or a click shows or hides the content,
+ * and a person's toggle queues VALUE_CHANGED on the group (ev->checked =
+ * expanded). gates_group_set_expanded is silent. */
+[[nodiscard]] gates_err_t gates_group_create(gates_tree_t *tree, gates_node_t parent, gates_str_t title,
+                                             bool collapsible, gates_node_t *out_group,
+                                             gates_node_t *out_content);
+[[nodiscard]] gates_err_t gates_group_set_expanded(gates_tree_t *tree, gates_node_t group, bool expanded);
+bool gates_group_expanded(const gates_tree_t *tree, gates_node_t group);
+
 /* Properties (setters mark the node layout/paint dirty as appropriate). */
 [[nodiscard]] gates_err_t gates_widget_set_text(gates_tree_t *tree, gates_node_t node,
                                                 gates_str_t text);

@@ -541,6 +541,230 @@ static void test_slider(void) {
     gates_tree_destroy(t);
 }
 
+/* -- GRID and WRAP layouts ------------------------------------------------------------- */
+
+static gates_rect_t rect(gates_tree_t *t, gates_node_t n) { return gates_node_layout_rect(t, n); }
+
+static gates_node_t label(gates_tree_t *t, gates_node_t parent, const char *s) {
+    gates_node_t n;
+    GT_ASSERT_OK(gates_label_create(t, parent, (gates_str_t){ .ptr = (const gates_u8 *)s, .size = strlen(s) }, &n));
+    return n;
+}
+
+static void test_grid(void) {
+    gates_tree_t *t;
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &t));
+    gates_i32 adv = be->metrics(be->ctx, GATES_FONT_UI).advance;
+    gates_i32 lh = be->metrics(be->ctx, GATES_FONT_UI).line_height;
+    gates_node_t root = gates_tree_root(t), g;
+    GT_ASSERT_OK(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN));
+    GT_ASSERT_OK(gates_panel_create(t, root, &g));
+    GT_ASSERT_OK(gates_layout_set(t, g, GATES_LAYOUT_KIND_GRID));
+    GT_ASSERT_OK(gates_layout_set_grid(t, g, 3));
+    GT_ASSERT_OK(gates_layout_set_gap(t, g, 4));
+    GT_ASSERT(gates_layout_set_grid(t, g, 0) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_layout_set_grid(t, g, GATES_GRID_MAX_COLUMNS + 1) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_layout_set_grid_column_grow(t, g, 3, 1) == PROVEN_ERR_INVALID_ARG);
+    /* Row 0: a | bbbb | cc     Row 1: dddddd | (hidden) e | f     Row 2: "wide span" over two | gg */
+    gates_node_t a = label(t, g, "a"), b = label(t, g, "bbbb"), c = label(t, g, "cc");
+    gates_node_t d = label(t, g, "dddddd"), hid = label(t, g, "hidden"), e = label(t, g, "e"), f = label(t, g, "f");
+    gates_node_t w = label(t, g, "wide span"), gg = label(t, g, "gg");
+    GT_ASSERT_OK(gates_node_set_hidden(t, hid, true));
+    GT_ASSERT_OK(gates_layout_set_child_span(t, w, 2));
+    gates_node_t btn;
+    GT_ASSERT_OK(gates_button_create(t, g, GATES_STR("tall"), nullptr, nullptr, &btn)); /* row 3, col 0 */
+    layout(t);
+    GT_ASSERT(gates_layout_validate(t, root));
+    gates_rect_t ga = rect(t, g);
+    /* Columns: 0 = widest of a, dddddd, (span), tall button; 1 = bbbb/e; 2 = cc/f/gg. */
+    gates_i32 btn_w = gates_node_preferred_size(t, btn).w;
+    gates_i32 col0 = 6 * adv > btn_w ? 6 * adv : btn_w;
+    gates_i32 col1 = 4 * adv;
+    GT_ASSERT(rect(t, a).x == ga.x && rect(t, d).x == ga.x);
+    GT_ASSERT(rect(t, b).x == ga.x + col0 + 4 && rect(t, e).x == rect(t, b).x);
+    GT_ASSERT(rect(t, c).x == rect(t, b).x + col1 + 4 && rect(t, f).x == rect(t, c).x);
+    GT_ASSERT(rect(t, a).w == col0);                          /* a cell's width by default */
+    /* Rows: each as tall as its tallest; the hidden label takes no cell. */
+    GT_ASSERT(rect(t, d).y == rect(t, a).y + lh + 4);
+    GT_ASSERT(rect(t, w).y == rect(t, d).y + lh + 4 && rect(t, gg).y == rect(t, w).y);
+    /* The span covers two columns and the gap between them. */
+    GT_ASSERT(rect(t, w).w == col0 + 4 + col1 && rect(t, gg).x == rect(t, c).x);
+    /* A taller child makes a taller row; shorter ones are centred in it. */
+    gates_i32 bh = gates_node_preferred_size(t, btn).h;
+    GT_ASSERT(rect(t, btn).y == rect(t, w).y + lh + 4 && rect(t, btn).h == bh);
+    /* Grow: spare width goes to column 1; START keeps a child's own width. */
+    GT_ASSERT_OK(gates_layout_set_grid_column_grow(t, g, 1, 1));
+    GT_ASSERT_OK(gates_layout_set_child_align(t, e, GATES_ALIGN_START_V));
+    GT_ASSERT_OK(gates_layout_set_child_align(t, f, GATES_ALIGN_END_V));
+    layout(t);
+    GT_ASSERT(rect(t, c).x + rect(t, c).w == ga.x + VW);      /* the grid fills the width */
+    GT_ASSERT(rect(t, b).w > col1 && rect(t, e).w == adv);
+    GT_ASSERT(rect(t, f).x + rect(t, f).w == rect(t, c).x + rect(t, c).w);
+    /* The grid's own size: all columns and rows. */
+    gates_size_t gp = gates_node_preferred_size(t, g);
+    GT_ASSERT(gp.w == col0 + col1 + 2 * adv + 2 * 4 && gp.h == 3 * lh + bh + 3 * 4);
+    GT_ASSERT(gates_layout_set_child_span(t, w, 0) == PROVEN_ERR_INVALID_ARG);
+    /* A short cell beside a taller one is centred in the row. */
+    gates_node_t beside = label(t, g, "s");
+    layout(t);
+    GT_ASSERT(rect(t, beside).y == rect(t, btn).y + (bh - lh) / 2 && rect(t, beside).x == rect(t, b).x);
+    gates_tree_destroy(t);
+
+    /* The default is two columns; a span wider than its columns widens the last of them. */
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &t));
+    root = gates_tree_root(t);
+    GT_ASSERT_OK(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN));
+    GT_ASSERT_OK(gates_panel_create(t, root, &g));
+    GT_ASSERT_OK(gates_layout_set(t, g, GATES_LAYOUT_KIND_GRID));
+    gates_node_t p0 = label(t, g, "aa"), p1 = label(t, g, "b"), p2 = label(t, g, "c");
+    gates_node_t long_span = label(t, g, "a very long spanning text");
+    GT_ASSERT_OK(gates_layout_set_child_span(t, long_span, 2));
+    layout(t);
+    GT_ASSERT(rect(t, p2).x == rect(t, p0).x && rect(t, p2).y > rect(t, p0).y);   /* third cell: row 2 */
+    GT_ASSERT(rect(t, p1).x == rect(t, p0).x + 2 * adv);                           /* no gap set */
+    gates_i32 span_w = 25 * adv;
+    GT_ASSERT(rect(t, long_span).w == span_w && gates_node_preferred_size(t, g).w == span_w);
+    GT_ASSERT(rect(t, long_span).y > rect(t, p2).y);          /* a span that does not fit starts a row */
+    gates_tree_destroy(t);
+}
+
+static void test_wrap(void) {
+    gates_tree_t *t;
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &t));
+    gates_node_t root = gates_tree_root(t), wrap, after, chip[6];
+    GT_ASSERT_OK(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN));
+    GT_ASSERT_OK(gates_panel_create(t, root, &wrap));
+    GT_ASSERT_OK(gates_layout_set(t, wrap, GATES_LAYOUT_KIND_WRAP));
+    GT_ASSERT_OK(gates_layout_set_gap(t, wrap, 6));
+    for (int i = 0; i < 6; i++) {
+        GT_ASSERT_OK(gates_button_create(t, wrap, GATES_STR("chip"), nullptr, nullptr, &chip[i]));
+    }
+    GT_ASSERT_OK(gates_button_create(t, root, GATES_STR("after"), nullptr, nullptr, &after));
+    GT_ASSERT_OK(gates_layout_run(t, (gates_size_t){ 200, 300 }, be));
+    gates_i32 cw = gates_node_preferred_size(t, chip[0]).w, ch = gates_node_preferred_size(t, chip[0]).h;
+    gates_i32 per = (200 + 6) / (cw + 6);                     /* chips per line */
+    GT_ASSERT(per >= 1 && per < 6);
+    GT_ASSERT(rect(t, chip[0]).y == rect(t, chip[per - 1]).y);
+    GT_ASSERT(rect(t, chip[per]).y == rect(t, chip[0]).y + ch + 6 && rect(t, chip[per]).x == rect(t, chip[0]).x);
+    GT_ASSERT(rect(t, chip[1]).x == rect(t, chip[0]).x + cw + 6);
+    gates_i32 lines = (6 + per - 1) / per;
+    GT_ASSERT(rect(t, wrap).h == lines * ch + (lines - 1) * 6);  /* the height follows the width */
+    GT_ASSERT(rect(t, after).y == rect(t, wrap).y + rect(t, wrap).h);
+    GT_ASSERT(gates_layout_validate(t, root));
+    /* Wider: one line; the next sibling moves up. */
+    GT_ASSERT_OK(gates_layout_run(t, (gates_size_t){ 800, 300 }, be));
+    GT_ASSERT(rect(t, chip[5]).y == rect(t, chip[0]).y && rect(t, wrap).h == ch);
+    GT_ASSERT(rect(t, after).y == rect(t, wrap).y + ch);
+    /* A child wider than the line gets a line of its own (the first stays on the first line). */
+    GT_ASSERT_OK(gates_layout_run(t, (gates_size_t){ cw - 5, 300 }, be));
+    GT_ASSERT(rect(t, chip[0]).y == rect(t, wrap).y);
+    GT_ASSERT(rect(t, chip[1]).y > rect(t, chip[0]).y && rect(t, chip[1]).x == rect(t, chip[0]).x);
+    gates_tree_destroy(t);
+}
+
+/* -- group box --------------------------------------------------------------------------- */
+
+static void test_group(void) {
+    gates_tree_t *t;
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &t));
+    gates_node_t root = gates_tree_root(t), plain, pc, fold, fc, name, opt, after;
+    GT_ASSERT_OK(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN));
+    GT_ASSERT_OK(gates_group_create(t, root, GATES_STR("&Identity"), false, &plain, &pc));
+    GT_ASSERT_OK(gates_textbox_create(t, pc, GATES_STR(""), 10, &name));
+    GT_ASSERT_OK(gates_node_set_access_name(t, name, GATES_STR("Name")));
+    GT_ASSERT_OK(gates_group_create(t, root, GATES_STR("&More options"), true, &fold, &fc));
+    GT_ASSERT_OK(gates_checkbox_create(t, fc, GATES_STR("Verbose"), false, nullptr, nullptr, &opt));
+    GT_ASSERT_OK(gates_button_create(t, root, GATES_STR("After"), nullptr, nullptr, &after));
+    rec_t rec = {0};
+    GT_ASSERT_OK(gates_widget_set_handler(t, fold, record, &rec));
+    layout(t);
+    GT_ASSERT(gates_node_kind(t, plain) == GATES_NODE_GROUP && gates_group_expanded(t, plain));
+    /* The content sits inside the frame, below the title. */
+    gates_rect_t pr = rect(t, plain), nr = rect(t, name);
+    GT_ASSERT(nr.x > pr.x && nr.y > pr.y + 8 && nr.y + nr.h < pr.y + pr.h);
+    gates_draw_list_t dl;
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    GT_ASSERT_OK(gates_paint_tree(t, &dl, theme, be));
+    char buf[256] = "";
+    gates_usize_t k = 0;
+    for (gates_u32 i = 0; i < gates_draw_list_len(&dl); i++) {
+        const gates_draw_cmd_t *cmd = gates_draw_list_at(&dl, i);
+        if (cmd->kind != GATES_DRAW_TEXT) continue;
+        gates_str_t s = gates_draw_cmd_text(&dl, cmd);
+        for (gates_usize_t j = 0; j < s.size && k + 1 < sizeof buf; j++) buf[k++] = (char)s.ptr[j];
+    }
+    buf[k] = 0;
+    GT_ASSERT(strstr(buf, "Identity") && strstr(buf, "More options") && !strstr(buf, "&"));
+    gates_draw_list_deinit(&dl);
+    /* Tab order: the name box, the collapsible title, its content, After. */
+    gates_tree_set_focus(t, name);
+    GT_ASSERT(key(t, GATES_KEY_TAB));
+    gates_node_t head = gates_tree_focus(t);
+    GT_ASSERT(gates_node_kind(t, head) == GATES_NODE_GROUPHEAD);
+    GT_ASSERT(rect(t, head).h >= 24);                         /* a pointer target */
+    /* A plain group's title is not a Tab stop: the first stop is the name box. */
+    gates_tree_set_focus(t, GATES_NODE_NULL);
+    GT_ASSERT(key(t, GATES_KEY_TAB));
+    GT_ASSERT(gates_node_eq(gates_tree_focus(t), name));
+    gates_tree_set_focus(t, head);
+    GT_ASSERT(key(t, GATES_KEY_TAB));
+    GT_ASSERT(gates_node_eq(gates_tree_focus(t), opt));
+    /* Space (on release), Enter and a click toggle; the content goes and comes back. */
+    gates_tree_set_focus(t, head);
+    gates_key_event_t up = { .key = GATES_KEY_SPACE, .down = false };
+    GT_ASSERT(key(t, GATES_KEY_SPACE));
+    GT_ASSERT(gates_group_expanded(t, fold));
+    GT_ASSERT(gates_input_key(t, &up));
+    GT_ASSERT(!gates_group_expanded(t, fold));
+    layout(t);
+    GT_ASSERT(!gates_widget_focusable(t, opt));
+    GT_ASSERT(rect(t, after).y < rect(t, head).y + rect(t, head).h + 20);  /* moved up */
+    dispatch(t);
+    GT_ASSERT(rec.n == 1 && rec.kind[0] == GATES_EVENT_VALUE_CHANGED && !rec.checked[0]);
+    GT_ASSERT(key(t, GATES_KEY_ENTER));
+    GT_ASSERT(gates_group_expanded(t, fold));
+    dispatch(t);                                             /* (unread toggles coalesce) */
+    GT_ASSERT(rec.n == 2 && rec.checked[1]);
+    layout(t);
+    click(t, head);
+    GT_ASSERT(!gates_group_expanded(t, fold));
+    dispatch(t);
+    GT_ASSERT(rec.n == 3 && !rec.checked[2]);
+    /* The program: silent. */
+    GT_ASSERT_OK(gates_group_set_expanded(t, fold, true));
+    dispatch(t);
+    GT_ASSERT(rec.n == 3 && gates_widget_focusable(t, opt));
+    GT_ASSERT(gates_group_set_expanded(t, name, true) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_group_set_expanded(t, plain, false) == PROVEN_ERR_INVALID_STATE);
+    /* Mnemonics: a plain group's title focuses its first control; a collapsible one toggles. */
+    layout(t);
+    gates_tree_set_focus(t, after);
+    GT_ASSERT(gates_input_mnemonic(t, 'i'));
+    GT_ASSERT(gates_node_eq(gates_tree_focus(t), name));
+    GT_ASSERT(gates_input_mnemonic(t, 'm'));
+    GT_ASSERT(!gates_group_expanded(t, fold) && gates_node_eq(gates_tree_focus(t), head));
+    /* Accessibility: groups named by their titles; the collapsible one expands. */
+    gates_access_info_t info;
+    GT_ASSERT_OK(gates_access_info(t, plain, 0, &info));
+    GT_ASSERT(info.role == GATES_ROLE_GROUP && seq(info.name, "Identity") && !(info.states & GATES_ACCESS_EXPANDABLE));
+    GT_ASSERT_OK(gates_access_info(t, fold, 0, &info));
+    GT_ASSERT(info.role == GATES_ROLE_GROUP && seq(info.name, "More options"));
+    GT_ASSERT((info.states & GATES_ACCESS_EXPANDABLE) && !(info.states & GATES_ACCESS_EXPANDED));
+    GT_ASSERT(seq(info.access_key, "Alt+M") && (info.actions & GATES_ACCESS_EXPAND));
+    gates_access_ref_t f = gates_access_focus_ref(t);
+    GT_ASSERT(gates_node_eq(f.node, fold) && f.item == 0);   /* the title's focus is the group's */
+    GT_ASSERT_OK(gates_access_expand(t, fold, 0, true));
+    GT_ASSERT(gates_group_expanded(t, fold));
+    rec.n = 0;
+    dispatch(t);
+    GT_ASSERT(rec.n == 1 && rec.checked[0]);
+    GT_ASSERT(gates_access_expand(t, plain, 0, true) == PROVEN_ERR_INVALID_ARG);
+    layout(t);
+    gates_access_issue_t issues[8];
+    GT_ASSERT(gates_access_audit(t, theme, issues, 8) == 0);
+    gates_tree_destroy(t);
+}
+
 int main(void) {
     be = gates_text_backend_builtin();
     theme = gates_theme_light();
@@ -549,5 +773,8 @@ int main(void) {
     test_range_text();
     test_spin();
     test_slider();
+    test_grid();
+    test_wrap();
+    test_group();
     return gt_report("test_inputs");
 }

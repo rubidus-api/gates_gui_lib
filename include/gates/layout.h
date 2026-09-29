@@ -21,7 +21,23 @@ typedef enum gates_layout_t {
     GATES_LAYOUT_KIND_SPLIT,      /* exactly two panes + draggable handle */
     GATES_LAYOUT_KIND_SCROLL,     /* clipped viewport over a taller column */
     GATES_LAYOUT_KIND_FORM,       /* rows of label | editor (plan-0010), see below */
+    GATES_LAYOUT_KIND_GRID,       /* rows and columns (plan-0019), see below */
+    GATES_LAYOUT_KIND_WRAP,       /* a row that breaks onto new lines (plan-0019) */
 } gates_layout_t;
+
+/* GRID: children fill cells left to right, row by row, gates_layout_set_grid
+ * columns to a row (default 2). A column is as wide as its widest child; the
+ * spare width goes to columns by their grow weights (none by default). A child
+ * may span columns (gates_layout_set_child_span). A row is as tall as its
+ * tallest child; children are centred vertically in their row and take the
+ * cell's width unless their align says START_V, CENTER_V or END_V (then their
+ * own width, at the left, middle or right). The gap applies both ways.
+ * WRAP: children at their preferred size, left to right, breaking onto a new
+ * line when the next one does not fit; the gap applies both ways; a line is as
+ * tall as its tallest child. A wrap container's height follows its width (the
+ * layout runs a second pass when that width changes). Hidden children take no
+ * place in either. At most GATES_GRID_MAX_COLUMNS columns. */
+#define GATES_GRID_MAX_COLUMNS 16
 
 /* FORM: every child is a row whose first child is its label and whose second
  * child is its editor (further children are not shown). Labels share one
@@ -53,6 +69,13 @@ typedef enum gates_align_t {
     GATES_ALIGN_CENTER_V,
     GATES_ALIGN_END_V,
 } gates_align_t;
+
+/* GRID (plan-0019): columns 1..GATES_GRID_MAX_COLUMNS; a column's grow weight;
+ * a child's span in columns (1 by default; wider than the grid is cut to fit). */
+[[nodiscard]] gates_err_t gates_layout_set_grid(gates_tree_t *tree, gates_node_t node, gates_u32 columns);
+[[nodiscard]] gates_err_t gates_layout_set_grid_column_grow(gates_tree_t *tree, gates_node_t node,
+                                                            gates_u32 column, gates_u8 weight);
+[[nodiscard]] gates_err_t gates_layout_set_child_span(gates_tree_t *tree, gates_node_t child, gates_u32 columns);
 
 /* Container properties. */
 [[nodiscard]] gates_err_t gates_layout_set(gates_tree_t *tree, gates_node_t node,

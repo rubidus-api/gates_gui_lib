@@ -262,7 +262,7 @@ static bool is_button(const gates_tree_t *tree, gates_u32 idx) {
 static bool is_toggle(const gates_tree_t *tree, gates_u32 idx) {
     gates_node_kind_t k = idx != GATES_NONE ? gates_i_slot(tree, idx)->kind : GATES_NODE_PANEL;
     return k == GATES_NODE_BUTTON || k == GATES_NODE_CHECKBOX || k == GATES_NODE_RADIO ||
-           k == GATES_NODE_CHOICE;
+           k == GATES_NODE_CHOICE || k == GATES_NODE_GROUPHEAD;
 }
 
 static bool is_kind(const gates_tree_t *tree, gates_u32 idx, gates_node_kind_t kind) {
@@ -377,7 +377,8 @@ static bool input_key(gates_tree_t *tree, const gates_key_event_t *ev) {
         if (ev->ctrl) {
             break;
         }
-        if (focus_ok && (is_button(tree, f) || is_kind(tree, f, GATES_NODE_CHOICE))) {
+        if (focus_ok && (is_button(tree, f) || is_kind(tree, f, GATES_NODE_CHOICE) ||
+                         is_kind(tree, f, GATES_NODE_GROUPHEAD))) {
             gates_i_activate(tree, f); /* a choice opens its list */
             return true;
         }
