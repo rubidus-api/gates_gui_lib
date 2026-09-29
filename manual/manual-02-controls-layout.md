@@ -4,7 +4,7 @@ Headers: `gates/widget.h`, `gates/layout.h`, `gates/geometry.h`.
 
 ## The control matrix
 
-Every control is one node. The table is the whole finite set in 0.6.0: what the person does
+Every control is one node. The table is the whole finite set in 0.7.0: what the person does
 with it, the keys, the events the program receives, and what a screen reader hears (chapter 9).
 
 | Control | Create | The person | Keys | Events | Accessible as |
@@ -14,6 +14,7 @@ with it, the keys, the events the program receives, and what a screen reader hea
 | button | `gates_button_create` | asks for one action | Space (on release), Enter | ACTIVATED | button (Invoke) |
 | check box | `gates_checkbox_create` | turns an option on or off | Space | VALUE_CHANGED | check box (Toggle) |
 | text box | `gates_textbox_create` | types one line | editing keys, Ctrl+C/X/V/Z/Y, the IME | TEXT_CHANGED, PREEDIT_CHANGED, LIMIT_EXCEEDED | edit (Value, Text) |
+| editor | `gates_editor_create` | writes many lines | editing keys, Ctrl+arrows, PageUp/PageDown, Ctrl+C/X/V/Z/Y, the IME; Tab when asked | TEXT_CHANGED, SELECTION_CHANGED, PREEDIT_CHANGED | edit (Value, Text by line) (chapter 6) |
 | radio group | `gates_radio_create` | picks one of a few | arrows, Home, End, Space | VALUE_CHANGED (result = option id) | group of radio buttons |
 | choice | `gates_choice_create` | picks one from a list | Space, Enter, Alt+Down open; arrows, Enter, Escape | VALUE_CHANGED | combo box (Selection, Expand) |
 | progress | `gates_progress_create` | sees how far work has come | - | - | progress bar (percent) |

@@ -4,7 +4,7 @@
 
 ## 컨트롤 표
 
-컨트롤은 저마다 노드 하나다. 아래 표가 0.6.0 의 유한한 컨트롤 전부다. 사람이 그것으로 하는 일,
+컨트롤은 저마다 노드 하나다. 아래 표가 0.7.0 의 유한한 컨트롤 전부다. 사람이 그것으로 하는 일,
 키, 프로그램이 받는 이벤트, 화면 읽기 프로그램이 듣는 것(9장)을 적었다.
 
 | 컨트롤 | 만들기 | 사람은 | 키 | 이벤트 | 접근성으로는 |
@@ -14,6 +14,7 @@
 | 버튼 | `gates_button_create` | 동작 하나를 청한다 | Space(뗄 때), Enter | ACTIVATED | 버튼(Invoke) |
 | 체크박스 | `gates_checkbox_create` | 선택 사항을 켜고 끈다 | Space | VALUE_CHANGED | 체크박스(Toggle) |
 | 텍스트 상자 | `gates_textbox_create` | 한 줄을 입력한다 | 편집 키, Ctrl+C/X/V/Z/Y, IME | TEXT_CHANGED, PREEDIT_CHANGED, LIMIT_EXCEEDED | 편집(Value, Text) |
+| 편집기 | `gates_editor_create` | 여러 줄을 쓴다 | 편집 키, Ctrl+화살표, PageUp/PageDown, Ctrl+C/X/V/Z/Y, IME; 청하면 Tab | TEXT_CHANGED, SELECTION_CHANGED, PREEDIT_CHANGED | 편집(Value, 줄 단위 Text)(6장) |
 | 라디오 그룹 | `gates_radio_create` | 몇 개 중 하나를 고른다 | 화살표, Home, End, Space | VALUE_CHANGED(result = 선택지 id) | 라디오 버튼의 그룹 |
 | 선택 상자 | `gates_choice_create` | 목록에서 하나를 고른다 | Space, Enter, Alt+Down 으로 열기; 화살표, Enter, Escape | VALUE_CHANGED | 콤보 상자(Selection, Expand) |
 | 진행 막대 | `gates_progress_create` | 일이 얼마나 되었는지 본다 | - | - | 진행 막대(백분율) |

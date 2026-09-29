@@ -3,7 +3,7 @@
 # Gates GUI Library
 
 A small retained-mode GUI library in C23 for tool-style Windows programs - settings panels,
-inspectors, log viewers, file browsers, build tools. Version **0.6.0** (the latest release is 0.2.0).
+inspectors, log viewers, file browsers, build tools. Version **0.7.0** (the latest release is 0.2.0).
 
 | | |
 |---|---|
@@ -49,7 +49,7 @@ What you get:
   Automation provider, so Narrator and automation tools can read and use every control; an
   audit of enforced rules (names, 24 x 24 targets, keyboard reach, contrast, focus cues).
 
-It is not a browser engine, a game UI or a pixel-exact drawing kit. Version 0.6.0 has one
+It is not a browser engine, a game UI or a pixel-exact drawing kit. Version 0.7.0 has one
 backend: Win32 with a software renderer. The core is platform-free C23 and runs its tests
 anywhere.
 
@@ -95,7 +95,7 @@ int main(void) {
 Build it with mingw-w64 against the SDK:
 
 ```sh
-x86_64-w64-mingw32-gcc -std=c23 -O2 -Igates-0.6.0/include hello.c -Lgates-0.6.0/lib/win64 \
+x86_64-w64-mingw32-gcc -std=c23 -O2 -Igates-0.7.0/include hello.c -Lgates-0.7.0/lib/win64 \
     -lgates -lproven -lgdi32 -luser32 -limm32 -ldwmapi -ladvapi32 -luiautomationcore \
     -lole32 -loleaut32 -luuid -mwindows -o hello.exe
 ```
@@ -133,15 +133,18 @@ headless use on any system.
 
 ## Status
 
-0.6.0 adds data controls: table cells that show check boxes, progress bars and icons and can be
-edited in place, columns people hide and reorder from a header menu, a property grid, an undo
+0.7.0 adds a multi-line text editor over a gap buffer: it paints only the lines it shows, wraps,
+numbers lines, highlights through the program's styler, finds, indents, composes with input
+methods at the caret and reads by line to screen readers. 0.6.0 added data controls: table cells
+that show check boxes, progress bars and icons and can be edited in place, columns people hide and reorder from a header menu, a property grid, an undo
 stack for the program's own data, and background tasks with progress and Cancel. 0.5.0 added
 images and icons (PNG, JPEG and more through Windows Imaging Component) and the native file,
 folder, colour and message dialogs. 0.4.0 added number input (a spin box and a slider), group boxes that can collapse, grid and wrap
 layouts, event bubbling to a container and deferred calls. 0.3.0 added the application frame: a menu bar, a toolbar, a status bar, tabs, tooltips,
 Alt-letter access keys, a keymap programs can rebind, and saved UI arrangement (splits, tabs,
 columns, window placement); the `gallery` example shows it all. 0.2.0 lifted the monospace restriction: text is set in the system's proportional UI font, with
-a fixed-pitch font for logs and code chosen per node. The core suites (over 13,000 checks) pass on GCC and Clang and
+a fixed-pitch font for logs and code chosen per node. The core suites (over 14,000 checks, plus a randomized model check of the text buffer with
+2.7 million more) pass on GCC and Clang and
 under AddressSanitizer and UndefinedBehaviorSanitizer; every example builds warning-free with
 mingw-w64; the interactive behaviour - input, the Korean IME, themes and scaling, UI
 Automation and Narrator, the example programs - is checked on Windows 11. Releases with the

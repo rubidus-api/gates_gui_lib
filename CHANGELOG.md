@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 This project follows Keep a Changelog.
 
+## [0.7.0] - 2026-09-30
+
+The multi-line editor (plan-0022, RFC-0006).
+
+### Added
+
+- Text buffer (`gates/text_buffer.h`): UTF-8 in a gap buffer whose reads never move the gap (a
+  range is at most two spans), a line index with a pending shift, a style byte per byte, marks
+  with gravity, and find (forward, backward, ASCII case).
+- Multi-line editor (`gates/editor.h`): one node over a text buffer that paints only the lines it
+  shows; keys by code point, word, line and page with smart Home; pointer caret, drag selection,
+  double click word, wheel and scrollbars; clipboard keeping line breaks and tabs; read-only and a
+  byte limit; undo with typing and deletion runs and a modified mark; program edits; events
+  (TEXT_CHANGED without a text copy, SELECTION_CHANGED with the caret).
+- Editor options: soft wrap (Up/Down by rows), a line number gutter, auto-indent, and when Tab
+  types tabs, Tab/Shift+Tab indenting selected lines with Ctrl+Tab leaving; `gates_editor_set_wrap`
+  and `_set_line_numbers` change them later.
+- Highlighting: a style table and a lazy styler asked only for stale lines about to show; program
+  styles; marks and find through the editor.
+- Input methods compose at the caret in the editor (drawn underlined; the result is one edit).
+- Accessibility by line: `gates_access_text_rects` (one rectangle per row), offsets, selection and
+  value for the editor; Win32 UIA Line and Paragraph units and multi-row bounding rectangles.
+- Manual chapter 6: the editor, highlighting and large texts (ex_06_editor, ex_06_highlight); the
+  gallery's Text editor page (Alt+X).
+
+### Changed
+
+- The Windows IME is detached while a read-only editor has focus, as for read-only text boxes.
+
 ## [0.6.0] - 2026-09-30
 
 Data controls (plan-0021, RFC-0005 group 5).

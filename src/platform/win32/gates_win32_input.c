@@ -249,8 +249,9 @@ bool gates_win32_handle_input(gates_window_t *win, UINT msg, WPARAM wparam, LPAR
 
 static bool ime_has_target(gates_window_t *win) {
     gates_node_t focus = gates_tree_focus(win->tree);
-    return gates_textbox_edit(win->tree, focus) != nullptr &&
-           !gates_widget_disabled(win->tree, focus);
+    bool text = gates_textbox_edit(win->tree, focus) != nullptr ||
+                gates_node_kind(win->tree, focus) == GATES_NODE_EDITOR; /* plan-0022 */
+    return text && !gates_widget_disabled(win->tree, focus);
 }
 
 /* Application code (an event handler) moved focus while the IME composes:

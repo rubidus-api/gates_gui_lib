@@ -1,4 +1,4 @@
-# gates Manual (v0.6.0)
+# gates Manual (v0.7.0)
 
 The manual of `gates`, a small retained GUI library in C23 for tool-style Windows programs:
 settings panels, inspectors, log viewers, build tools. Every chapter is one file under
@@ -12,7 +12,7 @@ settings panels, inspectors, log viewers, build tools. Every chapter is one file
 - [Chapter 3 - Forms](manual-03-forms.md): labelled fields, the draft, validation
 - [Chapter 4 - Commands, focus, dialogs and menus](manual-04-commands-focus.md): also undo and redo for the program's data
 - [Chapter 5 - Views over your data](manual-05-views.md): lists, tables, trees, logs; cells people edit; the property grid
-- [Chapter 6 - Text entry](manual-06-text.md): the text box, the installed IME, limits, Unicode
+- [Chapter 6 - Text entry](manual-06-text.md): the text box, the installed IME, limits, Unicode; the multi-line editor and large texts
 - [Chapter 7 - Workers and timers](manual-07-workers-timers.md): also background tasks with progress and Cancel
 - [Chapter 8 - Themes, units and scaling](manual-08-themes-units.md)
 - [Chapter 9 - Accessibility](manual-09-accessibility.md): the model, the rules, UI Automation
@@ -31,8 +31,8 @@ and the text is a bug.
 
 ## Edition
 
-- Library and manual version: 0.6.0. Chapters note the headers they need; everything here is
-  in the 0.6.0 profile ("Windows Tool UI 1": Win32, one window per top-level surface, software
+- Library and manual version: 0.7.0. Chapters note the headers they need; everything here is
+  in the 0.7.0 profile ("Windows Tool UI 1": Win32, one window per top-level surface, software
   rendering).
 - Author: rubidus. License: MIT - Copyright (c) 2026 rubidus-api; the library and this manual
   are under the same license (`LICENSE` in the package).
