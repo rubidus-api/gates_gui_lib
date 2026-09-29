@@ -496,6 +496,7 @@ void gates_tree_destroy(gates_tree_t *tree) {
         return;
     }
     gates_allocator_t alloc = tree->alloc;
+    gates_i_tasks_shutdown(tree); /* cancels and joins every task (plan-0021) */
     /* Before any slot goes: messages still queued for this tree become stale. */
     if (tree->sender != nullptr) {
         gates_sender_detach(tree->sender, tree);

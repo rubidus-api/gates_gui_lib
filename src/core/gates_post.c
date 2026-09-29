@@ -231,7 +231,9 @@ gates_u32 gates_sender_dispatch(gates_sender_t *s, gates_u32 max) {
     for (gates_u32 i = 0; i < n; i++) {
         const gates_message_t *m = &batch[i];
         gates_tree_t *tree = find_tree(s, m->target.tree); /* looked up again each time */
-        if (tree != nullptr && gates_i_valid(tree, m->target.node)) {
+        if (tree != nullptr && m->kind >= GATES_I_TASK_KIND_BASE) {
+            gates_i_task_message(tree, m->kind, m->payload); /* a task's progress or end (plan-0021) */
+        } else if (tree != nullptr && gates_i_valid(tree, m->target.node)) {
             const gates_i_msg_handler_t *h = find_handler(tree, m->target.node);
             if (h != nullptr && h->fn != nullptr) {
                 gates_message_fn fn = h->fn;

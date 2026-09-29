@@ -55,6 +55,7 @@ CORE_SRC := \
   src/core/gates_image.c \
   src/core/gates_propgrid.c \
   src/core/gates_undo.c \
+  src/core/gates_task.c \
   src/render/gates_draw_list.c \
   src/render/gates_render_soft.c \
   src/text/gates_text_builtin.c \
@@ -71,7 +72,7 @@ TESTS     := test_foundation test_node_pool test_tree test_draw_list test_render
              test_events test_text_editing test_focus_commands \
              test_overlay test_controls test_form test_view test_view_adapters test_post \
              test_post_stress test_theme_dpi test_access test_text_prop test_frame test_inputs test_images \
-             test_data test_undo
+             test_data test_undo test_task
 TEST_BINS := $(addprefix $(TESTBIN)/,$(TESTS))
 TEST_OBJ  := $(patsubst %,$(OBJ)/tests/%.o,$(TESTS))
 
@@ -89,14 +90,16 @@ $(TESTBIN)/%: $(OBJ)/tests/%.o $(CORE_OBJ) $(PROVEN_OBJ)
 	@mkdir -p $(TESTBIN)
 	$(CC) $(CFLAGS) $^ -lm -o $@
 
-# The threaded posting stress test (T034) alone links pthreads; the shared flags
-# stay thread-free. ThreadSanitizer lane:
-#   make CC=clang BUILD=build-tsan CFLAGS="-std=c23 -g -O1 -fsanitize=thread" build-tsan/tests/test_post_stress
-$(OBJ)/tests/test_post_stress.o: tests/test_post_stress.c
+# The threaded tests (T034 posting stress, T053 tasks) alone link pthreads; the
+# shared flags stay thread-free. ThreadSanitizer lane:
+#   make CC=gcc BUILD=build-tsan CFLAGS="-std=c23 -g -O1 -fsanitize=thread" build-tsan/tests/test_post_stress build-tsan/tests/test_task
+#   (clang works where its TSan runtime is installed)
+THREADED_TESTS := test_post_stress test_task
+$(addprefix $(OBJ)/tests/,$(addsuffix .o,$(THREADED_TESTS))): $(OBJ)/tests/%.o: tests/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -pthread $(DEPFLAGS) -c $< -o $@
 
-$(TESTBIN)/test_post_stress: $(OBJ)/tests/test_post_stress.o $(CORE_OBJ) $(PROVEN_OBJ)
+$(addprefix $(TESTBIN)/,$(THREADED_TESTS)): $(TESTBIN)/%: $(OBJ)/tests/%.o $(CORE_OBJ) $(PROVEN_OBJ)
 	@mkdir -p $(TESTBIN)
 	$(CC) $(CFLAGS) -pthread $^ -o $@
 
@@ -133,7 +136,8 @@ WIN32_SRC := \
   src/platform/win32/gates_win32_uia.c \
   src/platform/win32/gates_win32_perf.c \
   src/platform/win32/gates_win32_image.c \
-  src/platform/win32/gates_win32_dialogs.c
+  src/platform/win32/gates_win32_dialogs.c \
+  src/platform/win32/gates_win32_task.c
 
 # Headers the Windows programs are built from: a change rebuilds them.
 WIN_HDRS := $(wildcard include/gates/*.h) $(wildcard src/core/*.h) $(wildcard src/platform/win32/*.h)

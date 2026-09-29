@@ -20,6 +20,7 @@
 #include <gates/input.h>
 #include <gates/layout.h>
 #include <gates/image.h>
+#include <gates/task.h>
 
 /* One queued notification: kind/origin plus the source's handle. The payload
  * is read from the widget when the event is delivered (latest state). */
@@ -375,6 +376,12 @@ struct gates_tree {
     /* Posting and timers (plan-0012). */
     gates_u64 serial;            /* unique for the process, never reused */
     gates_sender_t *sender;      /* attached sender (not a reference) or null */
+    /* Background tasks (plan-0021): the platform's threads and the running tasks. */
+    gates_threads_t threads;
+    bool has_threads;
+    struct gates_task *tasks;
+    gates_u32 task_count;
+    gates_u32 next_task_id;
     gates_i_msg_handler_t *msg_handlers;
     gates_u32 msg_handler_count;
     gates_u32 msg_handler_cap;
@@ -875,6 +882,12 @@ typedef struct gates_i_range {
 void gates_i_range_free(gates_tree_t *tree, gates_widget_state_t *st);
 void gates_i_propgrid_free(gates_tree_t *tree, gates_widget_state_t *st);
 void gates_i_node_undo(gates_tree_t *tree, gates_node_t node);
+/* Background tasks (plan-0021): message kinds from GATES_I_TASK_KIND_BASE are
+ * the tasks' own, handled by gates_i_task_message before node handlers; tree
+ * destroy cancels and joins every task first. */
+#define GATES_I_TASK_KIND_BASE 0xFFFF0000u
+void gates_i_task_message(gates_tree_t *tree, gates_u32 kind, void *payload);
+void gates_i_tasks_shutdown(gates_tree_t *tree);
 gates_i64 gates_i_range_value(const gates_tree_t *tree, gates_u32 idx);
 bool gates_i_range_info(const gates_tree_t *tree, gates_u32 idx, gates_i64 *min, gates_i64 *max, gates_i64 *value);
 /* A person's change (accessibility, keys): reserved report, clamped, VALUE_CHANGED. */

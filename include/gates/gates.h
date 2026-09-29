@@ -24,6 +24,7 @@
 #include <gates/propgrid.h>
 #include <gates/render.h>
 #include <gates/state.h>
+#include <gates/task.h>
 #include <gates/text.h>
 #include <gates/text_edit.h>
 #include <gates/theme.h>

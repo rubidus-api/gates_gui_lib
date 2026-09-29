@@ -514,6 +514,7 @@ gates_err_t gates_window_create(gates_app_t *app, const gates_window_desc_t *des
     }
     gates_win32_install_clipboard(win); /* copy/cut/paste for textboxes */
     gates_win32_install_image_decoder(win); /* PNG, JPEG, ... through WIC (plan-0020) */
+    gates_win32_install_threads(win); /* background tasks (plan-0021) */
     cues_setting(win);
     gates_tree_set_clock(win->tree, clock_ms, timers_changed, win);
     if (app->sender != nullptr) {
