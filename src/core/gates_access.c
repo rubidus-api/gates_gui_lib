@@ -24,8 +24,9 @@ static gates_i_access_prop_t *find_prop(const gates_tree_t *tree, gates_u32 idx)
 static void free_prop_strings(gates_tree_t *tree, gates_i_access_prop_t *p) {
     if (p->name != nullptr) tree->alloc.free_fn(tree->alloc.ctx, p->name);
     if (p->id != nullptr) tree->alloc.free_fn(tree->alloc.ctx, p->id);
-    p->name = p->id = nullptr;
-    p->name_len = p->id_len = 0;
+    if (p->tip != nullptr) tree->alloc.free_fn(tree->alloc.ctx, p->tip);
+    p->name = p->id = p->tip = nullptr;
+    p->name_len = p->id_len = p->tip_len = 0;
 }
 
 /* The node's entry, created on demand; entries of dead nodes are recycled. */
@@ -124,6 +125,35 @@ gates_err_t gates_node_set_live(gates_tree_t *tree, gates_node_t node, gates_liv
     gates_err_t err = prop_for(tree, node.index, &p);
     if (gates_is_ok(err)) p->live = live;
     return err;
+}
+
+/* -- tooltips (plan-0018): kept with the other per-node properties ---------------- */
+
+gates_err_t gates_node_set_tooltip(gates_tree_t *tree, gates_node_t node, gates_str_t text) {
+    if (tree == nullptr || !gates_i_valid(tree, node) || (text.size > 0 && text.ptr == nullptr)) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    gates_i_access_prop_t *p = find_prop(tree, node.index);
+    if (p == nullptr && text.size == 0) {
+        return GATES_OK;
+    }
+    gates_err_t err = p != nullptr ? GATES_OK : prop_for(tree, node.index, &p);
+    if (gates_is_ok(err)) err = copy_str(tree, text, &p->tip, &p->tip_len);
+    if (gates_is_ok(err)) {
+        gates_i_access_log(tree, GATES_ACCESS_CHANGED, node.index, 0);
+        gates_i_tip_check(tree); /* a shown tooltip follows its text, or goes */
+    }
+    return err;
+}
+
+gates_str_t gates_i_tooltip_of(const gates_tree_t *tree, gates_u32 idx) {
+    const gates_i_access_prop_t *p = find_prop(tree, idx);
+    return p != nullptr && p->tip_len > 0 ? (gates_str_t){ .ptr = p->tip, .size = p->tip_len } : (gates_str_t){0};
+}
+
+gates_str_t gates_node_tooltip(const gates_tree_t *tree, gates_node_t node) {
+    if (tree == nullptr || !gates_i_valid(tree, node)) return (gates_str_t){0};
+    return gates_i_tooltip_of(tree, node.index);
 }
 
 gates_live_t gates_i_access_live(const gates_tree_t *tree, gates_u32 idx) {
@@ -368,7 +398,8 @@ static gates_str_t label_text(const gates_tree_t *tree, gates_node_t n) {
 
 static bool is_interactive(gates_node_kind_t k) {
     return k == GATES_NODE_BUTTON || k == GATES_NODE_CHECKBOX || k == GATES_NODE_TEXTBOX ||
-           k == GATES_NODE_RADIO || k == GATES_NODE_CHOICE || k == GATES_NODE_VIEW;
+           k == GATES_NODE_RADIO || k == GATES_NODE_CHOICE || k == GATES_NODE_VIEW ||
+           k == GATES_NODE_TOOLBAR;
 }
 
 static gates_role_t role_of(const gates_tree_t *tree, gates_u32 idx) {
@@ -387,6 +418,8 @@ static gates_role_t role_of(const gates_tree_t *tree, gates_u32 idx) {
     case GATES_NODE_MENU: return GATES_ROLE_MENU;
     case GATES_NODE_FORM: return GATES_ROLE_FORM;
     case GATES_NODE_MENUBAR: return GATES_ROLE_MENU_BAR;
+    case GATES_NODE_TOOLBAR: return GATES_ROLE_TOOL_BAR;
+    case GATES_NODE_STATUSBAR: return GATES_ROLE_STATUS_BAR;
     case GATES_NODE_VIEW: {
         gates_u32 k = gates_i_view_kind(tree, idx);
         return k == GATES_I_VIEW_TREE ? GATES_ROLE_TREE : k == GATES_I_VIEW_TABLE ? GATES_ROLE_TABLE : GATES_ROLE_LIST;
@@ -410,6 +443,11 @@ gates_u64 gates_access_item_count(gates_tree_t *tree, gates_node_t node) {
     if (s->kind == GATES_NODE_RADIO || s->kind == GATES_NODE_CHOICE) return st->opt_count;
     if (s->kind == GATES_NODE_VIEW) return gates_i_view_item_count(tree, node.index);
     if (s->kind == GATES_NODE_MENUBAR) return st->mbar != nullptr ? st->mbar->count : 0;
+    if (s->kind == GATES_NODE_TOOLBAR && st->tbar != nullptr) {
+        gates_u64 n = 0;
+        for (gates_u32 k = 0; k < st->tbar->count; k++) n += st->tbar->ids[k] != 0 ? 1u : 0u;
+        return n + (gates_i_toolbar_shown(tree, node.index) < st->tbar->count ? 1u : 0u);
+    }
     if (s->kind == GATES_NODE_MENU) {
         if (st->menu_is_list) return 0; /* a choice's list: its rows are the choice's items */
         gates_u64 n = 0;
@@ -430,6 +468,14 @@ gates_u64 gates_access_item_at(gates_tree_t *tree, gates_node_t node, gates_u64 
     if (s->kind == GATES_NODE_VIEW) return gates_i_view_item_at(tree, node.index, index);
     if (s->kind == GATES_NODE_MENUBAR) {
         return st->mbar != nullptr && index < st->mbar->count ? index + 1 : 0; /* titles 1..n */
+    }
+    if (s->kind == GATES_NODE_TOOLBAR && st->tbar != nullptr) { /* entry + 1; ">>" is count + 1 */
+        gates_u64 k = 0;
+        for (gates_u32 e = 0; e < st->tbar->count; e++) {
+            if (st->tbar->ids[e] == 0) continue;
+            if (k++ == index) return (gates_u64)e + 1;
+        }
+        return k == index && gates_i_toolbar_shown(tree, node.index) < st->tbar->count ? st->tbar->count + 1u : 0u;
     }
     if (s->kind == GATES_NODE_MENU) {
         gates_u64 k = 0;
@@ -609,6 +655,9 @@ gates_access_ref_t gates_access_at_point(gates_tree_t *tree, gates_point_t p) {
     } else if (s->kind == GATES_NODE_MENUBAR) {
         gates_i32 t = gates_i_menubar_title_at(tree, idx, p);
         if (t >= 0) return (gates_access_ref_t){ n, (gates_u64)t + 1 };
+    } else if (s->kind == GATES_NODE_TOOLBAR) {
+        gates_i32 k = gates_i_toolbar_entry_at(tree, idx, p);
+        if (k >= 0) return (gates_access_ref_t){ n, (gates_u64)k + 1 };
     }
     return (gates_access_ref_t){ n, 0 };
 }
@@ -634,6 +683,10 @@ gates_access_ref_t gates_access_focus_ref(gates_tree_t *tree) {
     if (gates_i_slot(tree, tree->focus)->kind == GATES_NODE_RADIO && st != nullptr &&
         gates_i_option_find(st, st->opt_sel) != nullptr) {
         return ref_of(tree, tree->focus, st->opt_sel);
+    }
+    if (gates_i_slot(tree, tree->focus)->kind == GATES_NODE_TOOLBAR && st != nullptr) {
+        gates_i32 k = gates_i_toolbar_stop(tree, tree->focus); /* the button with the focus */
+        return ref_of(tree, tree->focus, k >= 0 ? (gates_u64)k + 1 : 0);
     }
     if (gates_i_slot(tree, tree->focus)->kind == GATES_NODE_VIEW && st != nullptr) {
         return ref_of(tree, tree->focus, gates_i_view_selected(st)); /* the selected row */
@@ -696,6 +749,42 @@ static gates_err_t item_info(gates_tree_t *tree, gates_u32 idx, gates_u64 item, 
         out->bounds = gates_i_menu_row_rect(tree, idx, (gates_u32)row);
         out->set_size = gates_access_item_count(tree, gates_i_handle(tree, idx));
         out->set_position = (gates_u64)item_pos(tree, gates_i_handle(tree, idx), item) + 1;
+    } else if (s->kind == GATES_NODE_TOOLBAR) {
+        if (st->tbar == nullptr || item == 0 || item > (gates_u64)st->tbar->count + 1) return PROVEN_ERR_INVALID_ARG;
+        gates_u32 k = (gates_u32)item - 1;
+        gates_u32 n_shown = gates_i_toolbar_shown(tree, idx);
+        out->role = GATES_ROLE_BUTTON;
+        if (k == st->tbar->count) {                 /* ">>" */
+            if (n_shown >= st->tbar->count) return PROVEN_ERR_INVALID_ARG;
+            gates_u32 at = put(b, cstr("More"));
+            bind(b, &out->name, at, 4);
+            out->actions = node_on ? GATES_ACCESS_INVOKE : 0u;
+            out->bounds = gates_i_toolbar_more_rect(tree, idx);
+        } else {
+            if (st->tbar->ids[k] == 0) return PROVEN_ERR_INVALID_ARG; /* separators are no items */
+            const gates_i_command_t *c = gates_i_toolbar_command(tree, idx, k);
+            bool on = c != nullptr && c->enabled;
+            if (c != nullptr) {
+                gates_usize_t nn = 0;
+                gates_u32 at = put_shown(b, (gates_str_t){ .ptr = c->label, .size = c->label_len }, true, &nn);
+                bind(b, &out->name, at, nn);
+                accel_str(b, &out->accelerator, &c->shortcut);
+                gates_u32 tn = gates_i_toolbar_tip(tree, idx, k, nullptr, 0);
+                gates_u32 d0 = b->len;
+                for (gates_u32 i = 0; i < tn && !b->failed; i++) put(b, cstr(" ")); /* room, then fill */
+                if (!b->failed && tn > 0) {
+                    (void)gates_i_toolbar_tip(tree, idx, k, b->tree->access_buf + d0, tn);
+                    bind(b, &out->description, d0, tn);
+                }
+            }
+            out->states = (on ? 0u : GATES_ACCESS_DISABLED) | (c != nullptr && c->checked ? GATES_ACCESS_CHECKED : 0u) |
+                          (k >= n_shown ? GATES_ACCESS_OFFSCREEN : 0u);
+            out->actions = on ? GATES_ACCESS_INVOKE : 0u;
+            out->bounds = gates_i_toolbar_entry_rect(tree, idx, k);
+        }
+        if (!shown(tree, idx)) out->states |= GATES_ACCESS_OFFSCREEN;
+        out->set_position = (gates_u64)item_pos(tree, gates_i_handle(tree, idx), item) + 1;
+        out->set_size = gates_access_item_count(tree, gates_i_handle(tree, idx));
     } else if (s->kind == GATES_NODE_MENUBAR) {
         if (st->mbar == nullptr || item == 0 || item > st->mbar->count) return PROVEN_ERR_INVALID_ARG;
         gates_u32 t = (gates_u32)item - 1;
@@ -829,6 +918,10 @@ gates_err_t gates_access_info(gates_tree_t *tree, gates_node_t node, gates_u64 i
         put(&b, help);
         bind(&b, &out->description, d0, b.len - d0);
     }
+    if (out->description.size == 0 && p != nullptr && p->tip_len > 0) {
+        gates_u32 d0 = put(&b, (gates_str_t){ .ptr = p->tip, .size = p->tip_len }); /* the tooltip */
+        bind(&b, &out->description, d0, p->tip_len);
+    }
 
     /* Automation id: explicit > field-<id> > cmd-<id>. */
     if (p != nullptr && p->id_len > 0) {
@@ -949,6 +1042,13 @@ gates_err_t gates_access_invoke(gates_tree_t *tree, gates_node_t node, gates_u64
     }
     if (k == GATES_NODE_VIEW && item != 0) {
         return gates_i_view_activate_id(tree, node.index, item); /* as Enter */
+    }
+    if (k == GATES_NODE_TOOLBAR && item != 0) {
+        const gates_i_toolbar *tb = st->tbar;
+        if (tb == nullptr || item > (gates_u64)tb->count + 1 || (item <= tb->count && tb->ids[item - 1] == 0)) {
+            return PROVEN_ERR_INVALID_ARG;
+        }
+        return gates_i_toolbar_activate(tree, node.index, (gates_u32)item - 1);
     }
     if (k == GATES_NODE_MENUBAR && item != 0) {
         return gates_access_expand(tree, node, item,

@@ -350,6 +350,8 @@ static int control_type(gates_role_t role) {
     case GATES_ROLE_ROW:          return UIA_DataItemControlTypeId;
     case GATES_ROLE_TREE_ITEM:    return UIA_TreeItemControlTypeId;
     case GATES_ROLE_MENU_BAR:     return UIA_MenuBarControlTypeId;
+    case GATES_ROLE_TOOL_BAR:     return UIA_ToolBarControlTypeId;
+    case GATES_ROLE_STATUS_BAR:   return UIA_StatusBarControlTypeId;
     default:                      return UIA_PaneControlTypeId;
     }
 }

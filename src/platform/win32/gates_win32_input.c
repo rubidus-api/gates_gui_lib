@@ -109,8 +109,20 @@ bool gates_win32_handle_input(gates_window_t *win, UINT msg, WPARAM wparam, LPAR
 
     switch (msg) {
     case WM_MOUSEMOVE: {
+        if (!win->leave_tracked) {
+            /* Hear when the pointer leaves, so hover and tooltips end (plan-0018). */
+            TRACKMOUSEEVENT tme = { .cbSize = sizeof tme, .dwFlags = TME_LEAVE, .hwndTrack = win->hwnd };
+            win->leave_tracked = TrackMouseEvent(&tme) != FALSE;
+        }
         gates_pointer_event_t ev = { .action = GATES_POINTER_MOVE };
         fill_common(win, &ev, pos);
+        dispatch(win, &ev);
+        return true;
+    }
+    case WM_MOUSELEAVE: {
+        win->leave_tracked = false;
+        gates_pointer_event_t ev = { .action = GATES_POINTER_MOVE };
+        fill_common(win, &ev, (gates_point_t){ -1, -1 }); /* over nothing */
         dispatch(win, &ev);
         return true;
     }

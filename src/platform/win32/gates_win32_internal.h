@@ -98,6 +98,7 @@ struct gates_window {
     gates_u32 zoom;              /* percent, 100 = none */
     bool strict;                 /* GATES_ACCESS_STRICT: audit after every layout */
     gates_u64 perf_input_us;     /* plan-0017: first input since the last frame, 0 = none */
+    bool leave_tracked;          /* plan-0018: WM_MOUSELEAVE requested for this hover */
     bool perf_first_done;
     gates_u32 strict_issues;     /* the count last reported */
 };

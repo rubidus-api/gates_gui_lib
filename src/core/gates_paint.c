@@ -141,6 +141,12 @@ static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
     case GATES_NODE_MENUBAR:
         emit(ctx, gates_i_menubar_paint(tree, idx, ctx->dl, ctx->theme, ctx->text));
         break;
+    case GATES_NODE_TOOLBAR:
+        emit(ctx, gates_i_toolbar_paint(tree, idx, ctx->dl, ctx->theme, ctx->text));
+        break;
+    case GATES_NODE_STATUSBAR:
+        emit(ctx, gates_i_statusbar_paint(tree, idx, ctx->dl, ctx->theme));
+        break; /* its segments follow */
     case GATES_NODE_RADIO:
     case GATES_NODE_CHOICE:
         emit(ctx, gates_i_options_paint(tree, idx, ctx->dl, ctx->theme, ctx->text, pressed,
@@ -363,6 +369,7 @@ gates_err_t gates_paint_tree(gates_tree_t *tree, gates_draw_list_t *dl,
         }
         paint_node(&ctx, tree->overlays[i].index);
     }
+    emit(&ctx, gates_i_tip_paint(tree, dl, theme, text)); /* above everything (plan-0018) */
     if (gates_is_ok(ctx.err)) {
         tree->dirty_bits &= ~(gates_u32)GATES_TREE_DIRTY_PAINT;
     }

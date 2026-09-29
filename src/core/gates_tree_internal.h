@@ -80,6 +80,8 @@ typedef struct gates_i_access_prop_t {
     gates_u32 id_len;
     gates_live_t live;
     gates_node_t labelled_by;
+    gates_u8 *tip;               /* tooltip (plan-0018) */
+    gates_u32 tip_len;
 } gates_i_access_prop_t;
 
 /* One registered command (gates_command.c). */
@@ -217,6 +219,8 @@ typedef struct gates_widget_state_t {
     gates_u32 mn_target_generation;
     /* Menu bar (plan-0018): its titles and their command ids. */
     struct gates_i_menubar *mbar;
+    /* Toolbar (plan-0018): its entries (command ids, 0 = separator). */
+    struct gates_i_toolbar *tbar;
     /* Form (plan-0010 stage 2): its field table. */
     struct gates_i_field *fields;
     gates_u32 field_count;
@@ -381,7 +385,23 @@ struct gates_tree {
     bool cues_shown;             /* keyboard cues since the last Alt / menu mode */
     bool cues_always;            /* the platform always underlines access keys */
     bool eat_char;               /* a menu took the last key: drop the character it makes */
+    gates_u32 tb_hover;          /* toolbar under the pointer (its hover entry), GATES_NONE */
+    /* Tooltips (plan-0018). */
+    gates_u32 tip_index;         /* target node, GATES_NONE when none */
+    gates_u32 tip_generation;
+    gates_u64 tip_item;          /* a toolbar button: entry + 1, else 0 */
+    gates_u8 tip_state;          /* GATES_I_TIP_OFF / _PENDING / _SHOWN */
+    bool tip_by_focus;           /* armed by keyboard focus, not the pointer */
+    gates_timer_id_t tip_timer;  /* 0 = none */
+    gates_rect_t tip_box;
+    gates_u8 *tip_text;          /* the shown text (a toolbar button's is composed) */
+    gates_u32 tip_len;
+    gates_u32 tip_cap;
 };
+
+#define GATES_I_TIP_OFF 0u
+#define GATES_I_TIP_PENDING 1u
+#define GATES_I_TIP_SHOWN 2u
 
 #define GATES_I_MB_OFF 0u
 #define GATES_I_MB_HIGHLIGHT 1u
@@ -674,6 +694,59 @@ gates_err_t gates_i_menu_open_for_bar(gates_tree_t *tree, gates_point_t at, gate
                                       gates_node_t *out_menu);
 /* Closes menu overlay record i (reported with result 0). */
 void gates_i_menu_close_record(gates_tree_t *tree, gates_u32 i);
+
+/* Toolbar and status bar (gates_toolbar.c, plan-0018). */
+typedef struct gates_i_toolbar {
+    gates_u32 scope_index;
+    gates_u32 scope_generation;
+    gates_command_id_t *ids;     /* 0 = separator */
+    gates_u32 count;
+    gates_u32 cap;
+    gates_i32 sel;               /* keyboard stop: entry index, count = ">>", -1 = none */
+    gates_i32 press;             /* entry pressed by the pointer, count = ">>", -1 = none */
+    gates_i32 hover;             /* entry under the pointer, -1 = none */
+} gates_i_toolbar;
+void gates_i_toolbar_free(gates_tree_t *tree, gates_widget_state_t *st);
+bool gates_i_toolbar_any_enabled(const gates_tree_t *tree, const gates_widget_state_t *st);
+gates_size_t gates_i_toolbar_measure(const gates_tree_t *tree, const gates_node_slot_t *s,
+                                     const gates_text_backend_t *text);
+gates_err_t gates_i_toolbar_paint(const gates_tree_t *tree, gates_u32 idx, gates_draw_list_t *dl,
+                                  const gates_theme_t *theme, const gates_text_backend_t *text);
+/* Entries shown after the last layout; an entry's rect (empty when not shown);
+ * the ">>" rect (empty without overflow); the entry under p (count = ">>", -1). */
+gates_u32 gates_i_toolbar_shown(const gates_tree_t *tree, gates_u32 idx);
+gates_rect_t gates_i_toolbar_entry_rect(const gates_tree_t *tree, gates_u32 idx, gates_u32 k);
+gates_rect_t gates_i_toolbar_more_rect(const gates_tree_t *tree, gates_u32 idx);
+gates_i32 gates_i_toolbar_entry_at(const gates_tree_t *tree, gates_u32 idx, gates_point_t p);
+/* The command of entry k (null for a separator or a missing command). */
+const gates_i_command_t *gates_i_toolbar_command(const gates_tree_t *tree, gates_u32 idx, gates_u32 k);
+/* The current keyboard stop (repaired to an enabled one), or -1. */
+gates_i32 gates_i_toolbar_stop(const gates_tree_t *tree, gates_u32 idx);
+/* Invokes entry k (count = opens the ">>" menu); INVALID_STATE when disabled. */
+gates_err_t gates_i_toolbar_activate(gates_tree_t *tree, gates_u32 idx, gates_u32 k);
+bool gates_i_toolbar_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t *ev);
+void gates_i_toolbar_down(gates_tree_t *tree, gates_u32 idx, gates_point_t p);
+void gates_i_toolbar_up(gates_tree_t *tree, gates_u32 idx, gates_point_t p);
+/* "Cut (Ctrl+X)" for entry k into buf; returns the length it needs. */
+gates_u32 gates_i_toolbar_tip(const gates_tree_t *tree, gates_u32 idx, gates_u32 k, gates_u8 *buf,
+                              gates_u32 cap);
+gates_err_t gates_i_statusbar_paint(const gates_tree_t *tree, gates_u32 idx, gates_draw_list_t *dl,
+                                    const gates_theme_t *theme);
+
+/* Tooltips (gates_tooltip.c, plan-0018). */
+gates_str_t gates_i_tooltip_of(const gates_tree_t *tree, gates_u32 idx);
+/* The pointer rests over `idx`/`item` (GATES_NONE: over nothing with a tooltip). */
+void gates_i_tip_hover(gates_tree_t *tree, gates_point_t p, gates_u32 hit);
+/* A press or a key: hide; the target stays, so it does not come back until it changes. */
+void gates_i_tip_dismiss(gates_tree_t *tree);
+/* Keyboard focus reached `idx` (or GATES_NONE). */
+void gates_i_tip_focus(gates_tree_t *tree, gates_u32 idx);
+/* The target became unusable (disabled, hidden, unreachable) or its text changed. */
+void gates_i_tip_check(gates_tree_t *tree);
+void gates_i_tip_destroying(gates_tree_t *tree, gates_u32 top);
+gates_err_t gates_i_tip_paint(const gates_tree_t *tree, gates_draw_list_t *dl, const gates_theme_t *theme,
+                              const gates_text_backend_t *text);
+void gates_i_tip_free(gates_tree_t *tree);
 
 /* Form (gates_form.c). */
 void gates_i_form_free(gates_tree_t *tree, gates_widget_state_t *st);

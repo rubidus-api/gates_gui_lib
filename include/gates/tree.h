@@ -26,6 +26,8 @@ typedef enum gates_node_kind_t {
     GATES_NODE_FORM,         /* form: labelled field rows (gates/form.h) */
     GATES_NODE_VIEW,         /* virtual list/table over an application model (gates/view.h) */
     GATES_NODE_MENUBAR,      /* menu bar: titles over command menus (gates/frame.h) */
+    GATES_NODE_TOOLBAR,      /* toolbar: buttons bound to commands */
+    GATES_NODE_STATUSBAR,    /* status bar: a row of label segments */
     /* Semantic widgets arrive in Phase 4. */
 } gates_node_kind_t;
 

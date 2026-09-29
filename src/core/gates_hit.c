@@ -292,6 +292,10 @@ gates_node_t gates_input_pointer(gates_tree_t *tree, const gates_pointer_event_t
         return gates_i_handle(tree, tree->drag_node);
     }
 
+    /* A press hides a tooltip (plan-0018). */
+    if (ev->action == GATES_POINTER_DOWN) {
+        gates_i_tip_dismiss(tree);
+    }
     /* A press hides the keyboard cues (plan-0018). */
     if (ev->action == GATES_POINTER_DOWN && tree->cues_shown) {
         tree->cues_shown = false;
@@ -323,6 +327,41 @@ gates_node_t gates_input_pointer(gates_tree_t *tree, const gates_pointer_event_t
         hit == tree->menubar) {
         gates_i_menubar_press(tree, hit, ev->pos);
         return gates_i_handle(tree, hit);
+    }
+    /* Toolbars (plan-0018): hover and press per button; the focus stays where it is. */
+    gates_u32 tb = hit != GATES_NONE && gates_i_slot(tree, hit)->kind == GATES_NODE_TOOLBAR &&
+                           !gates_i_widget_inert(tree, gates_i_state(tree, gates_i_slot(tree, hit)->state_index))
+                       ? hit
+                       : GATES_NONE;
+    if (ev->action == GATES_POINTER_MOVE || ev->action == GATES_POINTER_DOWN) {
+        if (tree->tb_hover != GATES_NONE && tree->tb_hover != tb) {
+            gates_i_state(tree, gates_i_slot(tree, tree->tb_hover)->state_index)->tbar->hover = -1;
+            gates_i_mark_dirty(tree, tree->tb_hover, GATES_DIRTY_PAINT);
+        }
+        tree->tb_hover = tb;
+        if (tb != GATES_NONE) {
+            gates_i_toolbar *t = gates_i_state(tree, gates_i_slot(tree, tb)->state_index)->tbar;
+            gates_i32 k = gates_i_toolbar_entry_at(tree, tb, ev->pos);
+            if (k != t->hover) {
+                t->hover = k;
+                gates_i_mark_dirty(tree, tb, GATES_DIRTY_PAINT);
+            }
+        }
+    }
+    if (ev->action == GATES_POINTER_MOVE) {
+        gates_i_tip_hover(tree, ev->pos, hit);
+    }
+    if (ev->action == GATES_POINTER_DOWN && ev->button == GATES_BUTTON_LEFT && tb != GATES_NONE) {
+        set_hover(tree, GATES_NONE);
+        gates_i_toolbar_down(tree, tb, ev->pos);
+        return gates_i_handle(tree, tb);
+    }
+    if (ev->action == GATES_POINTER_UP && ev->button == GATES_BUTTON_LEFT && tree->pressed != GATES_NONE &&
+        gates_i_slot(tree, tree->pressed)->kind == GATES_NODE_TOOLBAR) {
+        gates_u32 was = tree->pressed;
+        tree->pressed = GATES_NONE;
+        gates_i_toolbar_up(tree, was, ev->pos);
+        return gates_i_handle(tree, was);
     }
 
     if (ev->action == GATES_POINTER_WHEEL) {

@@ -7,6 +7,7 @@
 #include <gates/overlay.h>
 #include <gates/frame.h>
 #include <gates/access.h>
+#include <gates/timer.h>
 #include "gates_test.h"
 #include <proven/heap.h>
 
@@ -797,6 +798,412 @@ static void test_access(void) {
     gates_tree_destroy(t);
 }
 
+
+/* -- toolbar --------------------------------------------------------------------------- */
+
+typedef struct tapp_t {
+    gates_tree_t *t;
+    gates_node_t bar, box, other;
+    rec_t rec;
+    gates_u64 now;
+} tapp_t;
+
+enum { T_CUT = 1, T_COPY, T_PASTE, T_BOLD, T_UNDO, T_HELP };
+
+static gates_u64 fake_now(void *ctx) { return *(gates_u64 *)ctx; }
+static void fake_changed(void *ctx) { (void)ctx; }
+
+static void make_tapp(tapp_t *a, gates_i32 width) {
+    memset(a, 0, sizeof *a);
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &a->t));
+    gates_tree_t *t = a->t;
+    gates_tree_set_clock(t, fake_now, fake_changed, &a->now);
+    gates_node_t root = gates_tree_root(t);
+    GT_ASSERT_OK(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN));
+    gates_command_desc_t d[] = {
+        cmd(T_CUT, "Cu&t", (gates_shortcut_t){ .key = GATES_KEY_X, .ctrl = true }, &a->rec),
+        cmd(T_COPY, "&Copy", (gates_shortcut_t){ .key = GATES_KEY_C, .ctrl = true }, &a->rec),
+        cmd(T_PASTE, "&Paste", (gates_shortcut_t){ .key = GATES_KEY_V, .ctrl = true }, &a->rec),
+        cmd(T_BOLD, "&Bold", (gates_shortcut_t){ .letter = 'B', .ctrl = true }, &a->rec),
+        cmd(T_UNDO, "&Undo", (gates_shortcut_t){0}, &a->rec),
+        cmd(T_HELP, "&Help", (gates_shortcut_t){ .key = GATES_KEY_F1 }, &a->rec),
+    };
+    for (gates_usize_t i = 0; i < sizeof d / sizeof d[0]; i++) GT_ASSERT_OK(gates_command_register(t, root, &d[i]));
+    GT_ASSERT_OK(gates_command_set_checked(t, root, T_BOLD, true));
+    GT_ASSERT_OK(gates_command_set_enabled(t, root, T_UNDO, false));
+    GT_ASSERT_OK(gates_toolbar_create(t, root, root, &a->bar));
+    static const gates_command_id_t ids[] = { T_CUT, T_COPY, T_PASTE, 0, T_BOLD, T_UNDO, 0, T_HELP };
+    for (gates_usize_t i = 0; i < sizeof ids / sizeof ids[0]; i++) GT_ASSERT_OK(gates_toolbar_add(t, a->bar, ids[i]));
+    GT_ASSERT_OK(gates_textbox_create(t, root, GATES_STR("text"), 10, &a->box));
+    GT_ASSERT_OK(gates_node_set_access_name(t, a->box, GATES_STR("Body")));
+    GT_ASSERT_OK(gates_button_create(t, root, GATES_STR("Other"), nullptr, nullptr, &a->other));
+    GT_ASSERT_OK(gates_layout_run(t, (gates_size_t){ width, VH }, be));
+    gates_tree_set_focus(t, a->box);
+}
+
+/* The rect of toolbar button k (entry index), from its accessibility item. */
+static gates_rect_t tb_rect(tapp_t *a, gates_u32 k) {
+    gates_access_info_t info;
+    if (!gates_is_ok(gates_access_info(a->t, a->bar, (gates_u64)k + 1, &info))) return (gates_rect_t){0};
+    return info.bounds;
+}
+static gates_point_t mid(gates_rect_t r) { return (gates_point_t){ r.x + r.w / 2, r.y + r.h / 2 }; }
+
+static void test_toolbar(void) {
+    tapp_t a;
+    make_tapp(&a, VW);
+    gates_tree_t *t = a.t;
+    GT_ASSERT(gates_node_kind(t, a.bar) == GATES_NODE_TOOLBAR);
+    GT_ASSERT(gates_toolbar_count(t, a.bar) == 8);
+    GT_ASSERT(gates_toolbar_shown(t, a.bar) == 8);
+    GT_ASSERT(gates_toolbar_add(t, a.box, T_CUT) == PROVEN_ERR_INVALID_ARG);
+    gates_rect_t br = gates_node_layout_rect(t, a.bar);
+    GT_ASSERT(br.h >= 24 && br.w == VW);
+    /* Paint: labels without markup, no ">>" while everything fits. */
+    gates_draw_list_t dl;
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    GT_ASSERT_OK(gates_paint_tree(t, &dl, theme, be));
+    char buf[512];
+    draw_texts(&dl, buf, sizeof buf);
+    GT_ASSERT(strstr(buf, "CutCopyPaste") != nullptr && strstr(buf, "Help") != nullptr);
+    GT_ASSERT(strstr(buf, ">>") == nullptr);
+    /* A click invokes and leaves the focus in the text box. */
+    click_at(t, mid(tb_rect(&a, 2)));
+    dispatch(t);
+    GT_ASSERT(a.rec.cmd[T_PASTE] == 1);
+    GT_ASSERT(focused(t, a.box));
+    /* A press and a release elsewhere invoke nothing; a disabled command neither. */
+    pointer(t, GATES_POINTER_DOWN, mid(tb_rect(&a, 0)));
+    pointer(t, GATES_POINTER_UP, mid(tb_rect(&a, 1)));
+    click_at(t, mid(tb_rect(&a, 5)));
+    dispatch(t);
+    GT_ASSERT(a.rec.cmd[T_CUT] == 0 && a.rec.cmd[T_COPY] == 0 && a.rec.cmd[T_UNDO] == 0);
+    GT_ASSERT_OK(gates_input_take_error(t));                   /* a disabled button is simply not pressed */
+    /* Accessibility: a toolbar of buttons; separators are not items. */
+    gates_access_info_t info;
+    GT_ASSERT_OK(gates_access_info(t, a.bar, 0, &info));
+    GT_ASSERT(info.role == GATES_ROLE_TOOL_BAR);
+    GT_ASSERT(info.item_count == 6);
+    GT_ASSERT(gates_access_item_at(t, a.bar, 3) == 5);        /* Bold: entry 4 */
+    GT_ASSERT_OK(gates_access_info(t, a.bar, 5, &info));
+    GT_ASSERT(info.role == GATES_ROLE_BUTTON && seq(info.name, GATES_STR("Bold")));
+    GT_ASSERT(info.states & GATES_ACCESS_CHECKED);
+    GT_ASSERT(seq(info.accelerator, GATES_STR("Ctrl+B")));
+    GT_ASSERT(seq(info.description, GATES_STR("Bold (Ctrl+B)")));
+    GT_ASSERT_OK(gates_access_info(t, a.bar, 6, &info));
+    GT_ASSERT((info.states & GATES_ACCESS_DISABLED) && info.actions == 0);
+    GT_ASSERT(gates_access_info(t, a.bar, 4, &info) == PROVEN_ERR_INVALID_ARG); /* a separator */
+    GT_ASSERT_OK(gates_access_invoke(t, a.bar, 1));
+    dispatch(t);
+    GT_ASSERT(a.rec.cmd[T_CUT] == 1);
+    GT_ASSERT(gates_access_invoke(t, a.bar, 6) == PROVEN_ERR_INVALID_STATE);
+    gates_draw_list_deinit(&dl);
+    gates_tree_destroy(t);
+}
+
+static void test_toolbar_keyboard(void) {
+    tapp_t a;
+    make_tapp(&a, VW);
+    gates_tree_t *t = a.t;
+    /* One Tab stop, entered on its first enabled button. */
+    gates_tree_set_focus(t, GATES_NODE_NULL);
+    GT_ASSERT(key(t, GATES_KEY_TAB));
+    GT_ASSERT(focused(t, a.bar));
+    gates_access_ref_t f = gates_access_focus_ref(t);
+    GT_ASSERT(gates_node_eq(f.node, a.bar) && f.item == 1);
+    GT_ASSERT(key(t, GATES_KEY_TAB));
+    GT_ASSERT(focused(t, a.box));                              /* not one stop per button */
+    GT_ASSERT(keyx(t, GATES_KEY_TAB, false, true, 0));
+    GT_ASSERT(focused(t, a.bar));
+    /* Right skips separators and disabled buttons, wrapping; Home/End. */
+    GT_ASSERT(key(t, GATES_KEY_RIGHT));
+    GT_ASSERT(key(t, GATES_KEY_RIGHT));
+    GT_ASSERT(key(t, GATES_KEY_RIGHT));
+    GT_ASSERT(gates_access_focus_ref(t).item == 5);            /* Bold, past the separator */
+    GT_ASSERT(key(t, GATES_KEY_RIGHT));
+    GT_ASSERT(gates_access_focus_ref(t).item == 8);            /* Help, past disabled Undo */
+    GT_ASSERT(key(t, GATES_KEY_RIGHT));
+    GT_ASSERT(gates_access_focus_ref(t).item == 1);            /* wraps */
+    GT_ASSERT(key(t, GATES_KEY_LEFT));
+    GT_ASSERT(gates_access_focus_ref(t).item == 8);
+    GT_ASSERT(key(t, GATES_KEY_HOME));
+    GT_ASSERT(gates_access_focus_ref(t).item == 1);
+    GT_ASSERT(key(t, GATES_KEY_END));
+    GT_ASSERT(key(t, GATES_KEY_ENTER));
+    dispatch(t);
+    GT_ASSERT(a.rec.cmd[T_HELP] == 1);
+    GT_ASSERT(key(t, GATES_KEY_HOME));
+    GT_ASSERT(key(t, GATES_KEY_SPACE));
+    dispatch(t);
+    GT_ASSERT(a.rec.cmd[T_CUT] == 1);
+    /* Leaving and coming back keeps the button. */
+    GT_ASSERT(key(t, GATES_KEY_RIGHT));
+    GT_ASSERT(key(t, GATES_KEY_TAB));
+    GT_ASSERT(keyx(t, GATES_KEY_TAB, false, true, 0));
+    GT_ASSERT(gates_access_focus_ref(t).item == 2);
+    /* When the focused button's command becomes disabled, the next one takes over. */
+    GT_ASSERT_OK(gates_command_set_enabled(t, gates_tree_root(t), T_COPY, false));
+    GT_ASSERT(key(t, GATES_KEY_ENTER));
+    dispatch(t);
+    GT_ASSERT(a.rec.cmd[T_COPY] == 0 && a.rec.cmd[T_PASTE] == 1);
+    /* Every command disabled: the toolbar is no Tab stop. */
+    static const gates_command_id_t all[] = { T_CUT, T_PASTE, T_BOLD, T_HELP };
+    for (int i = 0; i < 4; i++) GT_ASSERT_OK(gates_command_set_enabled(t, gates_tree_root(t), all[i], false));
+    GT_ASSERT(!focused(t, a.bar));
+    gates_tree_destroy(t);
+}
+
+static void test_toolbar_overflow(void) {
+    /* Widths (builtin backend): Cut 40, Copy 48, Paste 56, separator 9, Bold 48, Undo 48,
+     * separator 9, Help 48 = 306; ">>" 32. */
+    tapp_t w;
+    make_tapp(&w, 306);
+    GT_ASSERT(gates_toolbar_shown(w.t, w.bar) == 8);           /* exactly enough */
+    GT_ASSERT(gates_access_item_count(w.t, w.bar) == 6);
+    GT_ASSERT_OK(gates_layout_run(w.t, (gates_size_t){ 305, VH }, be));
+    GT_ASSERT(gates_toolbar_shown(w.t, w.bar) == 6);           /* Cut..Undo; the separator after is dropped */
+    GT_ASSERT_OK(gates_layout_run(w.t, (gates_size_t){ 200, VH }, be));
+    GT_ASSERT(gates_toolbar_shown(w.t, w.bar) == 3);           /* never ends on a separator */
+    /* The ">>" menu does not start with a separator: Bold, Undo, a separator, Help. */
+    gates_rect_t wr = gates_node_layout_rect(w.t, w.bar);
+    click_at(w.t, (gates_point_t){ wr.x + wr.w - 6, wr.y + wr.h / 2 });
+    GT_ASSERT(gates_tree_overlay_count(w.t) == 1);
+    GT_ASSERT_OK(gates_layout_run(w.t, (gates_size_t){ 200, VH }, be));
+    gates_node_t more_menu = gates_access_last_child(w.t, (gates_access_ref_t){ gates_tree_root(w.t), 0 }).node;
+    GT_ASSERT(gates_node_kind(w.t, more_menu) == GATES_NODE_MENU);
+    GT_ASSERT(gates_node_layout_rect(w.t, more_menu).h == 2 * 4 + 4 * 24);
+    gates_tree_destroy(w.t);
+
+    tapp_t a;
+    make_tapp(&a, 150);
+    gates_tree_t *t = a.t;
+    gates_u32 shown = gates_toolbar_shown(t, a.bar);
+    GT_ASSERT(shown == 2);                                     /* Cut, Copy; then ">>" */
+    GT_ASSERT(gates_access_item_count(t, a.bar) == 7);         /* six buttons and More */
+    GT_ASSERT(gates_access_item_at(t, a.bar, 6) == 9);
+    gates_draw_list_t dl;
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    GT_ASSERT_OK(gates_paint_tree(t, &dl, theme, be));
+    char buf[512];
+    draw_texts(&dl, buf, sizeof buf);
+    GT_ASSERT(strstr(buf, ">>") != nullptr && strstr(buf, "Help") == nullptr);
+    gates_draw_list_deinit(&dl);
+    /* Hidden buttons are offscreen items; ">>" opens a menu with their commands. */
+    gates_access_info_t info;
+    GT_ASSERT_OK(gates_access_info(t, a.bar, 8, &info));
+    GT_ASSERT(info.states & GATES_ACCESS_OFFSCREEN);
+    gates_rect_t br = gates_node_layout_rect(t, a.bar);
+    click_at(t, (gates_point_t){ br.x + br.w - 6, br.y + br.h / 2 });
+    GT_ASSERT(gates_tree_overlay_count(t) == 1);
+    GT_ASSERT(focused(t, a.box));
+    GT_ASSERT(key(t, GATES_KEY_END));                          /* the last entry: Help */
+    GT_ASSERT(key(t, GATES_KEY_ENTER));
+    dispatch(t);
+    GT_ASSERT(a.rec.cmd[T_HELP] == 1);
+    /* From the keyboard: ">>" is the last stop; Enter opens the menu. */
+    gates_tree_set_focus(t, a.bar);
+    GT_ASSERT(key(t, GATES_KEY_END));
+    GT_ASSERT(key(t, GATES_KEY_ENTER));
+    GT_ASSERT(gates_tree_overlay_count(t) == 1);
+    GT_ASSERT(key(t, GATES_KEY_ESCAPE));
+    /* Wider again: everything shows. */
+    layout(t);
+    GT_ASSERT(gates_toolbar_shown(t, a.bar) == 8);
+    gates_tree_destroy(t);
+}
+
+/* -- status bar --------------------------------------------------------------------------- */
+
+static void test_statusbar(void) {
+    gates_tree_t *t;
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &t));
+    gates_node_t root = gates_tree_root(t), body, bar, s1, s2, s3;
+    GT_ASSERT_OK(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN));
+    GT_ASSERT_OK(gates_panel_create(t, root, &body));
+    GT_ASSERT_OK(gates_layout_set_child_grow(t, body, 1));
+    GT_ASSERT_OK(gates_statusbar_create(t, root, &bar));
+    GT_ASSERT_OK(gates_statusbar_add(t, bar, GATES_STR("Ready"), 1, &s1));
+    GT_ASSERT_OK(gates_statusbar_add(t, bar, GATES_STR("Ln 1, Col 1"), 0, &s2));
+    GT_ASSERT_OK(gates_statusbar_add(t, bar, GATES_STR("UTF-8 & more"), 0, &s3));
+    GT_ASSERT(gates_statusbar_add(t, body, GATES_STR("x"), 0, nullptr) == PROVEN_ERR_INVALID_ARG);
+    layout(t);
+    GT_ASSERT(gates_node_kind(t, bar) == GATES_NODE_STATUSBAR);
+    gates_rect_t br = gates_node_layout_rect(t, bar);
+    GT_ASSERT(br.y + br.h == VH && br.w == VW);                /* along the bottom */
+    gates_rect_t r1 = gates_node_layout_rect(t, s1), r2 = gates_node_layout_rect(t, s2),
+                 r3 = gates_node_layout_rect(t, s3);
+    GT_ASSERT(r3.x + r3.w <= br.x + br.w && r2.x > r1.x + r1.w - 1 && r3.x > r2.x);
+    GT_ASSERT(r1.w > r2.w);                                    /* the growing segment */
+    GT_ASSERT_OK(gates_widget_set_text(t, s1, GATES_STR("Saved")));
+    layout(t);
+    gates_draw_list_t dl;
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    GT_ASSERT_OK(gates_paint_tree(t, &dl, theme, be));
+    char buf[256];
+    draw_texts(&dl, buf, sizeof buf);
+    GT_ASSERT(strstr(buf, "Saved") && strstr(buf, "UTF-8 & more"));  /* labels: no markup */
+    /* Thin separators between segments (not before the first). */
+    int lines = 0;
+    for (gates_u32 i = 0; i < gates_draw_list_len(&dl); i++) {
+        const gates_draw_cmd_t *c = gates_draw_list_at(&dl, i);
+        if (c->kind == GATES_DRAW_RECT && c->rect.w == 1 && c->rect.y >= br.y && c->rect.x > br.x) lines++;
+    }
+    GT_ASSERT(lines == 2);
+    gates_draw_list_deinit(&dl);
+    gates_access_info_t info;
+    GT_ASSERT_OK(gates_access_info(t, bar, 0, &info));
+    GT_ASSERT(info.role == GATES_ROLE_STATUS_BAR);
+    GT_ASSERT_OK(gates_access_info(t, s2, 0, &info));
+    GT_ASSERT(info.role == GATES_ROLE_TEXT && seq(info.name, GATES_STR("Ln 1, Col 1")));
+    GT_ASSERT(info.live == GATES_LIVE_OFF);
+    gates_tree_destroy(t);
+}
+
+/* -- tooltips ------------------------------------------------------------------------------ */
+
+static bool tip_is(gates_tree_t *t, gates_node_t n, const char *text) {
+    gates_node_t node;
+    gates_u64 item;
+    gates_str_t s;
+    gates_rect_t box;
+    if (!gates_tooltip_shown(t, &node, &item, &s, &box)) return text == nullptr;
+    return text != nullptr && gates_node_eq(node, n) && seq(s, (gates_str_t){ .ptr = (const gates_u8 *)text, .size = strlen(text) });
+}
+
+static void advance(tapp_t *a, gates_u64 ms) {
+    a->now += ms;
+    (void)gates_tree_run_timers(a->t);
+}
+
+static void test_tooltips(void) {
+    tapp_t a;
+    make_tapp(&a, VW);
+    gates_tree_t *t = a.t;
+    GT_ASSERT_OK(gates_node_set_tooltip(t, a.other, GATES_STR("Does the other thing")));
+    GT_ASSERT(seq(gates_node_tooltip(t, a.other), GATES_STR("Does the other thing")));
+    layout(t);
+    /* Nothing hovered: nothing timed. */
+    GT_ASSERT(gates_tree_timer_count(t) == 0);
+    /* Hover: shown after the delay, below the node, for its time. */
+    pointer(t, GATES_POINTER_MOVE, center(t, a.other));
+    GT_ASSERT(gates_tree_timer_count(t) == 1);
+    advance(&a, GATES_TOOLTIP_DELAY_MS - 1);
+    GT_ASSERT(tip_is(t, a.other, nullptr));
+    advance(&a, 1);
+    GT_ASSERT(tip_is(t, a.other, "Does the other thing"));
+    gates_rect_t box, orr = gates_node_layout_rect(t, a.other);
+    GT_ASSERT(gates_tooltip_shown(t, nullptr, nullptr, nullptr, &box));
+    GT_ASSERT(box.y >= orr.y + orr.h && box.w > 0 && box.h > 0 && box.x + box.w <= VW);
+    gates_draw_list_t dl;
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    GT_ASSERT_OK(gates_paint_tree(t, &dl, theme, be));
+    char buf[512];
+    draw_texts(&dl, buf, sizeof buf);
+    GT_ASSERT(strstr(buf, "Does the other thing") != nullptr);
+    gates_access_info_t info;
+    GT_ASSERT_OK(gates_access_info(t, a.other, 0, &info));
+    GT_ASSERT(seq(info.description, GATES_STR("Does the other thing")));
+    advance(&a, GATES_TOOLTIP_SHOW_MS);
+    GT_ASSERT(tip_is(t, a.other, nullptr));
+    GT_ASSERT(gates_tree_timer_count(t) == 0);
+    /* The tooltip never takes input: a click lands on what is under it. */
+    pointer(t, GATES_POINTER_MOVE, (gates_point_t){ 1, VH - 1 });
+    pointer(t, GATES_POINTER_MOVE, center(t, a.other));
+    advance(&a, GATES_TOOLTIP_DELAY_MS);
+    GT_ASSERT(gates_tooltip_shown(t, nullptr, nullptr, nullptr, &box));
+    /* A press hides it; so do a key and leaving. */
+    pointer(t, GATES_POINTER_DOWN, center(t, a.other));
+    pointer(t, GATES_POINTER_UP, center(t, a.other));
+    GT_ASSERT(tip_is(t, a.other, nullptr));
+    GT_ASSERT(gates_tree_timer_count(t) == 0);
+    pointer(t, GATES_POINTER_MOVE, (gates_point_t){ 1, VH - 1 });
+    pointer(t, GATES_POINTER_MOVE, center(t, a.other));
+    advance(&a, GATES_TOOLTIP_DELAY_MS);
+    (void)letter(t, 'Q');
+    GT_ASSERT(tip_is(t, a.other, nullptr));
+    pointer(t, GATES_POINTER_MOVE, (gates_point_t){ center(t, a.other).x + 1, center(t, a.other).y });
+    advance(&a, GATES_TOOLTIP_DELAY_MS);
+    GT_ASSERT(tip_is(t, a.other, nullptr));                     /* no re-show without leaving */
+    pointer(t, GATES_POINTER_MOVE, (gates_point_t){ 1, VH - 1 });
+    GT_ASSERT(gates_tree_timer_count(t) == 0);
+    /* Toolbar buttons have their command's label and shortcut; switching is immediate. */
+    pointer(t, GATES_POINTER_MOVE, mid(tb_rect(&a, 0)));
+    advance(&a, GATES_TOOLTIP_DELAY_MS);
+    gates_node_t n;
+    gates_u64 item = 0;
+    gates_str_t text;
+    GT_ASSERT(gates_tooltip_shown(t, &n, &item, &text, nullptr));
+    GT_ASSERT(gates_node_eq(n, a.bar) && item == 1 && seq(text, GATES_STR("Cut (Ctrl+X)")));
+    pointer(t, GATES_POINTER_MOVE, mid(tb_rect(&a, 1)));
+    GT_ASSERT(gates_tooltip_shown(t, &n, &item, &text, nullptr));
+    GT_ASSERT(item == 2 && seq(text, GATES_STR("Copy (Ctrl+C)")));
+    pointer(t, GATES_POINTER_MOVE, center(t, a.other));
+    GT_ASSERT(tip_is(t, a.other, "Does the other thing"));
+    /* Keyboard focus shows it after the delay; moving the focus away hides it. */
+    pointer(t, GATES_POINTER_MOVE, (gates_point_t){ 1, VH - 1 });
+    gates_tree_set_focus(t, a.box);
+    GT_ASSERT(key(t, GATES_KEY_TAB));
+    GT_ASSERT(focused(t, a.other));
+    advance(&a, GATES_TOOLTIP_DELAY_MS);
+    GT_ASSERT(tip_is(t, a.other, "Does the other thing"));
+    GT_ASSERT(key(t, GATES_KEY_TAB));
+    GT_ASSERT(tip_is(t, a.other, nullptr));
+    /* Disabled or destroyed while shown: gone. */
+    pointer(t, GATES_POINTER_MOVE, center(t, a.other));
+    advance(&a, GATES_TOOLTIP_DELAY_MS);
+    GT_ASSERT_OK(gates_widget_set_disabled(t, a.other, true));
+    GT_ASSERT(tip_is(t, a.other, nullptr));
+    GT_ASSERT_OK(gates_widget_set_disabled(t, a.other, false));
+    pointer(t, GATES_POINTER_MOVE, (gates_point_t){ 1, VH - 1 });
+    pointer(t, GATES_POINTER_MOVE, center(t, a.other));
+    advance(&a, GATES_TOOLTIP_DELAY_MS);
+    GT_ASSERT_OK(gates_node_destroy(t, a.other));
+    GT_ASSERT_OK(gates_tree_flush_destroys(t));
+    GT_ASSERT(!gates_tooltip_shown(t, nullptr, nullptr, nullptr, nullptr));
+    GT_ASSERT(gates_tree_timer_count(t) == 0);
+    /* Near the right edge the box moves left to stay inside. */
+    gates_node_t right;
+    GT_ASSERT_OK(gates_button_create(t, gates_tree_root(t), GATES_STR("R"), nullptr, nullptr, &right));
+    GT_ASSERT_OK(gates_layout_set_child_align(t, right, GATES_ALIGN_END_V));
+    GT_ASSERT_OK(gates_node_set_tooltip(t, right, GATES_STR("A rather long tooltip text")));
+    layout(t);
+    pointer(t, GATES_POINTER_MOVE, center(t, right));
+    advance(&a, GATES_TOOLTIP_DELAY_MS);
+    GT_ASSERT(gates_tooltip_shown(t, nullptr, nullptr, nullptr, &box));
+    GT_ASSERT(box.x + box.w == VW && box.x < gates_node_layout_rect(t, right).x);
+    pointer(t, GATES_POINTER_MOVE, (gates_point_t){ 1, VH - 1 });
+    /* Removing a tooltip; a node near the bottom gets it above. */
+    gates_node_t low;
+    GT_ASSERT_OK(gates_statusbar_create(t, gates_tree_root(t), &low));
+    GT_ASSERT_OK(gates_layout_set_child_grow(t, a.box, 1));
+    GT_ASSERT_OK(gates_node_set_tooltip(t, low, GATES_STR("Status")));
+    layout(t);
+    gates_rect_t lr = gates_node_layout_rect(t, low);
+    pointer(t, GATES_POINTER_MOVE, (gates_point_t){ lr.x + 5, lr.y + lr.h / 2 });
+    advance(&a, GATES_TOOLTIP_DELAY_MS);
+    GT_ASSERT(gates_tooltip_shown(t, nullptr, nullptr, nullptr, &box));
+    GT_ASSERT(box.y + box.h <= lr.y);
+    GT_ASSERT_OK(gates_node_set_tooltip(t, low, (gates_str_t){0}));
+    GT_ASSERT(!gates_tooltip_shown(t, nullptr, nullptr, nullptr, nullptr));
+    GT_ASSERT(gates_node_tooltip(t, low).size == 0);
+    gates_draw_list_deinit(&dl);
+    gates_tree_destroy(t);
+}
+
+/* Without a clock (a bare tree) a tooltip is kept but never timed. */
+static void test_tooltip_without_clock(void) {
+    gates_tree_t *t;
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &t));
+    gates_node_t b;
+    GT_ASSERT_OK(gates_button_create(t, gates_tree_root(t), GATES_STR("b"), nullptr, nullptr, &b));
+    GT_ASSERT_OK(gates_node_set_tooltip(t, b, GATES_STR("tip")));
+    layout(t);
+    pointer(t, GATES_POINTER_MOVE, center(t, b));
+    GT_ASSERT(gates_tree_timer_count(t) == 0);
+    GT_ASSERT(!gates_tooltip_shown(t, nullptr, nullptr, nullptr, nullptr));
+    gates_tree_destroy(t);
+}
+
 /* -- allocation failure -------------------------------------------------------------- */
 
 typedef struct fail_alloc_t {
@@ -859,6 +1266,12 @@ int main(void) {
     test_menubar_f10_and_dialog();
     test_menu_mnemonics();
     test_access();
+    test_toolbar();
+    test_toolbar_keyboard();
+    test_toolbar_overflow();
+    test_statusbar();
+    test_tooltips();
+    test_tooltip_without_clock();
     test_allocation_failure();
     return gt_report("test_frame");
 }

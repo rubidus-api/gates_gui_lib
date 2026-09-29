@@ -111,6 +111,109 @@ int main(void) {
 }
 ```
 
+## 도구 막대
+
+`gates_toolbar_create(tree, parent, scope, &bar)`는 작은 버튼이 늘어선 줄을 만들고, `gates_toolbar_add(tree, bar, id)`를 부를 때마다 `scope`의 명령에 묶인 버튼이 하나씩 더해진다(id 0은 구분선). 버튼은 명령의 레이블을 니모닉 표시 없이 보여 주고, 명령을 쓸 수 없는 동안은 흐리게, 명령이 체크된 동안은 눌린 모습으로 보인다. 굵게 같은 켜고 끄는 버튼은 체크된 명령이다. 버튼은 포인터가 위에 올 때까지 평평하다.
+
+클릭은 명령을 실행하고 키보드 초점은 그대로 둔다. 그래서 잘라내기와 붙여넣기 버튼은 사람이 입력하던 글상자에 작용한다. 키보드로는 도구 막대 전체가 Tab 정지 위치 하나이다. Left, Right, Home, End가 쓸 수 있는 버튼 사이를 옮기고, Space나 Enter가 초점이 있는 버튼을 실행한다. 도구 막대가 버튼보다 좁으면 들어가지 않는 버튼은 빠지고, 끝의 `>>` 버튼이 그 명령들을 메뉴로 보여 준다.
+
+## 상태 줄
+
+`gates_statusbar_create(tree, parent, &bar)`는 창 아래쪽을 따라 놓이는 띠를 만들고, `gates_statusbar_add(tree, bar, text, grow, &segment)`는 구역 하나를 더한다. 구역은 레이블이므로 글자는 `gates_widget_set_text`로 바꾼다. 구역 사이에는 가는 선이 있고, `grow`가 있는 구역은 레이아웃 자식처럼 남는 너비를 나눠 가진다. 상태 글자는 바뀔 때마다 읽히지 않는다. 소식이 중요한 구역만 라이브 영역으로 만든다(`gates_node_set_live`).
+
+## 툴팁
+
+`gates_node_set_tooltip(tree, node, text)`는 노드에 짧은 도움말을 준다. 포인터가 `GATES_TOOLTIP_DELAY_MS`(500 ms) 동안 머물거나 키보드 초점이 온 뒤 그만큼 지나면 노드 아래(창 아래쪽 가까이에서는 위)의 작은 상자에 나타나고, 누름, 키, 포인터나 초점이 떠날 때, 그리고 `GATES_TOOLTIP_SHOW_MS`가 지나면 숨는다. 툴팁 하나가 보이는 동안 다른 툴팁으로 옮기면 곧바로 바뀐다. 도구 막대 버튼은 따로 부탁하지 않아도 명령의 레이블과 단축키로 된 툴팁을 가진다(`"Paste (Ctrl+V)"`). 툴팁은 입력을 받지 않으며, 화면 낭독기는 그 글자를 노드의 도움말로 읽는다. 툴팁은 트리의 시계로 시간을 재며, 포인터가 올라가 있거나 초점이 있는 노드에 툴팁이 없는 동안에는 아무것도 재지 않는다.
+
+<!-- example: manual/examples/ex_11_toolbar.c -->
+```c
+/* manual example (host): a toolbar, a status bar and a tooltip.
+ * expect: pasted 1, focus kept; tooltip "Paste (Ctrl+V)" after 500 ms; status Pasted */
+#include <gates/gates.h>
+
+#include <stdio.h>
+#include <string.h>
+
+enum { CMD_CUT = 1, CMD_PASTE };
+
+typedef struct app_t {
+    gates_node_t status;
+    int pasted;
+} app_t;
+
+static void on_command(gates_tree_t *tree, gates_command_id_t id, void *user) {
+    app_t *a = user;
+    if (id == CMD_PASTE) {
+        a->pasted++;
+        (void)gates_widget_set_text(tree, a->status, GATES_STR("Pasted"));
+    }
+}
+
+/* A test clock: a window's tree has a real one. */
+static gates_u64 now_ms;
+static gates_u64 clock_now(void *ctx) { (void)ctx; return now_ms; }
+static void clock_changed(void *ctx) { (void)ctx; }
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&(gates_tree_desc_t){0}, &t))) return 1;
+    gates_tree_set_clock(t, clock_now, clock_changed, nullptr);
+    gates_node_t root = gates_tree_root(t), bar, body, status_bar;
+    app_t a = {0};
+    gates_command_desc_t cmds[] = {
+        { .id = CMD_CUT, .label = GATES_STR("Cu&t"), .shortcut = { .key = GATES_KEY_X, .ctrl = true },
+          .enabled = true, .invoke = on_command, .user = &a },
+        { .id = CMD_PASTE, .label = GATES_STR("&Paste"), .shortcut = { .key = GATES_KEY_V, .ctrl = true },
+          .enabled = true, .invoke = on_command, .user = &a },
+    };
+    if (!gates_is_ok(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN)) ||
+        !gates_is_ok(gates_command_register(t, root, &cmds[0])) ||
+        !gates_is_ok(gates_command_register(t, root, &cmds[1])) ||
+        !gates_is_ok(gates_toolbar_create(t, root, root, &bar)) ||
+        !gates_is_ok(gates_toolbar_add(t, bar, CMD_CUT)) ||
+        !gates_is_ok(gates_toolbar_add(t, bar, CMD_PASTE)) ||
+        !gates_is_ok(gates_textbox_create(t, root, GATES_STR(""), 30, &body)) ||
+        !gates_is_ok(gates_node_set_access_name(t, body, GATES_STR("Text"))) ||
+        !gates_is_ok(gates_layout_set_child_grow(t, body, 1)) ||
+        !gates_is_ok(gates_statusbar_create(t, root, &status_bar)) ||
+        !gates_is_ok(gates_statusbar_add(t, status_bar, GATES_STR("Ready"), 1, &a.status)) ||
+        !gates_is_ok(gates_layout_run(t, (gates_size_t){ 400, 300 }, gates_text_backend_builtin()))) {
+        return 1;
+    }
+    gates_tree_set_focus(t, body);
+
+    /* Find the Paste button through the accessibility model: item 2 of the bar. */
+    gates_access_info_t info;
+    if (!gates_is_ok(gates_access_info(t, bar, 2, &info))) return 1;
+    gates_point_t p = { info.bounds.x + info.bounds.w / 2, info.bounds.y + info.bounds.h / 2 };
+
+    /* Rest the pointer on it: the tooltip shows after GATES_TOOLTIP_DELAY_MS. */
+    gates_pointer_event_t move = { .action = GATES_POINTER_MOVE, .pos = p };
+    (void)gates_input_pointer(t, &move);
+    now_ms += GATES_TOOLTIP_DELAY_MS;
+    (void)gates_tree_run_timers(t);
+    gates_str_t tip = {0};
+    char tip_text[64] = "";
+    if (gates_tooltip_shown(t, nullptr, nullptr, &tip, nullptr) && tip.size < sizeof tip_text) {
+        memcpy(tip_text, tip.ptr, tip.size);
+    }
+
+    /* A click invokes the command; the focus stays in the text box. */
+    gates_pointer_event_t down = { .action = GATES_POINTER_DOWN, .button = GATES_BUTTON_LEFT, .pos = p };
+    gates_pointer_event_t up = { .action = GATES_POINTER_UP, .button = GATES_BUTTON_LEFT, .pos = p };
+    (void)gates_input_pointer(t, &down);
+    (void)gates_input_pointer(t, &up);
+    (void)gates_tree_dispatch_events(t, 0);
+
+    gates_str_t s = gates_widget_text(t, a.status);
+    printf("pasted %d, focus %s; tooltip \"%s\" after %u ms; status %.*s\n", a.pasted,
+           gates_node_eq(gates_tree_focus(t), body) ? "kept" : "moved", tip_text, GATES_TOOLTIP_DELAY_MS,
+           (int)s.size, (const char *)s.ptr);
+    gates_tree_destroy(t);
+    return 0;
+}
+```
+
 ## 접근성
 
-메뉴 막대는 MenuBar 요소이고 그 제목은 ExpandCollapse가 있는 메뉴 항목이다. 메뉴 모드에서는 강조된 제목이 키보드 초점을 가진다. 니모닉이 있는 컨트롤은 모두 그것을 접근 키로 알린다("Alt+F", 열린 메뉴의 항목은 글자만). 메뉴 항목과 명령에 묶인 버튼은 명령의 단축키를 가속 키로 알리며, 접근성 이름에는 `&` 표시가 들어가지 않는다.
+메뉴 막대는 MenuBar 요소이고 그 제목은 ExpandCollapse가 있는 메뉴 항목이다. 메뉴 모드에서는 강조된 제목이 키보드 초점을 가진다. 니모닉이 있는 컨트롤은 모두 그것을 접근 키로 알린다("Alt+F", 열린 메뉴의 항목은 글자만). 메뉴 항목과 명령에 묶인 버튼은 명령의 단축키를 가속 키로 알리며, 접근성 이름에는 `&` 표시가 들어가지 않는다. 도구 막대는 버튼을 항목으로 가진 ToolBar 요소이고(구분선은 항목이 아니며, `>>`는 보이는 동안 More라는 항목이다), 상태 줄은 구역을 글자로 가진 StatusBar 요소이다.

@@ -151,6 +151,8 @@ static gates_size_t widget_intrinsic(const gates_tree_t *tree, const gates_node_
         return st != nullptr ? gates_i_menu_measure(tree, st, text, fsz) : (gates_size_t){ 0, 0 };
     case GATES_NODE_MENUBAR:
         return gates_i_menubar_measure(tree, s, text);
+    case GATES_NODE_TOOLBAR:
+        return gates_i_toolbar_measure(tree, s, text);
     case GATES_NODE_BUTTON:
         return (gates_size_t){
             ts.w + 2 * (GATES_BUTTON_PAD_X + GATES_BUTTON_BORDER),

@@ -1,4 +1,5 @@
-/* gates_gui_lib - the application frame (plan-0018): mnemonics, menu bar.
+/* gates_gui_lib - the application frame (plan-0018): mnemonics, menu bar,
+ * toolbar, status bar, tooltips.
  *
  * Mnemonics. In the text of a button, check box, command, menu bar title or
  * tab, "&x" marks x as the mnemonic when x is a letter or digit (ASCII); "&&"
@@ -82,5 +83,65 @@ gates_node_t gates_menubar_menu(const gates_tree_t *tree, gates_node_t bar);
 bool gates_menubar_active(const gates_tree_t *tree, gates_node_t bar);
 /* The highlighted title in menu mode, or -1. */
 gates_i32 gates_menubar_highlighted(const gates_tree_t *tree, gates_node_t bar);
+
+/* -- toolbar -------------------------------------------------------------------------
+ *
+ * A row of compact buttons, each bound to a command of the bar's scope (label,
+ * enabled and checked state come from the command; a checked command shows its
+ * button pressed). Flat until hovered or focused. One Tab stop: Left/Right/
+ * Home/End move between buttons, Space or Enter invokes. A click invokes
+ * without taking the focus away from where the person was working (so Cut and
+ * Paste buttons act on the focused text box). Buttons that do not fit are left
+ * out and a ">>" button at the end lists their commands in a menu. Every
+ * button's tooltip is its command's label and shortcut. */
+
+[[nodiscard]] gates_err_t gates_toolbar_create(gates_tree_t *tree, gates_node_t parent,
+                                               gates_node_t scope, gates_node_t *out_bar);
+/* Adds a button for command `id` (0 = a separator). */
+[[nodiscard]] gates_err_t gates_toolbar_add(gates_tree_t *tree, gates_node_t bar,
+                                            gates_command_id_t id);
+/* Entries (buttons and separators), and how many are shown after the last layout
+ * (the rest are in the ">>" menu). */
+gates_u32 gates_toolbar_count(const gates_tree_t *tree, gates_node_t bar);
+gates_u32 gates_toolbar_shown(const gates_tree_t *tree, gates_node_t bar);
+
+/* -- status bar ------------------------------------------------------------------------
+ *
+ * A row of text segments along the bottom of a window, separated by thin
+ * lines. A segment is a label: change it with gates_widget_set_text. Segments
+ * are not announced unless the program makes one a live region
+ * (gates_node_set_live), so a clock does not chatter. */
+
+[[nodiscard]] gates_err_t gates_statusbar_create(gates_tree_t *tree, gates_node_t parent,
+                                                 gates_node_t *out_bar);
+/* Adds a segment (a label, text copied). grow > 0 takes a share of the spare
+ * width, like a layout child's grow. */
+[[nodiscard]] gates_err_t gates_statusbar_add(gates_tree_t *tree, gates_node_t bar,
+                                              gates_str_t text, gates_u8 grow,
+                                              gates_node_t *out_segment);
+
+/* -- tooltips ---------------------------------------------------------------------------
+ *
+ * A short help text shown in a small box below a node (above when there is no
+ * room) after the pointer rests on it for GATES_TOOLTIP_DELAY_MS, or that long
+ * after keyboard focus reaches it; it hides on a press, a key, when the pointer
+ * or the focus leaves, when the node is disabled, hidden or destroyed, and
+ * after GATES_TOOLTIP_SHOW_MS. Moving from one node with a tooltip to another
+ * while one is shown switches at once. It never takes input. Assistive
+ * technology reads it as the node's help text. Tooltips need the tree's clock
+ * (every window has one); nothing is timed while no hovered or focused node has
+ * a tooltip. */
+#define GATES_TOOLTIP_DELAY_MS 500u
+#define GATES_TOOLTIP_SHOW_MS 10000u
+
+/* Copied; an empty text removes it. */
+[[nodiscard]] gates_err_t gates_node_set_tooltip(gates_tree_t *tree, gates_node_t node,
+                                                 gates_str_t text);
+gates_str_t gates_node_tooltip(const gates_tree_t *tree, gates_node_t node);
+/* The tooltip shown now: true with its node, item (a toolbar button: its
+ * entry index + 1, else 0), text (borrowed until the next change) and box
+ * (window coordinates, after layout). */
+bool gates_tooltip_shown(const gates_tree_t *tree, gates_node_t *node, gates_u64 *item,
+                         gates_str_t *text, gates_rect_t *box);
 
 #endif /* GATES_FRAME_H */

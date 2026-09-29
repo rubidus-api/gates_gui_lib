@@ -12,7 +12,8 @@ gates_u32 gates_i_scope_root(const gates_tree_t *tree) {
 
 static bool focusable_kind(gates_node_kind_t k) {
     return k == GATES_NODE_BUTTON || k == GATES_NODE_CHECKBOX || k == GATES_NODE_TEXTBOX ||
-           k == GATES_NODE_RADIO || k == GATES_NODE_CHOICE || k == GATES_NODE_VIEW;
+           k == GATES_NODE_RADIO || k == GATES_NODE_CHOICE || k == GATES_NODE_VIEW ||
+           k == GATES_NODE_TOOLBAR;
 }
 
 /* Reachable: nothing on the way up is hidden, every stack ancestor shows the
@@ -130,6 +131,7 @@ static gates_u32 find_next(const gates_tree_t *tree, gates_u32 from, bool backwa
 void gates_i_focus_check(gates_tree_t *tree) {
     gates_i_choice_lists_check(tree, GATES_NONE); /* same triggers: disabled, hidden, page */
     gates_i_menubar_check(tree);
+    gates_i_tip_check(tree);
     if (tree->focus == GATES_NONE || gates_i_focus_eligible(tree, tree->focus)) {
         return;
     }

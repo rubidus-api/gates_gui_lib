@@ -46,6 +46,8 @@ CORE_SRC := \
   src/core/gates_version.c \
   src/core/gates_mnemonic.c \
   src/core/gates_menubar.c \
+  src/core/gates_toolbar.c \
+  src/core/gates_tooltip.c \
   src/render/gates_draw_list.c \
   src/render/gates_render_soft.c \
   src/text/gates_text_builtin.c \

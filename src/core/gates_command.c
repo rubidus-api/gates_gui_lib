@@ -350,6 +350,9 @@ bool gates_i_widget_inert(const gates_tree_t *tree, const gates_widget_state_t *
     if (st->has_options && !gates_i_options_any_enabled(st)) {
         return true; /* a radio group or choice with nothing to choose */
     }
+    if (st->tbar != nullptr && !gates_i_toolbar_any_enabled(tree, st)) {
+        return true; /* a toolbar whose commands are all disabled (plan-0018) */
+    }
     if (st->cmd_id == 0) {
         return false;
     }

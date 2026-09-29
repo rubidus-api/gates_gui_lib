@@ -143,6 +143,7 @@ void gates_i_state_release(gates_tree_t *tree, gates_u32 state_index) {
     gates_i_form_free(tree, st);
     gates_i_view_free(tree, st);
     gates_i_menubar_free(tree, st);
+    gates_i_toolbar_free(tree, st);
     memset(st, 0, sizeof *st);
     st->next_free = tree->state_first_free;
     tree->state_first_free = state_index;
@@ -236,6 +237,9 @@ static void pool_free_slot(gates_tree_t *tree, gates_u32 idx) {
     if (tree->menubar == idx) {
         tree->menubar = GATES_NONE;
         tree->mb_mode = GATES_I_MB_OFF;
+    }
+    if (tree->tb_hover == idx) {
+        tree->tb_hover = GATES_NONE;
     }
     s->alive = false;
     s->destroy_pending = false;
@@ -445,6 +449,8 @@ gates_err_t gates_tree_create(const gates_tree_desc_t *desc, gates_tree_t **out_
     tree->focus_scope = GATES_NONE;
     tree->menubar = GATES_NONE;
     tree->mb_hover = GATES_NONE;
+    tree->tip_index = GATES_NONE;
+    tree->tb_hover = GATES_NONE;
     tree->serial = atomic_fetch_add(&g_tree_serial, 1) + 1;
 
     proven_result_mem_mut_t sres = alloc.alloc_fn(
@@ -483,6 +489,7 @@ void gates_tree_destroy(gates_tree_t *tree) {
     gates_i_post_tree_free(tree);
     gates_i_timers_free(tree);
     gates_i_access_free(tree);
+    gates_i_tip_free(tree);
     /* Release owned widget text before dropping the pools. */
     if (tree->states != nullptr) {
         for (gates_u32 i = 0; i < tree->state_cap; i++) {
@@ -502,6 +509,7 @@ void gates_tree_destroy(gates_tree_t *tree) {
             gates_i_form_free(tree, &tree->states[i]);
             gates_i_view_free(tree, &tree->states[i]);
             gates_i_menubar_free(tree, &tree->states[i]);
+            gates_i_toolbar_free(tree, &tree->states[i]);
         }
         alloc.free_fn(alloc.ctx, tree->states);
     }
@@ -631,6 +639,7 @@ gates_err_t gates_node_destroy(gates_tree_t *tree, gates_node_t node) {
     gates_i_access_log(tree, GATES_ACCESS_REMOVED, node.index, 0); /* before the slot can be reused */
     gates_i_overlay_node_destroyed(tree, node.index); /* an open overlay ends quietly */
     gates_i_menubar_destroying(tree, node.index);   /* its open menu closes, menu mode ends */
+    gates_i_tip_destroying(tree, node.index);       /* a tooltip over it goes */
     gates_i_focus_leave_subtree(tree, node.index); /* before the links go */
     if (gates_i_slot(tree, node.index)->parent != GATES_NONE) {
         link_unlink(tree, node.index);

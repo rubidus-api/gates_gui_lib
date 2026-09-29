@@ -269,10 +269,26 @@ static bool is_kind(const gates_tree_t *tree, gates_u32 idx, gates_node_kind_t k
     return idx != GATES_NONE && gates_i_slot(tree, idx)->kind == kind;
 }
 
+static bool input_key(gates_tree_t *tree, const gates_key_event_t *ev);
+
 bool gates_input_key(gates_tree_t *tree, const gates_key_event_t *ev) {
     if (tree == nullptr || ev == nullptr) {
         return false;
     }
+    if (!ev->down) {
+        return input_key(tree, ev);
+    }
+    /* A key hides a tooltip; one that moves the focus shows the new node's (plan-0018). */
+    gates_u32 before = tree->focus;
+    gates_i_tip_dismiss(tree);
+    bool consumed = input_key(tree, ev);
+    if (tree->focus != before) {
+        gates_i_tip_focus(tree, tree->focus);
+    }
+    return consumed;
+}
+
+static bool input_key(gates_tree_t *tree, const gates_key_event_t *ev) {
     if (!ev->down) {
         /* Space activates on release, and only the control it pressed. */
         if (ev->key == GATES_KEY_SPACE && tree->key_press != GATES_NONE) {
@@ -314,6 +330,9 @@ bool gates_input_key(gates_tree_t *tree, const gates_key_event_t *ev) {
     bool focus_ok = f != GATES_NONE && gates_i_focus_eligible(tree, f);
     if (focus_ok && is_kind(tree, f, GATES_NODE_RADIO) && gates_i_radio_key(tree, f, ev)) {
         return true;
+    }
+    if (focus_ok && is_kind(tree, f, GATES_NODE_TOOLBAR) && gates_i_toolbar_key(tree, f, ev)) {
+        return true; /* buttons, Enter/Space invoke (plan-0018) */
     }
     if (focus_ok && is_kind(tree, f, GATES_NODE_VIEW) && gates_i_view_key(tree, f, ev)) {
         return true; /* rows, paging, Enter activates the row */
