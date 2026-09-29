@@ -898,6 +898,16 @@ bool gates_i_editor_char(gates_tree_t *tree, gates_u32 idx, gates_str_t utf8);
 bool gates_i_editor_press(gates_tree_t *tree, gates_u32 idx, gates_point_t p, gates_u32 clicks, bool shift);
 void gates_i_editor_drag(gates_tree_t *tree, gates_point_t p);
 bool gates_i_editor_wheel(gates_tree_t *tree, gates_u32 idx, gates_vec2_t wheel);
+bool gates_i_editor_composing(const gates_widget_state_t *st);
+gates_str_t gates_i_editor_preedit(const gates_widget_state_t *st);
+gates_err_t gates_i_editor_set_preedit(gates_tree_t *tree, gates_u32 idx, gates_str_t text, gates_u32 cursor);
+gates_err_t gates_i_editor_commit(gates_tree_t *tree, gates_u32 idx, gates_str_t text);
+void gates_i_editor_preedit_cancel(gates_tree_t *tree, gates_u32 idx);
+void gates_i_editor_blur(gates_tree_t *tree, gates_u32 idx);
+gates_u32 gates_i_editor_text_rects(gates_tree_t *tree, gates_u32 idx, gates_u32 start, gates_u32 end, gates_rect_t *out,
+                                    gates_u32 cap);
+gates_u32 gates_i_editor_offset_at_point(gates_tree_t *tree, gates_u32 idx, gates_point_t p);
+gates_err_t gates_i_editor_user_set(gates_tree_t *tree, gates_u32 idx, gates_str_t text);
 void gates_i_node_undo(gates_tree_t *tree, gates_node_t node);
 /* Background tasks (plan-0021): message kinds from GATES_I_TASK_KIND_BASE are
  * the tasks' own, handled by gates_i_task_message before node handlers; tree

@@ -437,6 +437,15 @@ gates_input_result_t gates_input_char(gates_tree_t *tree, gates_u32 codepoint) {
 
 /* -- IME composition (plan-0006) ------------------------------------------- */
 
+/* The focused multi-line editor, or GATES_NONE (plan-0022). */
+static gates_u32 focused_editor(const gates_tree_t *tree) {
+    if (tree == nullptr || tree->focus == GATES_NONE || !is_kind(tree, tree->focus, GATES_NODE_EDITOR) ||
+        !gates_i_focus_eligible(tree, tree->focus)) {
+        return GATES_NONE;
+    }
+    return tree->focus;
+}
+
 /* Composition is refused for read-only and password boxes (the Win32 window
  * also detaches the IME from them). */
 static gates_widget_state_t *composing_box(const gates_tree_t *tree) {
@@ -446,6 +455,17 @@ static gates_widget_state_t *composing_box(const gates_tree_t *tree) {
 
 gates_input_result_t gates_input_preedit(gates_tree_t *tree, gates_str_t text,
                                          gates_u32 cursor) {
+    gates_u32 ed = focused_editor(tree);
+    if (ed != GATES_NONE) {
+        if (text.size > 0 && text.ptr == nullptr) return GATES_INPUT_IGNORED;
+        gates_err_t err = gates_i_editor_set_preedit(tree, ed, text, cursor);
+        if (err == PROVEN_ERR_PERMISSION) return GATES_INPUT_IGNORED;
+        if (!gates_is_ok(err)) {
+            tree->input_error = err;
+            return GATES_INPUT_FAILED;
+        }
+        return GATES_INPUT_CONSUMED;
+    }
     gates_widget_state_t *st = composing_box(tree);
     if (st == nullptr || (text.size > 0 && text.ptr == nullptr)) {
         return GATES_INPUT_IGNORED;
@@ -489,6 +509,13 @@ static void end_composition(gates_tree_t *tree, gates_widget_state_t *st, bool h
 }
 
 gates_input_result_t gates_input_commit(gates_tree_t *tree, gates_str_t text) {
+    gates_u32 editor = focused_editor(tree);
+    if (editor != GATES_NONE) {
+        if (text.size > 0 && text.ptr == nullptr) return GATES_INPUT_IGNORED;
+        gates_err_t err = gates_i_editor_commit(tree, editor, text);
+        if (err == PROVEN_ERR_PERMISSION) return GATES_INPUT_IGNORED;
+        return gates_is_ok(err) ? GATES_INPUT_CONSUMED : GATES_INPUT_FAILED;
+    }
     gates_widget_state_t *st = composing_box(tree);
     if (st == nullptr || (text.size > 0 && text.ptr == nullptr)) {
         return GATES_INPUT_IGNORED;
@@ -522,6 +549,13 @@ gates_input_result_t gates_input_commit(gates_tree_t *tree, gates_str_t text) {
 }
 
 gates_input_result_t gates_input_preedit_cancel(gates_tree_t *tree) {
+    gates_u32 ed = focused_editor(tree);
+    if (ed != GATES_NONE) {
+        const gates_widget_state_t *es = gates_i_state(tree, gates_i_slot(tree, ed)->state_index);
+        if (!gates_i_editor_composing(es)) return GATES_INPUT_IGNORED;
+        gates_i_editor_preedit_cancel(tree, ed);
+        return GATES_INPUT_CONSUMED;
+    }
     gates_widget_state_t *st = focused_box(tree);
     if (st == nullptr || gates_text_edit_preedit(st->edit).size == 0) {
         return GATES_INPUT_IGNORED;
@@ -544,12 +578,16 @@ gates_err_t gates_input_take_error(gates_tree_t *tree) {
 }
 
 bool gates_input_composing(const gates_tree_t *tree) {
+    gates_u32 ed = focused_editor(tree);
+    if (ed != GATES_NONE) return gates_i_editor_composing(gates_i_state(tree, gates_i_slot(tree, ed)->state_index));
     const gates_widget_state_t *st = focused_box(tree);
     return st != nullptr && gates_text_edit_preedit(st->edit).size > 0;
 }
 
 bool gates_input_caret_rect(const gates_tree_t *tree, gates_rect_t *out) {
-    const gates_widget_state_t *st = focused_box(tree);
+    gates_u32 ed = focused_editor(tree);
+    const gates_widget_state_t *st = ed != GATES_NONE ? gates_i_state(tree, gates_i_slot(tree, ed)->state_index)
+                                                      : focused_box(tree);
     if (st == nullptr || !st->caret_valid || out == nullptr) {
         return false;
     }

@@ -170,6 +170,9 @@ and a styler (`gates_editor_set_styler`) is asked, just before painting, to styl
 to show whose styles are stale - an edit makes its line stale again - so style work follows the
 view, not the length of the text. `gates_editor_find` selects the next match; marks
 (`gates_editor_mark_add`) keep a place while the text around it changes.
+An input method composes at the caret, drawn underlined in the text; the result arrives as one
+edit. Screen readers read the editor's text by character, word and line, with one rectangle per
+row for a range (`gates_access_text_rects`).
 
 <!-- example: manual/examples/ex_06_highlight.c -->
 ```c

@@ -55,6 +55,9 @@ struct gates_i_editor {
     gates_editor_styler_fn styler;
     void *styler_user;
     gates_u32 styled_end;            /* styles before this (a line start) are up to date */
+    /* Stage 4: an input method's composition, shown at the caret. */
+    gates_u8 *pre;
+    gates_u32 pre_len, pre_cap, ime_cursor;
 };
 
 typedef struct ed_geom {
@@ -93,6 +96,7 @@ void gates_i_editor_free(gates_tree_t *tree, gates_widget_state_t *st) {
     if (e->hist != nullptr) a.free_fn(a.ctx, e->hist);
     if (e->scratch != nullptr) a.free_fn(a.ctx, e->scratch);
     if (e->sscratch != nullptr) a.free_fn(a.ctx, e->sscratch);
+    if (e->pre != nullptr) a.free_fn(a.ctx, e->pre);
     gates_text_buffer_destroy(e->buf);
     a.free_fn(a.ctx, e);
     st->editor = nullptr;
@@ -1039,7 +1043,11 @@ gates_err_t gates_i_editor_paint(const gates_tree_t *tree, gates_u32 idx, gates_
             gates_i32 sx1 = brk ? width + space : x_in(text, font, e, u, z - rb);
             if (sx1 > sx0) TRY_DRAW(gates_draw_rect(dl, (gates_rect_t){ x0 + sx0, y, sx1 - sx0, g.row_h }, sel_bg));
         }
-        /* Text in runs cut at tabs, selection edges and style changes. */
+        /* Text in runs cut at tabs, selection edges, style changes and the
+         * composition, which is drawn at the caret, underlined. */
+        bool comp_here = e->pre_len > 0 && e->caret >= rb && (e->caret < rend || (last_row && e->caret == rend));
+        bool pre_done = false;
+        gates_i32 pre_w = 0, pre_cursor_x = 0;
         gates_i32 x = 0, run_x = 0;
         gates_u32 run_start = 0;
         for (gates_u32 i = 0; i <= u.size;) {
@@ -1048,7 +1056,7 @@ gates_err_t gates_i_editor_paint(const gates_tree_t *tree, gates_u32 idx, gates_
             bool tab = i < u.size && cp == '\t';
             bool cut = i > run_start && i < u.size &&
                        ((sel_b < sel_e && (rb + i == sel_b || rb + i == sel_e)) ||
-                        (sty != nullptr && sty[rs + i] != sty[rs + run_start]));
+                        (sty != nullptr && sty[rs + i] != sty[rs + run_start]) || (comp_here && rb + i == e->caret));
             if ((i == u.size || tab || cut) && i > run_start) {
                 bool in_sel = rb + run_start >= sel_b && rb + run_start < sel_e;
                 gates_color_t c = inert ? fg : in_sel ? sel_fg : sty != nullptr ? style_color(e, theme, sty[rs + run_start], fg) : fg;
@@ -1061,6 +1069,17 @@ gates_err_t gates_i_editor_paint(const gates_tree_t *tree, gates_u32 idx, gates_
                 run_start = i;
                 run_x = x;
             }
+            if (comp_here && !pre_done && rb + i == e->caret) {
+                gates_str_t pre = { .ptr = e->pre, .size = e->pre_len };
+                pre_w = gates_text_width(text, font, pre);
+                pre_cursor_x = x + gates_text_width(text, font, (gates_str_t){ .ptr = e->pre, .size = e->ime_cursor });
+                TRY_DRAW(gates_draw_text(dl, (gates_rect_t){ x0 + x, y + (g.row_h - m.line_height) / 2, pre_w, m.line_height },
+                                         pre, font, fg));
+                TRY_DRAW(gates_draw_rect(dl, (gates_rect_t){ x0 + x, y + g.row_h - 2, pre_w, 1 }, fg));
+                x += pre_w;
+                run_x = x;
+                pre_done = true;
+            }
             if (i == u.size) break;
             x += advance(text, font, e, x, cp);
             if (tab) {
@@ -1071,7 +1090,8 @@ gates_err_t gates_i_editor_paint(const gates_tree_t *tree, gates_u32 idx, gates_
         }
         /* The caret: in this row, or at the line's end on its last row. */
         if (focused && !inert && e->caret >= rb && (e->caret < rend || (last_row && e->caret == rend))) {
-            gates_rect_t caret = { x0 + x_in(text, font, e, u, e->caret - rb), y, 1, g.row_h };
+            gates_i32 cx = comp_here ? pre_cursor_x : x_in(text, font, e, u, e->caret - rb);
+            gates_rect_t caret = { x0 + cx, y, 1, g.row_h };
             if (!e->read_only) TRY_DRAW(gates_draw_rect(dl, caret, fg));
             st->caret_rect = caret;
             st->caret_valid = true;
@@ -1573,4 +1593,133 @@ bool gates_editor_find(gates_tree_t *tree, gates_node_t editor, gates_str_t need
     keep_caret(tree, editor.index, e);
     gates_i_mark_dirty(tree, editor.index, GATES_DIRTY_PAINT);
     return true;
+}
+
+/* -- input method and accessibility (stage 4) ------------------------------------------------------ */
+
+bool gates_i_editor_composing(const gates_widget_state_t *st) {
+    return st != nullptr && st->editor != nullptr && st->editor->pre_len > 0;
+}
+
+gates_str_t gates_i_editor_preedit(const gates_widget_state_t *st) {
+    if (st == nullptr || st->editor == nullptr) return (gates_str_t){0};
+    return (gates_str_t){ .ptr = st->editor->pre, .size = st->editor->pre_len };
+}
+
+static void pre_announce(gates_tree_t *tree, gates_u32 idx) {
+    gates_i_event_try_push(tree, idx, GATES_EVENT_PREEDIT_CHANGED, 0);
+}
+
+/* The composition shown at the caret (empty ends it). PERMISSION when read-only. */
+gates_err_t gates_i_editor_set_preedit(gates_tree_t *tree, gates_u32 idx, gates_str_t text, gates_u32 cursor) {
+    struct gates_i_editor *e = ed_at(tree, idx);
+    if (e == nullptr || e->read_only) return PROVEN_ERR_PERMISSION;
+    if (text.size > e->pre_cap) {
+        gates_u32 cap = e->pre_cap < 32 ? 32 : e->pre_cap;
+        while (cap < text.size) cap *= 2;
+        proven_result_mem_mut_t r = e->pre == nullptr ? tree->alloc.alloc_fn(tree->alloc.ctx, cap, 1)
+                                                      : tree->alloc.realloc_fn(tree->alloc.ctx, e->pre, e->pre_cap, cap, 1);
+        if (!proven_is_ok(r.err)) return r.err; /* the previous composition stays */
+        e->pre = (gates_u8 *)r.value.ptr;
+        e->pre_cap = cap;
+    }
+    if (text.size > 0) memcpy(e->pre, text.ptr, text.size);
+    e->pre_len = (gates_u32)text.size;
+    if (cursor > text.size) cursor = (gates_u32)text.size;
+    while (cursor > 0 && cursor < text.size && (text.ptr[cursor] & 0xC0) == 0x80) cursor--;
+    e->ime_cursor = cursor;
+    e->run_open = false;
+    gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
+    pre_announce(tree, idx);
+    return GATES_OK;
+}
+
+/* The input method's result replaces the selection as one step; the composition ends. */
+gates_err_t gates_i_editor_commit(gates_tree_t *tree, gates_u32 idx, gates_str_t text) {
+    struct gates_i_editor *e = ed_at(tree, idx);
+    if (e == nullptr || e->read_only) return PROVEN_ERR_PERMISSION;
+    bool had = e->pre_len > 0;
+    if (text.size > 0) {
+        if (!utf8_ok(text)) return PROVEN_ERR_INVALID_ARG;
+        gates_u32 b = e->anchor < e->caret ? e->anchor : e->caret, en = e->anchor < e->caret ? e->caret : e->anchor;
+        e->run_open = false;
+        gates_err_t err = user_edit(tree, idx, e, b, en, text, RUN_OTHER);
+        if (!gates_is_ok(err) && err != PROVEN_ERR_OUT_OF_BOUNDS) return err; /* text, selection, composition kept */
+    }
+    e->pre_len = 0;
+    e->ime_cursor = 0;
+    gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
+    if (had) pre_announce(tree, idx);
+    return GATES_OK;
+}
+
+/* A composition cancelled, or dropped when focus leaves (no text changes). */
+void gates_i_editor_preedit_cancel(gates_tree_t *tree, gates_u32 idx) {
+    struct gates_i_editor *e = ed_at(tree, idx);
+    if (e == nullptr || e->pre_len == 0) return;
+    e->pre_len = 0;
+    e->ime_cursor = 0;
+    gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
+    pre_announce(tree, idx);
+}
+
+void gates_i_editor_blur(gates_tree_t *tree, gates_u32 idx) {
+    struct gates_i_editor *e = ed_at(tree, idx);
+    if (e == nullptr) return;
+    e->run_open = false;
+    gates_i_editor_preedit_cancel(tree, idx);
+}
+
+/* One rectangle per shown row of [start, end) (an empty range: a zero-width one at its place). */
+gates_u32 gates_i_editor_text_rects(gates_tree_t *tree, gates_u32 idx, gates_u32 start, gates_u32 end, gates_rect_t *out,
+                                    gates_u32 cap) {
+    struct gates_i_editor *e = ed_at(tree, idx);
+    const gates_text_backend_t *be = backend(tree);
+    if (e == nullptr || be == nullptr || out == nullptr || cap == 0) return 0;
+    gates_u32 len = len_of(e);
+    if (end > len) end = len;
+    if (start > end) start = end;
+    ed_geom g;
+    geom_now(tree, idx, e, &g);
+    lay_t L = lay_of(tree, idx, &g);
+    gates_u32 n = 0;
+    dpos p = { g.top, g.top_row };
+    for (gates_u32 k = 0; k < g.visible && n < cap; k++) {
+        gates_str_t t = line_text(tree, e, p.line, nullptr);
+        gates_u32 rs, re;
+        (void)row_range(&L, e, t, p.row, &rs, &re);
+        gates_u32 ls = gates_text_buffer_line_start(e->buf, p.line), rb = ls + rs, rend = ls + re;
+        bool last_row = re >= t.size;
+        gates_str_t u = { .ptr = t.ptr + rs, .size = re - rs };
+        gates_u32 a = start > rb ? start : rb, z = end < rend ? end : rend;
+        bool here = start == end ? (start >= rb && (start < rend || (last_row && start == rend))) : a < z;
+        if (here) {
+            gates_i32 x0 = g.text.x - g.scroll_x + x_in(be, L.font, e, u, a - rb);
+            gates_i32 x1 = g.text.x - g.scroll_x + x_in(be, L.font, e, u, z - rb); /* z == a when empty */
+            gates_rect_t r = { x0, g.text.y + (gates_i32)k * g.row_h, x1 - x0, g.row_h };
+            gates_rect_t c = gates_rect_intersect(r, g.text);
+            if (start == end && r.x >= g.text.x && r.x <= g.text.x + g.text.w) c = (gates_rect_t){ r.x, r.y, 0, r.h };
+            if (!gates_rect_is_empty(c) || start == end) out[n++] = c;
+        }
+        gates_i64 moved = 0;
+        p = advance_rows(tree, &L, e, p, 1, &moved);
+        if (moved == 0) break;
+    }
+    return n;
+}
+
+gates_u32 gates_i_editor_offset_at_point(gates_tree_t *tree, gates_u32 idx, gates_point_t p) {
+    struct gates_i_editor *e = ed_at(tree, idx);
+    if (e == nullptr) return 0;
+    ed_geom g;
+    geom_now(tree, idx, e, &g);
+    return offset_at(tree, idx, e, &g, p);
+}
+
+/* Assistive technology sets the whole text: a person's edit (undoable, reported). */
+gates_err_t gates_i_editor_user_set(gates_tree_t *tree, gates_u32 idx, gates_str_t text) {
+    struct gates_i_editor *e = ed_at(tree, idx);
+    if (e == nullptr || (text.size > 0 && text.ptr == nullptr) || !utf8_ok(text)) return PROVEN_ERR_INVALID_ARG;
+    e->run_open = false;
+    return user_edit(tree, idx, e, 0, len_of(e), text, RUN_OTHER); /* PERMISSION when read-only */
 }

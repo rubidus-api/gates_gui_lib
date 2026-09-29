@@ -208,6 +208,10 @@ gates_access_ref_t gates_access_focus_ref(gates_tree_t *tree);
  * changes; refused as input would be). Password boxes answer nothing. */
 bool gates_access_text_rect(gates_tree_t *tree, gates_node_t node, gates_u32 start, gates_u32 end,
                             gates_rect_t *out);
+/* A multi-line editor's range covers rows: one rectangle per shown row
+ * (plan-0022), at most cap; a text box gives at most one. Returns how many. */
+gates_u32 gates_access_text_rects(gates_tree_t *tree, gates_node_t node, gates_u32 start, gates_u32 end,
+                                  gates_rect_t *out, gates_u32 cap);
 gates_u32 gates_access_text_offset_at(gates_tree_t *tree, gates_node_t node, gates_point_t p);
 [[nodiscard]] gates_err_t gates_access_select_text(gates_tree_t *tree, gates_node_t node, gates_u32 anchor,
                                                    gates_u32 caret);

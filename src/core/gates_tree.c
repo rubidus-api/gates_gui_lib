@@ -811,6 +811,9 @@ void gates_tree_set_focus(gates_tree_t *tree, gates_node_t node) {
     }
     if (left != GATES_NONE) {
         gates_i_view_editor_left(tree, left); /* plan-0021: leaving a cell editor commits */
+        if (gates_i_valid(tree, gates_i_handle(tree, left)) && gates_i_slot(tree, left)->kind == GATES_NODE_EDITOR) {
+            gates_i_editor_blur(tree, left); /* plan-0022: a composition does not follow focus */
+        }
     }
 }
 

@@ -272,11 +272,13 @@ static void ime_follow_focus(gates_window_t *win) {
     win->ime_active = false;
 }
 
-/* Read-only and password boxes take no IME composition: detach the input
- * context while one has focus, re-attach it afterwards. */
+/* Read-only and password boxes (and read-only editors) take no IME
+ * composition: detach the input context while one has focus, re-attach it
+ * afterwards. */
 static void ime_policy(gates_window_t *win) {
     gates_node_t f = gates_tree_focus(win->tree);
-    bool off = gates_textbox_read_only(win->tree, f) || gates_textbox_password(win->tree, f);
+    bool off = gates_textbox_read_only(win->tree, f) || gates_textbox_password(win->tree, f) ||
+               gates_editor_read_only(win->tree, f);
     if (off && !win->ime_off) {
         win->ime_saved = ImmAssociateContext(win->hwnd, nullptr);
         win->ime_off = true;

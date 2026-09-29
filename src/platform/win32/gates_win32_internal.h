@@ -17,6 +17,7 @@
 #include <gates/window.h>
 #include <gates/frame.h>
 #include <gates/image.h>
+#include <gates/editor.h>
 #include <gates/task.h>
 #include <gates/render.h>
 #include <gates/text.h>

@@ -429,6 +429,11 @@ gates_u32 gates_tree_dispatch_events(gates_tree_t *tree, gates_u32 max_events) {
                 tree->input_error = PROVEN_ERR_NOMEM;
                 continue;
             }
+        } else if (ev.kind == GATES_EVENT_PREEDIT_CHANGED && st->editor != nullptr) {
+            if (!payload(tree, gates_i_editor_preedit(st), &ev.text)) {
+                tree->input_error = PROVEN_ERR_NOMEM;
+                continue;
+            }
         } else if (ev.kind == GATES_EVENT_PREEDIT_CHANGED && st->edit != nullptr) {
             if (!payload(tree, gates_text_edit_preedit(st->edit), &ev.text)) {
                 tree->input_error = PROVEN_ERR_NOMEM;

@@ -1078,6 +1078,121 @@ static void test_indenting(void) {
     done(&a);
 }
 
+/* -- stage 4: input methods and accessibility by line ------------------------------------------- */
+
+typedef struct pre_rec_t {
+    int n;
+    char last[32];
+} pre_rec_t;
+
+static void on_pre(gates_tree_t *tree, const gates_event_t *ev, void *user) {
+    (void)tree;
+    pre_rec_t *r = user;
+    if (ev->kind != GATES_EVENT_PREEDIT_CHANGED) return;
+    r->n++;
+    snprintf(r->last, sizeof r->last, "%.*s", (int)ev->text.size, (const char *)ev->text.ptr);
+}
+
+static void test_ime(void) {
+    app_t a;
+    make(&a, &(gates_editor_desc_t){0});
+    pre_rec_t pr = {0};
+    GT_ASSERT_OK(gates_widget_set_handler(a.t, a.ed, on_pre, &pr));
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, GATES_STR("ab\ncd")));
+    GT_ASSERT_OK(gates_editor_set_selection(a.t, a.ed, 4, 4)); /* between c and d */
+    GT_ASSERT(!gates_input_composing(a.t));
+    GT_ASSERT(gates_input_preedit(a.t, GATES_STR("\xEA\xB0\x80\xEB\x82\x98"), 4) == GATES_INPUT_CONSUMED); /* cursor snaps to 3 */
+    GT_ASSERT(gates_input_composing(a.t) && text_is(&a, "ab\ncd"));
+    (void)gates_tree_dispatch_events(a.t, 0);
+    GT_ASSERT(pr.n == 1 && strcmp(pr.last, "\xEA\xB0\x80\xEB\x82\x98") == 0);
+    /* Drawn at the caret, underlined, the rest of the row after it; the caret rect inside it. */
+    gates_draw_list_t dl;
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    paint(&a, &dl);
+    gates_point_t o = origin(&a);
+    const gates_draw_cmd_t *pc = text_cmd(&dl, "\xEA\xB0\x80\xEB\x82\x98"), *d = text_cmd(&dl, "d");
+    GT_ASSERT(pc != nullptr && pc->rect.x == o.x + 8 && pc->rect.y == o.y + 16 && pc->rect.w == 32);
+    GT_ASSERT(d != nullptr && d->rect.x == o.x + 8 + 32);
+    bool underline = false;
+    for (gates_u32 i = 0; i < dl.len; i++) {
+        const gates_draw_cmd_t *c = gates_draw_list_at(&dl, i);
+        if (c->kind == GATES_DRAW_RECT && c->rect.x == o.x + 8 && c->rect.w == 32 && c->rect.h == 1 && c->rect.y == o.y + 30) underline = true;
+    }
+    GT_ASSERT(underline);
+    gates_rect_t cr;
+    GT_ASSERT(gates_input_caret_rect(a.t, &cr) && cr.x == o.x + 8 + 16 && cr.y == o.y + 16);
+    /* The result replaces the selection as one step; the composition ends. */
+    GT_ASSERT(gates_input_commit(a.t, GATES_STR("\xEA\xB0\x80")) == GATES_INPUT_CONSUMED);
+    GT_ASSERT(!gates_input_composing(a.t) && text_is(&a, "ab\nc\xEA\xB0\x80" "d") && caret(&a) == 7);
+    (void)gates_tree_dispatch_events(a.t, 0);
+    GT_ASSERT(pr.n == 2 && pr.last[0] == 0);
+    GT_ASSERT(key_mods(a.t, GATES_KEY_Z, true, false) && text_is(&a, "ab\ncd"));
+    /* An empty result only ends it; a cancel drops it; nothing composing: ignored. */
+    GT_ASSERT(gates_input_preedit(a.t, GATES_STR("x"), 1) == GATES_INPUT_CONSUMED);
+    GT_ASSERT(gates_input_commit(a.t, GATES_STR("")) == GATES_INPUT_CONSUMED && !gates_input_composing(a.t) && text_is(&a, "ab\ncd"));
+    GT_ASSERT(gates_input_preedit(a.t, GATES_STR("y"), 1) == GATES_INPUT_CONSUMED);
+    GT_ASSERT(gates_input_preedit_cancel(a.t) == GATES_INPUT_CONSUMED && !gates_input_composing(a.t));
+    GT_ASSERT(gates_input_preedit_cancel(a.t) == GATES_INPUT_IGNORED);
+    GT_ASSERT(gates_input_preedit(a.t, GATES_STR(""), 0) == GATES_INPUT_CONSUMED && !gates_input_composing(a.t));
+    /* Focus leaving drops a composition. */
+    GT_ASSERT(gates_input_preedit(a.t, GATES_STR("z"), 1) == GATES_INPUT_CONSUMED);
+    int before = pr.n;
+    (void)gates_tree_dispatch_events(a.t, 0);
+    gates_tree_set_focus(a.t, a.after);
+    gates_tree_set_focus(a.t, a.ed);
+    GT_ASSERT(!gates_input_composing(a.t) && text_is(&a, "ab\ncd"));
+    (void)gates_tree_dispatch_events(a.t, 0);
+    GT_ASSERT(pr.n == before + 2);
+    /* Read-only: no composition. */
+    GT_ASSERT_OK(gates_editor_set_read_only(a.t, a.ed, true));
+    GT_ASSERT(gates_input_preedit(a.t, GATES_STR("q"), 1) == GATES_INPUT_IGNORED);
+    GT_ASSERT(gates_input_commit(a.t, GATES_STR("q")) == GATES_INPUT_IGNORED && text_is(&a, "ab\ncd"));
+    gates_draw_list_deinit(&dl);
+    done(&a);
+}
+
+static void test_access_lines(void) {
+    app_t a;
+    make(&a, &(gates_editor_desc_t){0});
+    GT_ASSERT_OK(gates_node_set_access_name(a.t, a.ed, GATES_STR("Notes")));
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, GATES_STR("one\ntwo two\nthree")));
+    gates_point_t o = origin(&a);
+    /* A range over three lines: one rectangle per row. */
+    gates_rect_t r[8];
+    GT_ASSERT(gates_access_text_rects(a.t, a.ed, 1, 14, r, 8) == 3);
+    GT_ASSERT(r[0].x == o.x + 8 && r[0].y == o.y && r[0].w == 16);
+    GT_ASSERT(r[1].x == o.x && r[1].y == o.y + 16 && r[1].w == 56);
+    GT_ASSERT(r[2].x == o.x && r[2].y == o.y + 32 && r[2].w == 16);
+    GT_ASSERT(gates_access_text_rects(a.t, a.ed, 1, 14, r, 2) == 2); /* at most cap */
+    gates_rect_t one;
+    GT_ASSERT(gates_access_text_rect(a.t, a.ed, 5, 7, &one) && one.x == o.x + 8 && one.w == 16 && one.y == o.y + 16);
+    /* An empty range: a zero-width rectangle at its place. */
+    GT_ASSERT(gates_access_text_rects(a.t, a.ed, 4, 4, r, 8) == 1 && r[0].w == 0 && r[0].x == o.x && r[0].y == o.y + 16);
+    /* The offset under a point; a selection through the model; the value set as a person would. */
+    GT_ASSERT(gates_access_text_offset_at(a.t, a.ed, (gates_point_t){ o.x + 17, o.y + 20 }) == 6);
+    GT_ASSERT_OK(gates_access_select_text(a.t, a.ed, 4, 7));
+    GT_ASSERT(anchor(&a) == 4 && caret(&a) == 7);
+    GT_ASSERT(gates_access_select_text(a.t, a.ed, 0, 99) == PROVEN_ERR_OUT_OF_BOUNDS);
+    GT_ASSERT_OK(gates_access_set_value(a.t, a.ed, GATES_STR("new\ntext")));
+    GT_ASSERT(text_is(&a, "new\ntext") && gates_editor_can_undo(a.t, a.ed));
+    (void)gates_tree_dispatch_events(a.t, 0);
+    GT_ASSERT(a.rec.text >= 1);
+    GT_ASSERT(gates_access_set_value(a.t, a.ed, (gates_str_t){ (const gates_u8 *)"\xFF", 1 }) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT_OK(gates_editor_set_read_only(a.t, a.ed, true));
+    GT_ASSERT(gates_access_set_value(a.t, a.ed, GATES_STR("no")) == PROVEN_ERR_PERMISSION);
+    GT_ASSERT_OK(gates_access_select_text(a.t, a.ed, 0, 3)); /* selection works read-only */
+    /* Scrolled away: rows not shown give nothing. */
+    static char big[20000];
+    int n = 0;
+    for (int i = 0; i < 300; i++) n += snprintf(big + n, sizeof big - (size_t)n, "line %d\n", i);
+    GT_ASSERT_OK(gates_editor_set_read_only(a.t, a.ed, false));
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, (gates_str_t){ (const gates_u8 *)big, (gates_usize_t)n }));
+    layout(a.t);
+    GT_ASSERT(gates_access_text_rects(a.t, a.ed, 3000, 3005, r, 8) == 0);
+    GT_ASSERT(gates_access_text_rects(a.t, a.ed, 0, 5, nullptr, 8) == 0 && gates_access_text_rects(a.t, a.ed, 0, 5, r, 0) == 0);
+    done(&a);
+}
+
 int main(void) {
     be = gates_text_backend_builtin();
     theme = gates_theme_light();
@@ -1095,5 +1210,7 @@ int main(void) {
     test_highlighting();
     test_marks_find();
     test_indenting();
+    test_ime();
+    test_access_lines();
     return gt_report("test_editor");
 }

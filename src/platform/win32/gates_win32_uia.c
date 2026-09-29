@@ -1252,15 +1252,28 @@ static bool word_start(const WCHAR *w, LONG n, LONG p) {
     return p == 0 || p >= n || (!space_at(w, p) && space_at(w, p - 1));
 }
 
-/* One edit is one line: Line, Paragraph, Page, Format and Document all span it. */
+/* Page, Format and Document span the whole text; Line and Paragraph end
+ * after each line break (a single-line box is one line) (plan-0022). */
 static bool whole_unit(enum TextUnit u) {
-    return u != TextUnit_Character && u != TextUnit_Word;
+    return u != TextUnit_Character && u != TextUnit_Word && u != TextUnit_Line && u != TextUnit_Paragraph;
+}
+
+static bool line_unit(enum TextUnit u) {
+    return u == TextUnit_Line || u == TextUnit_Paragraph;
+}
+
+static bool line_start(const WCHAR *w, LONG p) {
+    return p == 0 || w[p - 1] == L'\n';
 }
 
 static LONG unit_start(enum TextUnit u, const WCHAR *w, LONG n, LONG p) {
     if (whole_unit(u)) return 0;
     if (p >= n) return n;
     if (u == TextUnit_Character) return p > 0 && IS_LOW_SURROGATE(w[p]) ? p - 1 : p;
+    if (line_unit(u)) {
+        while (p > 0 && !line_start(w, p)) p--;
+        return p;
+    }
     while (p > 0 && !word_start(w, n, p)) p--;
     return p;
 }
@@ -1269,6 +1282,10 @@ static LONG unit_next(enum TextUnit u, const WCHAR *w, LONG n, LONG p) {
     if (whole_unit(u)) return n;
     if (u == TextUnit_Character) return next_char(w, n, p);
     if (p >= n) return n;
+    if (line_unit(u)) {
+        do p++; while (p < n && !line_start(w, p));
+        return p;
+    }
     do p++; while (p < n && !word_start(w, n, p));
     return p;
 }
@@ -1277,6 +1294,10 @@ static LONG unit_prev(enum TextUnit u, const WCHAR *w, LONG n, LONG p) {
     if (whole_unit(u)) return 0;
     if (u == TextUnit_Character) return prev_char(w, p);
     if (p <= 0) return 0;
+    if (line_unit(u)) {
+        do p--; while (p > 0 && !line_start(w, p));
+        return p;
+    }
     do p--; while (p > 0 && !word_start(w, n, p));
     return p;
 }
@@ -1415,16 +1436,24 @@ static HRESULT STDMETHODCALLTYPE rt_rects(ITextRangeProvider *This, SAFEARRAY **
     HRESULT hr = range_text(r, &i, &w, &n);
     if (FAILED(hr)) return hr;
     SysFreeString(w);
-    gates_rect_t lr;
-    bool any = r->end > r->start &&
-               gates_access_text_rect(r->el->win->tree, r->el->ref.node, u8_of(i.value, r->start),
-                                      u8_of(i.value, r->end), &lr) && lr.w > 0;
-    SAFEARRAY *sa = SafeArrayCreateVector(VT_R8, 0, any ? 4 : 0);
+    /* One rectangle per row the range covers (a multi-line editor has several). */
+    gates_rect_t lr[64];
+    gates_u32 got = r->end > r->start ? gates_access_text_rects(r->el->win->tree, r->el->ref.node,
+                                                                u8_of(i.value, r->start), u8_of(i.value, r->end), lr, 64)
+                                      : 0;
+    gates_u32 keep = 0;
+    for (gates_u32 k = 0; k < got; k++) {
+        if (lr[k].w > 0) lr[keep++] = lr[k];
+    }
+    SAFEARRAY *sa = SafeArrayCreateVector(VT_R8, 0, (ULONG)(4 * keep));
     if (sa == nullptr) return E_OUTOFMEMORY;
-    if (any) {
-        struct UiaRect sr = screen_rect(r->el->win, lr);
+    for (gates_u32 k = 0; k < keep; k++) {
+        struct UiaRect sr = screen_rect(r->el->win, lr[k]);
         double v[4] = { sr.left, sr.top, sr.width, sr.height };
-        for (LONG k = 0; k < 4; k++) SafeArrayPutElement(sa, &k, &v[k]);
+        for (LONG q = 0; q < 4; q++) {
+            LONG at = (LONG)(4 * k) + q;
+            SafeArrayPutElement(sa, &at, &v[q]);
+        }
     }
     *out = sa;
     return S_OK;

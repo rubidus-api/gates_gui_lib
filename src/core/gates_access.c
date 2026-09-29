@@ -1226,6 +1226,9 @@ gates_err_t gates_access_set_value(gates_tree_t *tree, gates_node_t node, gates_
     gates_widget_state_t *st = nullptr;
     gates_err_t err = usable(tree, node, &st);
     if (!gates_is_ok(err)) return err;
+    if (gates_i_slot(tree, node.index)->kind == GATES_NODE_EDITOR) {
+        return gates_i_editor_user_set(tree, node.index, text); /* plan-0022 */
+    }
     if (gates_i_slot(tree, node.index)->kind != GATES_NODE_TEXTBOX || st->edit == nullptr ||
         (text.size > 0 && text.ptr == nullptr)) {
         return PROVEN_ERR_INVALID_ARG;
@@ -1484,8 +1487,28 @@ static const gates_widget_state_t *text_box(const gates_tree_t *tree, gates_node
     return st != nullptr && st->edit != nullptr && !st->password ? st : nullptr;
 }
 
+static bool is_editor(const gates_tree_t *tree, gates_node_t node) {
+    return tree != nullptr && gates_i_valid(tree, node) && gates_i_slot(tree, node.index)->kind == GATES_NODE_EDITOR;
+}
+
+gates_u32 gates_access_text_rects(gates_tree_t *tree, gates_node_t node, gates_u32 start, gates_u32 end, gates_rect_t *out,
+                                  gates_u32 cap) {
+    if (out == nullptr || cap == 0) return 0;
+    if (is_editor(tree, node)) {
+        if (!shown(tree, node.index)) return 0;
+        gates_u32 n = gates_i_editor_text_rects(tree, node.index, start, end, out, cap);
+        gates_u32 kept = 0;
+        for (gates_u32 i = 0; i < n; i++) {
+            if (!clipped(tree, node.index, out[i])) out[kept++] = out[i];
+        }
+        return kept;
+    }
+    return gates_access_text_rect(tree, node, start, end, out) ? 1u : 0u;
+}
+
 bool gates_access_text_rect(gates_tree_t *tree, gates_node_t node, gates_u32 start, gates_u32 end,
                             gates_rect_t *out) {
+    if (is_editor(tree, node)) return out != nullptr && gates_access_text_rects(tree, node, start, end, out, 1) == 1;
     const gates_widget_state_t *st = text_box(tree, node);
     if (st == nullptr || out == nullptr || !shown(tree, node.index)) return false;
     gates_u32 len = (gates_u32)gates_text_edit_text(st->edit).size;
@@ -1506,6 +1529,7 @@ bool gates_access_text_rect(gates_tree_t *tree, gates_node_t node, gates_u32 sta
 }
 
 gates_u32 gates_access_text_offset_at(gates_tree_t *tree, gates_node_t node, gates_point_t p) {
+    if (is_editor(tree, node)) return gates_i_editor_offset_at_point(tree, node.index, p);
     const gates_widget_state_t *st = text_box(tree, node);
     if (st == nullptr) return 0;
     gates_rect_t inner = gates_i_textbox_inner(tree, node.index);
@@ -1515,6 +1539,14 @@ gates_u32 gates_access_text_offset_at(gates_tree_t *tree, gates_node_t node, gat
 }
 
 gates_err_t gates_access_select_text(gates_tree_t *tree, gates_node_t node, gates_u32 anchor, gates_u32 caret) {
+    if (is_editor(tree, node)) {
+        gates_widget_state_t *es = nullptr;
+        gates_err_t err = usable(tree, node, &es);
+        if (!gates_is_ok(err)) return err;
+        gates_u32 len = gates_editor_length(tree, node);
+        if (anchor > len || caret > len) return PROVEN_ERR_OUT_OF_BOUNDS;
+        return gates_editor_set_selection(tree, node, anchor, caret); /* plan-0022 */
+    }
     gates_widget_state_t *st = nullptr;
     gates_err_t err = usable(tree, node, &st);
     if (!gates_is_ok(err)) return err;
