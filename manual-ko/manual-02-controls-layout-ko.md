@@ -19,7 +19,7 @@
 | 선택 상자 | `gates_choice_create` | 목록에서 하나를 고른다 | Space, Enter, Alt+Down 으로 열기; 화살표, Enter, Escape | VALUE_CHANGED | 콤보 상자(Selection, Expand) |
 | 진행 막대 | `gates_progress_create` | 일이 얼마나 되었는지 본다 | - | - | 진행 막대(백분율) |
 | 구분선 | `gates_separator_create` | 나뉨을 본다 | - | - | 구분선 |
-| 뷰 | `gates_view_create`, `gates_log_create` | 목록·표·트리·로그에서 고른다 | 화살표, PageUp/PageDown, Home, End, Enter; 트리는 Left/Right; 글자를 치면 그 줄로 간다; Ctrl+C 는 줄을 복사한다; Ctrl+Left/Right 는 F2 와 Space 가 쓰는 열을 고른다 | SELECTION_CHANGED, ACTIVATED, SORT_REQUESTED, EXPAND_REQUESTED, CELL_EDITED | 목록, 표, 트리(5장) |
+| 뷰 | `gates_view_create`, `gates_log_create` | 목록·표·트리·로그에서 고른다 | 화살표, PageUp/PageDown, Home, End, Enter; 트리는 Left/Right; 글자를 치면 그 줄로 간다; Ctrl+C 는 줄을 복사한다; Ctrl+Left/Right 는 F2 와 Space 가 쓰는 열을 고른다; multi_select 이면 Shift/Ctrl 로 여럿, Ctrl+A 로 전부 | SELECTION_CHANGED, ACTIVATED, SORT_REQUESTED, EXPAND_REQUESTED, CELL_EDITED | 목록, 표, 트리(5장) |
 | 폼 | `gates_form_create` | 이름표 달린 필드를 채운다 | - | 편집기들의 이벤트 | 필드의 그룹(3장) |
 | 속성 격자 | `gates_propgrid_create` | 레코드의 형식 있는 필드를 고친다 | Tab, 편집기들의 키 | VALUE_CHANGED(result = 속성 id) | 이름 붙은 편집기의 그룹(5장) |
 | 대화상자, 메뉴 | `gates_dialog_open`, `gates_menu_open` | 한 번 답한다, 명령을 고른다 | Enter, Escape, 화살표 | DIALOG_CLOSED, MENU_CLOSED | 창, 메뉴(4장) |

@@ -50,6 +50,7 @@ typedef struct model_t {
     char last_text[32];
     bool last_checked;
     bool remove_on_set;          /* set_cell also removes the last row (the model may change) */
+    bool selected[64];           /* multi-select: the program's own selection */
 } model_t;
 
 static row_t *row_of(model_t *m, gates_item_id_t id) {
@@ -123,6 +124,14 @@ static void fill(model_t *m, gates_u64 n) {
     }
 }
 
+static gates_u64 m_next_sel(void *u, gates_u64 row) {
+    model_t *m = u;
+    for (gates_u64 r = row; r < m->n; r++) {
+        if (m->selected[r]) return r;
+    }
+    return GATES_ROW_NONE;
+}
+
 static gates_rows_model_t bind(model_t *m, bool writable) {
     return (gates_rows_model_t){ .user = m, .count = m_count, .id_at = m_id_at, .index_of = m_index_of,
                                  .cell = m_cell, .set_cell = writable ? m_set_cell : nullptr };
@@ -156,6 +165,7 @@ typedef struct rec_t {
     gates_event_kind_t kind[32];
     gates_u64 item[32];
     gates_u32 result[32];
+    gates_u64 anchor[32];
     int n;
 } rec_t;
 
@@ -166,6 +176,7 @@ static void record(gates_tree_t *tree, const gates_event_t *ev, void *user) {
         r->kind[r->n] = ev->kind;
         r->item[r->n] = ev->item;
         r->result[r->n] = ev->result;
+        r->anchor[r->n] = ev->anchor;
         r->n++;
     }
 }
@@ -766,6 +777,245 @@ static void test_keyboard_extras(void) {
     type(a.t, "r"); /* no clock: letters still search */
     GT_ASSERT(gates_view_selected(a.t, a.view) == 100);
     free_app(&a);
+}
+
+/* -- 0.9.0: multi-selection (RFC-0007) ------------------------------------------------------ */
+
+/* What a program does with a request: its own selection changes, then the view repaints. */
+static void apply_request(model_t *m, gates_select_request_t kind, gates_item_id_t target, gates_item_id_t anchor) {
+    gates_u64 t = 0, a = 0;
+    bool have_t = m_index_of(m, target, &t), have_a = m_index_of(m, anchor, &a);
+    if (!have_t) return;
+    if (!have_a) a = t;
+    gates_u64 lo = a < t ? a : t, hi = a < t ? t : a;
+    switch (kind) {
+    case GATES_SELECT_ONE: memset(m->selected, 0, sizeof m->selected); m->selected[t] = true; break;
+    case GATES_SELECT_TOGGLE: m->selected[t] = !m->selected[t]; break;
+    case GATES_SELECT_RANGE: memset(m->selected, 0, sizeof m->selected); /* fall through */
+    case GATES_SELECT_ADD_RANGE: for (gates_u64 r = lo; r <= hi; r++) m->selected[r] = true; break;
+    case GATES_SELECT_ALL: for (gates_u64 r = 0; r < m->n; r++) m->selected[r] = true; break;
+    }
+}
+
+static void on_multi(gates_tree_t *tree, const gates_event_t *ev, void *user) {
+    app_t *a = user;
+    record(tree, ev, &a->rec);
+    if (ev->kind == GATES_EVENT_SELECT_REQUESTED) {
+        apply_request(&a->m, (gates_select_request_t)ev->result, ev->item, ev->anchor);
+        GT_ASSERT_OK(gates_view_model_changed(tree, ev->source));
+    }
+}
+
+static void make_multi(app_t *a, gates_u64 rows) {
+    memset(a, 0, sizeof *a);
+    make_cols(&a->own);
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &a->t));
+    gates_node_t root = gates_tree_root(a->t);
+    GT_ASSERT_OK(gates_layout_set(a->t, root, GATES_LAYOUT_KIND_COLUMN));
+    gates_view_desc_t d = { .columns = cols, .column_count = 2, .header = true, .multi_select = true };
+    GT_ASSERT_OK(gates_view_create(a->t, root, &d, &a->view));
+    GT_ASSERT_OK(gates_layout_set_child_grow(a->t, a->view, 1));
+    GT_ASSERT_OK(gates_widget_set_handler(a->t, a->view, on_multi, a));
+    fill(&a->m, rows);
+    gates_rows_model_t mb = bind(&a->m, true);
+    GT_ASSERT(gates_view_set_model(a->t, a->view, &mb) == PROVEN_ERR_INVALID_ARG); /* no next_selected */
+    mb.next_selected = m_next_sel;
+    GT_ASSERT_OK(gates_view_set_model(a->t, a->view, &mb));
+    layout(a->t);
+}
+
+static int sel_rects(app_t *a) {
+    gates_draw_list_t dl;
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    GT_ASSERT_OK(gates_paint_tree(a->t, &dl, theme, be));
+    gates_color_t sb = gates_theme_color(theme, GATES_COLOR_SELECTION_BG);
+    gates_rect_t body = gates_view_part_rect(a->t, a->view, GATES_VIEW_PART_BODY, 0);
+    int n = 0;
+    for (gates_u32 i = 0; i < gates_draw_list_len(&dl); i++) {
+        const gates_draw_cmd_t *c = gates_draw_list_at(&dl, i);
+        if (c->kind == GATES_DRAW_RECT && c->rect.w == body.w && c->color.r == sb.r && c->color.g == sb.g &&
+            c->color.b == sb.b) {
+            n++;
+        }
+    }
+    gates_draw_list_deinit(&dl);
+    return n;
+}
+
+static bool only(const model_t *m, const char *pattern) { /* "1110..": row r selected when pattern[r] == '1' */
+    for (gates_u64 r = 0; r < m->n; r++) {
+        bool want = r < strlen(pattern) && pattern[r] == '1';
+        if (m->selected[r] != want) return false;
+    }
+    return true;
+}
+
+static bool keyc(gates_tree_t *t, gates_key_t k, bool ctrl, bool shift) {
+    gates_key_event_t e = { .key = k, .down = true, .ctrl = ctrl, .shift = shift };
+    return gates_input_key(t, &e);
+}
+
+static void press_mod(app_t *a, gates_u64 row, bool ctrl, bool shift) {
+    gates_pointer_event_t e = { .action = GATES_POINTER_DOWN, .button = GATES_BUTTON_LEFT,
+                                .pos = at(cell_rect(a, row, 0), 10), .clicks = 1, .ctrl = ctrl, .shift = shift };
+    (void)gates_input_pointer(a->t, &e);
+    e.action = GATES_POINTER_UP;
+    (void)gates_input_pointer(a->t, &e);
+}
+
+typedef struct big_t { gates_u64 n, calls; } big_t;
+static gates_u64 b_count(void *u) { return ((big_t *)u)->n; }
+static gates_item_id_t b_id_at(void *u, gates_u64 row) { return row < ((big_t *)u)->n ? row + 1 : 0; }
+static bool b_index_of(void *u, gates_item_id_t id, gates_u64 *row) {
+    if (id == 0 || id > ((big_t *)u)->n) return false;
+    *row = id - 1;
+    return true;
+}
+static gates_err_t b_cell(void *u, gates_item_id_t id, gates_column_id_t col, gates_cell_t *out) {
+    (void)u; (void)id; (void)col;
+    out->text = GATES_STR("x");
+    return GATES_OK;
+}
+static gates_u64 b_sparse(void *u, gates_u64 row) { /* every 5000th row */
+    big_t *b = u;
+    b->calls++;
+    gates_u64 r = (row + 4999) / 5000 * 5000;
+    return r < b->n ? r : GATES_ROW_NONE;
+}
+static gates_u64 b_all(void *u, gates_u64 row) { /* everything selected: one flag */
+    big_t *b = u;
+    b->calls++;
+    return row < b->n ? row : GATES_ROW_NONE;
+}
+
+static void test_multi_select(void) {
+    app_t a;
+    make_multi(&a, 8);
+    gates_tree_set_clipboard(a.t, &(gates_clipboard_t){ .get_text = clip_get, .set_text = clip_set });
+    gates_access_info_t info;
+    GT_ASSERT_OK(gates_access_info(a.t, a.view, 0, &info));
+    GT_ASSERT(info.states & GATES_ACCESS_MULTISELECT);
+    gates_tree_set_focus(a.t, a.view);
+    /* Keys: Down selects one; Shift extends from the anchor; Ctrl moves the focus only. */
+    GT_ASSERT(key(a.t, GATES_KEY_DOWN));
+    dispatch(&a);
+    GT_ASSERT(only(&a.m, "1") && a.rec.kind[a.rec.n - 1] == GATES_EVENT_SELECT_REQUESTED &&
+              a.rec.result[a.rec.n - 1] == GATES_SELECT_ONE && a.rec.anchor[a.rec.n - 1] == 100);
+    GT_ASSERT(keyc(a.t, GATES_KEY_DOWN, false, true) && keyc(a.t, GATES_KEY_DOWN, false, true));
+    dispatch(&a);
+    GT_ASSERT(only(&a.m, "111") && a.rec.result[a.rec.n - 1] == GATES_SELECT_RANGE &&
+              a.rec.item[a.rec.n - 1] == 102 && a.rec.anchor[a.rec.n - 1] == 100);
+    GT_ASSERT(sel_rects(&a) == 3);
+    a.rec.n = 0;
+    GT_ASSERT(keyc(a.t, GATES_KEY_DOWN, true, false)); /* focus 103, nothing asked */
+    dispatch(&a);
+    GT_ASSERT(gates_view_selected(a.t, a.view) == 103 && only(&a.m, "111"));
+    GT_ASSERT(sel_rects(&a) == 3); /* the focus row is not painted as selected */
+    for (int i = 0; i < a.rec.n; i++) GT_ASSERT(a.rec.kind[i] != GATES_EVENT_SELECT_REQUESTED);
+    GT_ASSERT(keyc(a.t, GATES_KEY_SPACE, true, false)); /* Ctrl+Space toggles the focus row */
+    dispatch(&a);
+    GT_ASSERT(only(&a.m, "1111") && sel_rects(&a) == 4);
+    GT_ASSERT(keyc(a.t, GATES_KEY_SPACE, true, false) && keyc(a.t, GATES_KEY_SPACE, true, false)); /* never coalesced */
+    dispatch(&a);
+    GT_ASSERT(only(&a.m, "1111"));
+    GT_ASSERT(keyc(a.t, GATES_KEY_UP, false, true)); /* Shift+Up: the range 103..102 */
+    dispatch(&a);
+    GT_ASSERT(only(&a.m, "0011") && a.rec.anchor[a.rec.n - 1] == 103);
+    GT_ASSERT(keyc(a.t, GATES_KEY_A, true, false)); /* Ctrl+A */
+    dispatch(&a);
+    GT_ASSERT(only(&a.m, "11111111") && a.rec.result[a.rec.n - 1] == GATES_SELECT_ALL);
+    /* Space with a check column still toggles the check, asks nothing. */
+    a.rec.n = 0;
+    bool was = a.m.rows[2].done;
+    GT_ASSERT(key(a.t, GATES_KEY_SPACE));
+    dispatch(&a);
+    GT_ASSERT(a.m.rows[2].done != was && count_kind(&a.rec, GATES_EVENT_SELECT_REQUESTED) == 0);
+    /* Pointer: click, Ctrl+click, Shift+click, Ctrl+Shift+click. */
+    press_mod(&a, 4, false, false);
+    dispatch(&a);
+    GT_ASSERT(only(&a.m, "00001"));
+    press_mod(&a, 1, true, false);
+    dispatch(&a);
+    GT_ASSERT(only(&a.m, "01001") && a.rec.result[a.rec.n - 1] == GATES_SELECT_TOGGLE);
+    press_mod(&a, 3, false, true);
+    dispatch(&a);
+    GT_ASSERT(only(&a.m, "0111") && a.rec.anchor[a.rec.n - 1] == 101);
+    press_mod(&a, 6, true, true);
+    dispatch(&a);
+    GT_ASSERT(only(&a.m, "0111111") && a.rec.result[a.rec.n - 1] == GATES_SELECT_ADD_RANGE);
+    /* Ctrl+C: the selected rows, one per line, in model order. */
+    memset(a.m.selected, 0, sizeof a.m.selected);
+    a.m.selected[1] = a.m.selected[3] = true;
+    GT_ASSERT_OK(gates_view_model_changed(a.t, a.view));
+    gates_key_event_t cc = { .key = GATES_KEY_C, .down = true, .ctrl = true };
+    GT_ASSERT(gates_input_key(a.t, &cc));
+    GT_ASSERT(strcmp(clip_text, "row1\tyes\nrow3\tyes") == 0);
+    /* Accessibility: items report the model's selection; joining and leaving are requests. */
+    GT_ASSERT_OK(gates_access_info(a.t, a.view, 101, &info));
+    GT_ASSERT(info.states & GATES_ACCESS_SELECTED);
+    GT_ASSERT_OK(gates_access_info(a.t, a.view, 102, &info));
+    GT_ASSERT(!(info.states & GATES_ACCESS_SELECTED));
+    a.rec.n = 0;
+    GT_ASSERT_OK(gates_access_set_item_selected(a.t, a.view, 101, true)); /* already: nothing */
+    GT_ASSERT_OK(gates_access_set_item_selected(a.t, a.view, 102, true));
+    dispatch(&a);
+    GT_ASSERT(count_kind(&a.rec, GATES_EVENT_SELECT_REQUESTED) == 1 && only(&a.m, "0111"));
+    GT_ASSERT_OK(gates_access_set_item_selected(a.t, a.view, 101, false));
+    dispatch(&a);
+    GT_ASSERT(only(&a.m, "0011"));
+    GT_ASSERT_OK(gates_access_select(a.t, a.view, 105)); /* Select = ONE */
+    dispatch(&a);
+    GT_ASSERT(only(&a.m, "000001") && gates_view_selected(a.t, a.view) == 105);
+    /* The program's set_selected starts a range there. */
+    GT_ASSERT_OK(gates_view_set_selected(a.t, a.view, 102));
+    GT_ASSERT(keyc(a.t, GATES_KEY_DOWN, false, true));
+    dispatch(&a);
+    GT_ASSERT(only(&a.m, "0011") && a.rec.anchor[a.rec.n - 1] == 102);
+    free_app(&a);
+    /* A single-select view refuses the multi-select action. */
+    make_app(&a, 4, true);
+    GT_ASSERT(gates_access_set_item_selected(a.t, a.view, 101, true) == PROVEN_ERR_INVALID_ARG);
+    free_app(&a);
+
+    /* Bounded: a billion rows all selected - painting asks only about painted rows; Ctrl+C asks
+     * the program instead of copying more than GATES_VIEW_COPY_MAX rows. */
+    big_t big = { .n = 1000000000ull };
+    gates_tree_t *t;
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &t));
+    GT_ASSERT_OK(gates_layout_set(t, gates_tree_root(t), GATES_LAYOUT_KIND_COLUMN));
+    gates_node_t v;
+    GT_ASSERT_OK(gates_view_create(t, gates_tree_root(t), &(gates_view_desc_t){ .multi_select = true }, &v));
+    GT_ASSERT_OK(gates_layout_set_child_grow(t, v, 1));
+    rec_t rec = {0};
+    GT_ASSERT_OK(gates_widget_set_handler(t, v, record, &rec));
+    gates_rows_model_t bm = { .user = &big, .count = b_count, .id_at = b_id_at, .index_of = b_index_of,
+                              .cell = b_cell, .next_selected = b_all };
+    GT_ASSERT_OK(gates_view_set_model(t, v, &bm));
+    GT_ASSERT_OK(gates_layout_run(t, (gates_size_t){ VW, VH }, be));
+    gates_draw_list_t dl;
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    GT_ASSERT_OK(gates_paint_tree(t, &dl, theme, be));
+    gates_draw_list_deinit(&dl);
+    GT_ASSERT(big.calls > 0 && big.calls <= gates_view_visible_rows(t, v) + 2);
+    bm.next_selected = b_sparse; /* a selected row far below the painted ones is not touched */
+    GT_ASSERT_OK(gates_view_set_model(t, v, &bm));
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    big.calls = 0;
+    GT_ASSERT_OK(gates_paint_tree(t, &dl, theme, be));
+    gates_draw_list_deinit(&dl);
+    GT_ASSERT(big.calls == 2);
+    bm.next_selected = b_all;
+    GT_ASSERT_OK(gates_view_set_model(t, v, &bm));
+    GT_ASSERT_OK(gates_layout_run(t, (gates_size_t){ VW, VH }, be));
+    gates_tree_set_clipboard(t, &(gates_clipboard_t){ .get_text = clip_get, .set_text = clip_set });
+    gates_tree_set_focus(t, v);
+    strcpy(clip_text, "untouched");
+    big.calls = 0;
+    GT_ASSERT(gates_input_key(t, &cc));
+    (void)gates_tree_dispatch_events(t, 0);
+    GT_ASSERT(strcmp(clip_text, "untouched") == 0 && big.calls == GATES_VIEW_COPY_MAX + 1);
+    GT_ASSERT(count_kind(&rec, GATES_EVENT_COPY_REQUESTED) == 1);
+    gates_tree_destroy(t);
 }
 
 /* -- edits across scrolling and model changes ---------------------------------------------- */
@@ -1443,6 +1693,7 @@ int main(void) {
     test_double_click();
     test_checks();
     test_keyboard_extras();
+    test_multi_select();
     test_scroll_and_model();
     test_create_failures();
     test_hide_and_move();

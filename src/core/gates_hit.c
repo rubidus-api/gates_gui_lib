@@ -208,7 +208,7 @@ static bool drag_begin(gates_tree_t *tree, gates_u32 idx, const gates_pointer_ev
         return gates_i_spin_arrows_press(tree, idx, p); /* repeats while held (0.8.0) */
     }
     if (s->kind == GATES_NODE_VIEW) {
-        return gates_i_view_pointer_down(tree, idx, p, clicks); /* rows, header, bars */
+        return gates_i_view_pointer_down(tree, idx, p, clicks, ev->shift, ev->ctrl); /* rows, header, bars */
     }
     if (s->kind == GATES_NODE_EDITOR) {
         return gates_i_editor_press(tree, idx, p, clicks, ev->shift);

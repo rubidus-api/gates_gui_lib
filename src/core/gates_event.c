@@ -211,6 +211,13 @@ void gates_i_event_push(gates_tree_t *tree, gates_u32 idx, gates_event_kind_t ki
     };
 }
 
+void gates_i_event_push_req(gates_tree_t *tree, gates_u32 idx, gates_event_kind_t kind, gates_u32 aux,
+                            gates_u64 item, gates_u64 anchor) {
+    gates_u32 before = tree->event_len;
+    gates_i_event_push_ex(tree, idx, kind, GATES_ORIGIN_USER, aux, item);
+    if (tree->event_len > before) tree->events[tree->event_len - 1].anchor = anchor;
+}
+
 void gates_i_event_push_ex(gates_tree_t *tree, gates_u32 idx, gates_event_kind_t kind,
                            gates_event_origin_t origin, gates_u32 aux, gates_u64 item) {
     gates_u32 before = tree->event_len;
@@ -403,7 +410,7 @@ gates_u32 gates_tree_dispatch_events(gates_tree_t *tree, gates_u32 max_events) {
             .result = e.kind == GATES_EVENT_VALUE_CHANGED
                           ? (st->tabs != nullptr ? gates_i_tabs_selected(tree, node.index) : st->opt_sel)
                       : (e.kind == GATES_EVENT_SORT_REQUESTED || e.kind == GATES_EVENT_EXPAND_REQUESTED ||
-                         e.kind == GATES_EVENT_CELL_EDITED) ? e.aux
+                         e.kind == GATES_EVENT_CELL_EDITED || e.kind == GATES_EVENT_SELECT_REQUESTED) ? e.aux
                       : e.kind == GATES_EVENT_FOLLOW_CHANGED ? (gates_i_view_following(st) ? 1u : 0u)
                                                              : 0,
             /* A selection is read at delivery (latest); an activation keeps its row. */
@@ -411,6 +418,7 @@ gates_u32 gates_tree_dispatch_events(gates_tree_t *tree, gates_u32 max_events) {
                         ? (st->editor != nullptr ? gates_i_editor_caret(st) : gates_i_view_selected(st))
                         : e.item,
             .value = st->rng != nullptr ? gates_i_range_value(tree, node.index) : 0,
+            .anchor = e.kind == GATES_EVENT_SELECT_REQUESTED ? e.anchor : 0,
         };
         if (ev.kind == GATES_EVENT_LIMIT_EXCEEDED) {
             if (st->offer_len == 0) {

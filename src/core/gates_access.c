@@ -1101,6 +1101,7 @@ gates_err_t gates_access_info(gates_tree_t *tree, gates_node_t node, gates_u64 i
     case GATES_NODE_VIEW: {
         gates_u32 pos, page;
         if (!inert && gates_i_view_scroll_info(tree, idx, &pos, &page)) actions |= GATES_ACCESS_SCROLL;
+        if (gates_i_view_multi(tree, idx)) states |= GATES_ACCESS_MULTISELECT; /* 0.9.0 */
         if (gates_i_view_kind(tree, idx) == GATES_I_VIEW_TABLE) {
             gates_i_view_item_t it = {0};
             gates_item_id_t first = gates_i_view_item_at(tree, idx, 0);
@@ -1549,6 +1550,14 @@ gates_u32 gates_access_text_offset_at(gates_tree_t *tree, gates_node_t node, gat
     gates_i32 rel = p.x - inner.x;
     if (rel < 0) rel = 0;
     return gates_i_box_offset_at_x(tree->text_backend, gates_i_font(tree, node.index), st, rel + st->view_x);
+}
+
+gates_err_t gates_access_set_item_selected(gates_tree_t *tree, gates_node_t node, gates_u64 item, bool selected) {
+    gates_widget_state_t *st = nullptr;
+    gates_err_t err = usable(tree, node, &st);
+    if (!gates_is_ok(err)) return err;
+    if (gates_i_slot(tree, node.index)->kind != GATES_NODE_VIEW || item == 0) return PROVEN_ERR_INVALID_ARG;
+    return gates_i_view_set_item_selected(tree, node.index, item, selected);
 }
 
 gates_err_t gates_access_select_text(gates_tree_t *tree, gates_node_t node, gates_u32 anchor, gates_u32 caret) {

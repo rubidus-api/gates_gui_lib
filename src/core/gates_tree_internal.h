@@ -32,6 +32,7 @@ typedef struct gates_i_event_t {
     gates_u32 aux;           /* GATES_I_EVENT_COMMAND: the command id (node = scope);
                               * SORT_REQUESTED: the column id */
     gates_u64 item;          /* ACTIVATED from a view: the row's id at queue time */
+    gates_u64 anchor;        /* SELECT_REQUESTED: the anchor row */
 } gates_i_event_t;
 
 /* Queue-only kind for command invocations (never a public gates_event_kind_t). */
@@ -650,6 +651,8 @@ void gates_i_choice_lists_check(gates_tree_t *tree, gates_u32 only_idx);
 /* Queues an event carrying `aux` / `item` (reserved slot required). */
 void gates_i_event_push_ex(gates_tree_t *tree, gates_u32 idx, gates_event_kind_t kind,
                            gates_event_origin_t origin, gates_u32 aux, gates_u64 item);
+void gates_i_event_push_req(gates_tree_t *tree, gates_u32 idx, gates_event_kind_t kind, gates_u32 aux,
+                            gates_u64 item, gates_u64 anchor); /* USER origin, with an anchor */
 
 /* Virtual views (gates_view.c). */
 void gates_i_view_free(gates_tree_t *tree, gates_widget_state_t *st);
@@ -686,8 +689,10 @@ gates_err_t gates_i_view_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
 bool gates_i_view_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t *ev);
 bool gates_i_view_char(gates_tree_t *tree, gates_u32 idx, gates_str_t ch);
 /* Left press on the view (true: taken, possibly starting a drag). */
+bool gates_i_view_multi(const gates_tree_t *tree, gates_u32 idx);
+gates_err_t gates_i_view_set_item_selected(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id, bool selected);
 bool gates_i_view_pointer_down(gates_tree_t *tree, gates_u32 idx, gates_point_t p,
-                               gates_u32 clicks);
+                               gates_u32 clicks, bool shift, bool ctrl);
 void gates_i_view_pointer_up(gates_tree_t *tree, gates_u32 idx, gates_point_t p);
 void gates_i_view_drag(gates_tree_t *tree, gates_point_t p);
 bool gates_i_view_wheel(gates_tree_t *tree, gates_u32 idx, gates_vec2_t wheel);

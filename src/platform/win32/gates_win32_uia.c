@@ -823,26 +823,54 @@ static HRESULT STDMETHODCALLTYPE sel_get(ISelectionProvider *This, SAFEARRAY **o
     gates_access_info_t i;
     HRESULT hr = el_info(e, &i);
     if (FAILED(hr)) return hr;
-    gates_u64 id = selected_item(e->win->tree, e->ref.node);
-    uia_el_t *s = id != 0 ? el_get(e->win, (gates_access_ref_t){ e->ref.node, id }) : nullptr;
-    SAFEARRAY *sa = SafeArrayCreateVector(VT_UNKNOWN, 0, s != nullptr ? 1 : 0);
-    if (sa == nullptr) {
-        if (s != nullptr) el_release(s);
-        return E_OUTOFMEMORY;
+    if ((i.states & GATES_ACCESS_MULTISELECT) == 0) {
+        gates_u64 id = selected_item(e->win->tree, e->ref.node);
+        uia_el_t *s = id != 0 ? el_get(e->win, (gates_access_ref_t){ e->ref.node, id }) : nullptr;
+        SAFEARRAY *sa = SafeArrayCreateVector(VT_UNKNOWN, 0, s != nullptr ? 1 : 0);
+        if (sa == nullptr) {
+            if (s != nullptr) el_release(s);
+            return E_OUTOFMEMORY;
+        }
+        if (s != nullptr) {
+            LONG k = 0;
+            SafeArrayPutElement(sa, &k, (IUnknown *)&s->simple); /* the array takes its own reference */
+            el_release(s);
+        }
+        *out = sa;
+        return S_OK;
     }
-    if (s != nullptr) {
-        LONG k = 0;
-        SafeArrayPutElement(sa, &k, (IUnknown *)&s->simple); /* the array takes its own reference */
+    /* Multi-select (0.9.0): the selected items among those described (shown rows and the focus row). */
+    gates_tree_t *t = e->win->tree;
+    gates_u64 n = gates_access_item_count(t, e->ref.node), m = 0;
+    for (gates_u64 k = 0; k < n; k++) {
+        gates_access_info_t ii;
+        gates_u64 id = gates_access_item_at(t, e->ref.node, k);
+        if (gates_is_ok(gates_access_info(t, e->ref.node, id, &ii)) && (ii.states & GATES_ACCESS_SELECTED) != 0) m++;
+    }
+    SAFEARRAY *sa = SafeArrayCreateVector(VT_UNKNOWN, 0, (ULONG)m);
+    if (sa == nullptr) return E_OUTOFMEMORY;
+    LONG put = 0;
+    for (gates_u64 k = 0; k < n && put < (LONG)m; k++) {
+        gates_access_info_t ii;
+        gates_u64 id = gates_access_item_at(t, e->ref.node, k);
+        if (!gates_is_ok(gates_access_info(t, e->ref.node, id, &ii)) || (ii.states & GATES_ACCESS_SELECTED) == 0) continue;
+        uia_el_t *s = el_get(e->win, (gates_access_ref_t){ e->ref.node, id });
+        if (s == nullptr) continue;
+        SafeArrayPutElement(sa, &put, (IUnknown *)&s->simple);
         el_release(s);
+        put++;
     }
     *out = sa;
     return S_OK;
 }
 
 static HRESULT STDMETHODCALLTYPE sel_multiple(ISelectionProvider *This, WINBOOL *out) {
-    (void)This;
+    uia_el_t *e = EL_OF(This, sel);
     if (out == nullptr) return E_POINTER;
-    *out = FALSE;
+    gates_access_info_t i;
+    HRESULT hr = el_info(e, &i);
+    if (FAILED(hr)) return hr;
+    *out = (i.states & GATES_ACCESS_MULTISELECT) != 0;
     return S_OK;
 }
 
@@ -868,11 +896,27 @@ static HRESULT STDMETHODCALLTYPE selitem_select(ISelectionItemProvider *This) {
     return acted(e, gates_access_select(e->win->tree, e->ref.node, e->ref.item));
 }
 
+/* The container is multi-select: add and remove are requests (0.9.0). */
+static bool in_multi(uia_el_t *e) {
+    gates_access_info_t c;
+    return gates_is_ok(gates_access_info(e->win->tree, e->ref.node, 0, &c)) && (c.states & GATES_ACCESS_MULTISELECT) != 0;
+}
+
+static HRESULT STDMETHODCALLTYPE selitem_add(ISelectionItemProvider *This) {
+    uia_el_t *e = EL_OF(This, selitem);
+    gates_access_info_t i;
+    HRESULT hr = el_info(e, &i);
+    if (FAILED(hr)) return hr;
+    if (!in_multi(e)) return acted(e, gates_access_select(e->win->tree, e->ref.node, e->ref.item));
+    return acted(e, gates_access_set_item_selected(e->win->tree, e->ref.node, e->ref.item, true));
+}
+
 static HRESULT STDMETHODCALLTYPE selitem_remove(ISelectionItemProvider *This) {
     uia_el_t *e = EL_OF(This, selitem);
     gates_access_info_t i;
     HRESULT hr = el_info(e, &i);
     if (FAILED(hr)) return hr;
+    if (in_multi(e)) return acted(e, gates_access_set_item_selected(e->win->tree, e->ref.node, e->ref.item, false));
     return (i.states & GATES_ACCESS_SELECTED) != 0 ? UIA_E_INVALIDOPERATION : S_OK; /* single selection */
 }
 
@@ -899,7 +943,7 @@ static HRESULT STDMETHODCALLTYPE selitem_container(ISelectionItemProvider *This,
 
 static const ISelectionItemProviderVtbl selitem_vtbl = {
     selitem_qi, selitem_addref, selitem_release,
-    selitem_select, selitem_select /* AddToSelection: single selection */, selitem_remove,
+    selitem_select, selitem_add, selitem_remove,
     selitem_is, selitem_container,
 };
 

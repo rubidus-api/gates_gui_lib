@@ -159,6 +159,11 @@ node per part.
   `gates_view_model_changed`.
 - The selection is an item id, never a row number: it survives inserts, removals and sorting.
   When the selected item goes away the view announces the new selection with origin PROGRAM.
+- A multi-select view leaves the selection to the model: it asks `next_selected(row)` only for
+  rows it paints, describes or copies, and turns every gesture into a request
+  (SELECT_REQUESTED: ONE, TOGGLE, RANGE, ADD_RANGE, ALL) that the program applies. Nothing gates
+  holds or walks grows with the number of rows or of selected rows; copying stops at 10000 rows
+  and asks the program (COPY_REQUESTED).
 - Sorting and opening tree rows are requests (SORT_REQUESTED, EXPAND_REQUESTED): the program
   reorders or changes its rows. gates never walks rows it does not show.
 - Editable cells change through the model's `set_cell`, the one callback that may change the
@@ -220,6 +225,7 @@ window's placement is kept the same way (`gates_window_placement`).
 | log | 1000 lines, 1 MiB (settable per log) |
 | pointer target | at least 24 x 24 units |
 | type-ahead | 4096 rows looked at per character |
+| multi-select copy | 10000 rows, then the program is asked |
 
 ## 14. The Windows backend
 

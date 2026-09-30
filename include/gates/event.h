@@ -44,6 +44,13 @@ typedef enum gates_event_kind_t {
     /* log view (0.8.0): a person's scrolling started or stopped following new
      * lines; ev->result = 1 following, 0 not (read at delivery) */
     GATES_EVENT_FOLLOW_CHANGED,
+    /* multi-select view (0.9.0): a person asked to change the selection;
+     * ev->result = gates_select_request_t, ev->item = the target row,
+     * ev->anchor = the anchor row. Never coalesced. */
+    GATES_EVENT_SELECT_REQUESTED,
+    /* multi-select view: Ctrl+C with more selected rows than the view copies;
+     * ev->item = the focus row. The program copies, or says why not. */
+    GATES_EVENT_COPY_REQUESTED,
 } gates_event_kind_t;
 
 typedef enum gates_event_origin_t {
@@ -73,6 +80,8 @@ typedef struct gates_event_t {
     gates_u64 item;
     /* VALUE_CHANGED of a spin box or slider: the value (0.4.0). */
     gates_i64 value;
+    /* SELECT_REQUESTED: the anchor row id (0.9.0). */
+    gates_u64 anchor;
 } gates_event_t;
 
 typedef void (*gates_event_fn)(gates_tree_t *tree, const gates_event_t *ev, void *user);

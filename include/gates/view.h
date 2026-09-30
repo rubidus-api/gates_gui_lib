@@ -125,7 +125,14 @@ typedef struct gates_rows_model_t {
      * one callback that may); any error refuses the change. Null = read-only. */
     gates_err_t (*set_cell)(void *user, gates_item_id_t id, gates_column_id_t column,
                             const gates_cell_t *value);
+    /* Required for a multi-select view (0.9.0), ignored otherwise: the first
+     * selected row at or after `row`, or GATES_ROW_NONE. The program keeps its
+     * selection as it likes (a flag, ranges, a bitmap); gates asks only about
+     * rows it paints, describes or copies. */
+    gates_u64 (*next_selected)(void *user, gates_u64 row);
 } gates_rows_model_t;
+
+#define GATES_ROW_NONE UINT64_MAX
 
 typedef struct gates_column_desc_t {
     gates_column_id_t id;        /* nonzero, unique in the view */
@@ -157,9 +164,39 @@ typedef struct gates_view_desc_t {
      * the view's own scope, one per column, with the column ids; every column
      * needs a label. */
     bool column_menu;
+    /* Multi-selection (0.9.0): the model owns the selection (next_selected)
+     * and a person's gestures arrive as GATES_EVENT_SELECT_REQUESTED, which the
+     * program applies before calling gates_view_model_changed. The view keeps
+     * a focus row (gates_view_selected, SELECTION_CHANGED) and an anchor.
+     *   click, arrows, PageUp/PageDown, Home/End, type-ahead   ONE
+     *   Ctrl+click, Ctrl+Space                                 TOGGLE
+     *   Shift+click, Shift with the moving keys                RANGE
+     *   Ctrl+Shift+click                                       ADD_RANGE
+     *   Ctrl+A                                                 ALL
+     * Ctrl with the moving keys moves the focus row only. Ctrl+C copies the
+     * selected rows (one per line, cells tab-separated, model order); more than
+     * GATES_VIEW_COPY_MAX rows copy nothing and send GATES_EVENT_COPY_REQUESTED
+     * instead. Not for logs. */
+    bool multi_select;
 } gates_view_desc_t;
 
-/* INVALID_ARG for bad columns (id 0, duplicates); nothing is left on failure. */
+/* What a person asked of a multi-select view (ev->result of SELECT_REQUESTED;
+ * ev->item = the target row, ev->anchor = where a range starts). RANGE is
+ * exactly anchor..target in model order (the rest unselected); ADD_RANGE adds
+ * it; TOGGLE flips the target; ALL is every row. An anchor that is gone makes
+ * a range the target alone. */
+typedef enum gates_select_request_t {
+    GATES_SELECT_ONE = 1,
+    GATES_SELECT_TOGGLE,
+    GATES_SELECT_RANGE,
+    GATES_SELECT_ADD_RANGE,
+    GATES_SELECT_ALL,
+} gates_select_request_t;
+
+#define GATES_VIEW_COPY_MAX 10000u  /* rows a multi-select view copies itself */
+
+/* INVALID_ARG for bad columns (id 0, duplicates); nothing is left on failure.
+ * A multi-select view refuses a model without next_selected (set_model). */
 [[nodiscard]] gates_err_t gates_view_create(gates_tree_t *tree, gates_node_t parent,
                                             const gates_view_desc_t *desc, gates_node_t *out_view);
 /* Binds (copies the struct; `user` and callbacks are borrowed) or, with null,

@@ -83,6 +83,9 @@ struct gates_i_view {
     gates_u8 find[64];
     gates_u32 find_len;
     gates_u64 find_at;           /* clock time of the last typed character */
+    /* 0.9.0: multi-selection - the model owns it; the view keeps where a range starts. */
+    bool multi;
+    gates_item_id_t anchor;
 };
 
 typedef struct view_geom_t {
@@ -312,6 +315,7 @@ gates_err_t gates_view_create(gates_tree_t *tree, gates_node_t parent, const gat
     v->press_col = -1;
     v->editor = GATES_NONE;
     v->column_menu = desc->column_menu && desc->column_count > 0;
+    v->multi = desc->multi_select;
     bool wants_editor = false;
     gates_err_t err = GATES_OK;
     if (desc->column_count > 0) {
@@ -389,7 +393,8 @@ gates_err_t gates_view_set_model(gates_tree_t *tree, gates_node_t view,
     if (v == nullptr || v->log != nullptr || /* a log owns its model */
         (model != nullptr && (model->count == nullptr || model->id_at == nullptr ||
                               model->index_of == nullptr || model->cell == nullptr ||
-                              (v->tree && model->row_info == nullptr)))) {
+                              (v->tree && model->row_info == nullptr) ||
+                              (v->multi && model->next_selected == nullptr)))) {
         return PROVEN_ERR_INVALID_ARG;
     }
     (void)end_edit(tree, view.index, v, false, false); /* a cancel never fails */
@@ -399,6 +404,7 @@ gates_err_t gates_view_set_model(gates_tree_t *tree, gates_node_t view,
     v->scroll_x = 0;
     v->sel = 0;
     v->sel_row = 0;
+    v->anchor = 0;
     v->press_col = -1;
     if (tree->drag_node == view.index &&
         (tree->drag_kind == GATES_DRAG_VIEW_VTHUMB || tree->drag_kind == GATES_DRAG_VIEW_HTHUMB ||
@@ -488,6 +494,7 @@ gates_err_t gates_view_set_selected(gates_tree_t *tree, gates_node_t view, gates
     if (id != 0 && (!v->has_model || !v->model.index_of(v->model.user, id, &row))) {
         return PROVEN_ERR_INVALID_ARG;
     }
+    if (v->multi) v->anchor = id; /* a range starts here */
     if (v->sel != id) {
         v->sel = id;
         v->sel_row = row;
@@ -658,18 +665,29 @@ gates_err_t gates_i_view_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
     /* Rows: ids first (one id_at per painted row), then cells column by column. */
     gates_item_id_t ids[GATES_VIEW_MAX_ROWS];
     gates_row_info_t infos[GATES_VIEW_MAX_ROWS];
-    gates_i32 sel_k = -1;
+    bool selrow[GATES_VIEW_MAX_ROWS];
+    gates_i32 sel_k = -1; /* the focus row (the selected row of a single-select view) */
     for (gates_u32 k = 0; k < g.painted; k++) {
         ids[k] = v->model.id_at(v->model.user, g.first + k);
         if (ids[k] != 0 && ids[k] == v->sel) sel_k = (gates_i32)k;
+        selrow[k] = !v->multi && ids[k] != 0 && ids[k] == v->sel;
         infos[k] = (gates_row_info_t){0};
         if (v->tree && ids[k] != 0) {
             TRY_DRAW(v->model.row_info(v->model.user, ids[k], &infos[k])); /* painted rows only */
         }
     }
+    if (v->multi) { /* the model's selection, asked for the painted rows only */
+        for (gates_u64 r = g.first; r < g.first + g.painted;) {
+            gates_u64 n = v->model.next_selected(v->model.user, r);
+            if (n == GATES_ROW_NONE || n < r || n >= g.first + g.painted) break;
+            selrow[n - g.first] = true;
+            r = n + 1;
+        }
+    }
     TRY_DRAW(gates_draw_clip_push(dl, g.body));
-    if (sel_k >= 0) {
-        TRY_DRAW(gates_draw_rect(dl, (gates_rect_t){ g.body.x, g.body.y + sel_k * g.row_h,
+    for (gates_u32 k = 0; k < g.painted; k++) {
+        if (!selrow[k]) continue;
+        TRY_DRAW(gates_draw_rect(dl, (gates_rect_t){ g.body.x, g.body.y + (gates_i32)k * g.row_h,
                                                      g.body.w, g.row_h },
                                  gates_theme_color(theme, GATES_COLOR_SELECTION_BG)));
     }
@@ -691,13 +709,13 @@ gates_err_t gates_i_view_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
                 TRY_DRAW(gates_draw_clip_push(dl, gates_rect_intersect(cell_r, clip)));
                 gates_cell_paint_t cp = { .dl = dl, .rect = cell_r, .theme = theme, .font = font,
                                           .id = ids[k], .column = cid, .cell = &cell,
-                                          .selected = (gates_i32)k == sel_k, .disabled = inert };
+                                          .selected = selrow[k], .disabled = inert };
                 TRY_DRAW(col->paint(col->paint_user, &cp));
                 TRY_DRAW(gates_draw_clip_pop(dl));
                 continue;
             }
             gates_color_token_t fg = inert                     ? GATES_COLOR_CONTROL_DISABLED_FG
-                                     : (gates_i32)k == sel_k ? GATES_COLOR_SELECTION_FG
+                                     : selrow[k] ? GATES_COLOR_SELECTION_FG
                                      : infos[k].state == GATES_ROW_LOADING ? GATES_COLOR_CONTROL_DISABLED_FG
                                      : infos[k].state == GATES_ROW_ERROR   ? GATES_COLOR_ERROR
                                                                            : GATES_COLOR_CONTROL_FG;
@@ -749,7 +767,7 @@ gates_err_t gates_i_view_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
         if (v->tree && c == tree_col(v)) {
             for (gates_u32 k = 0; k < g.painted; k++) {
                 if (!infos[k].expandable) continue;
-                gates_color_token_t mt = (gates_i32)k == sel_k ? GATES_COLOR_SELECTION_FG
+                gates_color_token_t mt = selrow[k] ? GATES_COLOR_SELECTION_FG
                                                                : GATES_COLOR_CONTROL_FG;
                 TRY_DRAW(paint_mark(dl, cr.x, g.body.y + (gates_i32)k * g.row_h, g.row_h, &infos[k],
                                     gates_theme_color(theme, mt)));
@@ -770,7 +788,8 @@ gates_err_t gates_i_view_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
             gates_i32 fw = gates_theme_focus_width(theme);
             TRY_DRAW(gates_draw_border(dl, (gates_rect_t){ col_left(v, &g, (gates_u32)cc) + fw, g.body.y + sel_k * g.row_h + fw,
                                                            v->cols[cc].width - 2 * fw, g.row_h - 2 * fw },
-                                       1, gates_theme_color(theme, GATES_COLOR_SELECTION_FG))); /* on the selection */
+                                       1, gates_theme_color(theme, selrow[sel_k] ? GATES_COLOR_SELECTION_FG /* on the selection */
+                                                                                 : GATES_COLOR_FOCUS_RING)));
         }
     }
     TRY_DRAW(gates_draw_clip_pop(dl));
@@ -818,6 +837,45 @@ static void request_expand(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id
 }
 
 /* A person selects row `row`: announced first (no change without it), kept in view. */
+/* Whether a row is selected: the model's answer in a multi-select view. */
+static bool row_is_selected(struct gates_i_view *v, gates_u64 row, gates_item_id_t id) {
+    if (!v->multi) return id != 0 && id == v->sel;
+    return v->has_model && v->model.next_selected(v->model.user, row) == row;
+}
+
+bool gates_i_view_multi(const gates_tree_t *tree, gates_u32 idx) {
+    const struct gates_i_view *v = view_at(tree, idx);
+    return v != nullptr && v->multi;
+}
+
+/* A person's selection gesture in a multi-select view (RFC-0007): a request for
+ * the program. ONE, TOGGLE and ALL start a new range at the target. */
+static void select_request(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v, gates_select_request_t kind,
+                           gates_item_id_t target) {
+    if (!v->multi || target == 0) return;
+    if (kind != GATES_SELECT_RANGE && kind != GATES_SELECT_ADD_RANGE) v->anchor = target;
+    if (v->anchor == 0) v->anchor = target;
+    if (!gates_i_wants_events(tree, idx)) return;
+    gates_err_t err = gates_i_event_reserve(tree, 1, 0);
+    if (!gates_is_ok(err)) {
+        tree->input_error = err;
+        return;
+    }
+    gates_i_event_push_req(tree, idx, GATES_EVENT_SELECT_REQUESTED, (gates_u32)kind, target, v->anchor);
+}
+
+/* After the focus row moved by a key: plain keys select it alone, Shift makes
+ * a range from the anchor, Ctrl alone only moves the focus. */
+static void moved(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v, gates_item_id_t was, bool shift, bool ctrl) {
+    if (!v->multi || v->sel == 0 || (ctrl && !shift)) return;
+    if (shift) {
+        if (v->anchor == 0) v->anchor = was != 0 ? was : v->sel;
+        select_request(tree, idx, v, GATES_SELECT_RANGE, v->sel);
+    } else {
+        select_request(tree, idx, v, GATES_SELECT_ONE, v->sel);
+    }
+}
+
 static void pick(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v, const view_geom_t *g,
                  gates_u64 row) {
     if (!v->has_model || row >= g->count) return;
@@ -1171,8 +1229,14 @@ static void move_cur_col(gates_tree_t *tree, gates_u32 idx, struct gates_i_view 
     gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
 }
 
+static void copy_rows(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v);
+
 /* Ctrl+C: the selected row's shown cells, tab-separated, on the clipboard (0.8.0). */
-static void copy_row(gates_tree_t *tree, struct gates_i_view *v) {
+static void copy_row(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v) {
+    if (v->multi) {
+        copy_rows(tree, idx, v);
+        return;
+    }
     if (!tree->has_clipboard || v->sel == 0 || !v->has_model) return;
     gates_allocator_t a = tree->alloc;
     gates_u8 *buf = nullptr;
@@ -1205,6 +1269,79 @@ static void copy_row(gates_tree_t *tree, struct gates_i_view *v) {
     if (!gates_is_ok(err)) tree->input_error = err;
 }
 
+/* Appends a row's shown cells (tab-separated) to buf, growing it. */
+static gates_err_t append_row(gates_allocator_t a, struct gates_i_view *v, gates_item_id_t id, gates_u8 **buf,
+                              gates_usize_t *len, gates_usize_t *cap, bool newline) {
+    gates_u32 n = v->ncol > 0 ? nvisible(v) : 1;
+    for (gates_u32 k = 0; k < n; k++) {
+        gates_column_id_t cid = v->ncol > 0 ? v->cols[visible_at(v, k)].id : 0;
+        gates_cell_t cell = {0};
+        gates_err_t err = v->model.cell(v->model.user, id, cid, &cell);
+        if (!gates_is_ok(err)) return err;
+        gates_usize_t need = *len + 1 + cell.text.size;
+        if (need > *cap) {
+            gates_usize_t nc = *cap < 256 ? 256 : *cap;
+            while (nc < need) nc *= 2;
+            proven_result_mem_mut_t m = *buf == nullptr ? a.alloc_fn(a.ctx, nc, 1) : a.realloc_fn(a.ctx, *buf, *cap, nc, 1);
+            if (!proven_is_ok(m.err)) return m.err;
+            *buf = m.value.ptr;
+            *cap = nc;
+        }
+        if (k > 0) (*buf)[(*len)++] = '\t';
+        else if (newline) (*buf)[(*len)++] = '\n';
+        if (cell.text.size > 0) memcpy(*buf + *len, cell.text.ptr, cell.text.size);
+        *len += cell.text.size;
+    }
+    return GATES_OK;
+}
+
+/* Ctrl+C in a multi-select view: the selected rows in model order, one per line,
+ * walked with next_selected; past GATES_VIEW_COPY_MAX rows the program is asked. */
+static void copy_rows(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v) {
+    if (!v->has_model) return;
+    gates_u64 count = model_count(v), n = 0;
+    for (gates_u64 r = 0; r < count && n <= GATES_VIEW_COPY_MAX;) {
+        gates_u64 s = v->model.next_selected(v->model.user, r);
+        if (s == GATES_ROW_NONE || s < r || s >= count) break;
+        n++;
+        r = s + 1;
+    }
+    if (n > GATES_VIEW_COPY_MAX) {
+        if (!gates_i_wants_events(tree, idx)) return;
+        gates_err_t err = gates_i_event_reserve(tree, 1, 0);
+        if (!gates_is_ok(err)) {
+            tree->input_error = err;
+            return;
+        }
+        gates_i_event_push_req(tree, idx, GATES_EVENT_COPY_REQUESTED, 0, v->sel, 0);
+        return;
+    }
+    if (n == 0 || !tree->has_clipboard) return;
+    gates_allocator_t a = tree->alloc;
+    gates_u8 *buf = nullptr;
+    gates_usize_t len = 0, cap = 0;
+    gates_err_t err = GATES_OK;
+    bool first = true;
+    for (gates_u64 r = 0; r < count && gates_is_ok(err);) {
+        gates_u64 s = v->model.next_selected(v->model.user, r);
+        if (s == GATES_ROW_NONE || s < r || s >= count) break;
+        gates_item_id_t id = v->model.id_at(v->model.user, s);
+        if (id != 0) {
+            err = append_row(a, v, id, &buf, &len, &cap, !first);
+            first = false;
+        }
+        r = s + 1;
+    }
+    if (gates_is_ok(err)) err = tree->clipboard.set_text(tree->clipboard.ctx, (gates_str_t){ .ptr = buf, .size = len });
+    if (buf != nullptr) a.free_fn(a.ctx, buf);
+    if (!gates_is_ok(err)) tree->input_error = err;
+}
+
+static bool nav_key(gates_key_t k) {
+    return k == GATES_KEY_UP || k == GATES_KEY_DOWN || k == GATES_KEY_PAGE_UP || k == GATES_KEY_PAGE_DOWN ||
+           k == GATES_KEY_HOME || k == GATES_KEY_END;
+}
+
 bool gates_i_view_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t *ev) {
     struct gates_i_view *v = view_at(tree, idx);
     if (v == nullptr) return false;
@@ -1212,15 +1349,23 @@ bool gates_i_view_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t
     geom_now(tree, idx, v, &g);
     if (ev->ctrl && !ev->alt && !ev->shift) {
         if (ev->key == GATES_KEY_C) {
-            copy_row(tree, v);
-            return v->sel != 0;
+            copy_row(tree, idx, v);
+            return v->sel != 0 || v->multi;
+        }
+        if (v->multi && ev->key == GATES_KEY_A) {
+            select_request(tree, idx, v, GATES_SELECT_ALL, v->sel != 0 ? v->sel : (g.count > 0 ? v->model.id_at(v->model.user, 0) : 0));
+            return true;
+        }
+        if (v->multi && ev->key == GATES_KEY_SPACE && v->sel != 0) {
+            select_request(tree, idx, v, GATES_SELECT_TOGGLE, v->sel);
+            return true;
         }
         if ((ev->key == GATES_KEY_LEFT || ev->key == GATES_KEY_RIGHT) && v->ncol > 0) {
             move_cur_col(tree, idx, v, &g, ev->key == GATES_KEY_RIGHT);
             return true;
         }
     }
-    if (ev->ctrl || ev->alt) {
+    if (ev->alt || (ev->ctrl && !(v->multi && nav_key(ev->key)))) {
         return false;
     }
     gates_i32 step = VIEW_STEP_CELLS * (tree->advance > 0 ? tree->advance : 8);
@@ -1245,6 +1390,10 @@ bool gates_i_view_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t
         return true;
     case GATES_KEY_SPACE: {
         gates_i32 c = key_col(v, false);
+        if (v->multi && c < 0 && !ev->shift && v->sel != 0) { /* no check column: select the focus row */
+            select_request(tree, idx, v, GATES_SELECT_ONE, v->sel);
+            return true;
+        }
         if (ev->shift || c < 0 || v->sel == 0) return false;
         toggle_check(tree, idx, v, v->sel, c);
         return true;
@@ -1253,7 +1402,9 @@ bool gates_i_view_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t
     case GATES_KEY_RIGHT:
         v->find_len = 0; /* moving ends a type-ahead search */
         if (v->tree) {
+            gates_item_id_t was = v->sel;
             tree_key(tree, idx, v, &g, ev->key == GATES_KEY_RIGHT);
+            if (v->sel != was) moved(tree, idx, v, was, false, false);
         } else {
             scroll_x_by(tree, idx, v, &g, ev->key == GATES_KEY_RIGHT ? step : -step);
         }
@@ -1285,7 +1436,9 @@ bool gates_i_view_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t
     case GATES_KEY_END:
     default:                  target = last; break;
     }
+    gates_item_id_t was = v->sel;
     pick(tree, idx, v, &g, target);
+    moved(tree, idx, v, was, ev->shift, ev->ctrl);
     return true;
 }
 
@@ -1332,7 +1485,9 @@ bool gates_i_view_char(gates_tree_t *tree, gates_u32 idx, gates_str_t ch) {
     for (gates_u64 k = 0; k < scan; k++) {
         gates_u64 r = (start + k) % g.count;
         if (row_starts(v, r, v->find, n)) {
+            gates_item_id_t was = v->sel;
             pick(tree, idx, v, &g, r);
+            moved(tree, idx, v, was, false, false);
             break;
         }
     }
@@ -1366,7 +1521,7 @@ static gates_i32 header_col_at(const struct gates_i_view *v, const view_geom_t *
 }
 
 bool gates_i_view_pointer_down(gates_tree_t *tree, gates_u32 idx, gates_point_t p,
-                               gates_u32 clicks) {
+                               gates_u32 clicks, bool shift, bool ctrl) {
     struct gates_i_view *v = view_at(tree, idx);
     gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
     if (v == nullptr || st->disabled) {
@@ -1434,6 +1589,14 @@ bool gates_i_view_pointer_down(gates_tree_t *tree, gates_u32 idx, gates_point_t 
             gates_i32 c = body_col_at(v, &g, p);
             if (c >= 0 && v->ncol > 0) v->cur_col = v->cols[c].id; /* the cell pressed is current (0.8.0) */
             pick(tree, idx, v, &g, g.first + k);
+            if (v->multi && id != 0) { /* RFC-0007: the press asks for a selection change */
+                if (shift) {
+                    if (v->anchor == 0) v->anchor = before != 0 ? before : id;
+                    select_request(tree, idx, v, ctrl ? GATES_SELECT_ADD_RANGE : GATES_SELECT_RANGE, id);
+                } else {
+                    select_request(tree, idx, v, ctrl ? GATES_SELECT_TOGGLE : GATES_SELECT_ONE, id);
+                }
+            }
             if (can_edit(v, c, false) && v->sel == id &&
                 p.x < col_left(v, &g, (gates_u32)c) + row_indent(v, c, id) + VIEW_CELL_PAD + GATES_CHECK_BOX +
                           VIEW_CELL_PAD) {
@@ -1773,7 +1936,7 @@ bool gates_i_view_item(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id, ga
     out->row = row;
     out->count = g.count;
     out->shown = shown;
-    out->selected = id == v->sel;
+    out->selected = row_is_selected(v, row, id);
     out->columns = v->ncol > 0 ? nvisible(v) : 1;
     if (shown) {
         out->rect = (gates_rect_t){ g.body.x, g.body.y + (gates_i32)(row - g.first) * g.row_h, g.body.w, g.row_h };
@@ -1816,6 +1979,22 @@ gates_err_t gates_i_view_pick_id(gates_tree_t *tree, gates_u32 idx, gates_item_i
     gates_err_t before = tree->input_error; /* the input paths report here; keep the caller's */
     tree->input_error = GATES_OK;
     pick(tree, idx, v, &g, row);
+    select_request(tree, idx, v, GATES_SELECT_ONE, id); /* multi-select: the program applies it */
+    gates_err_t err = tree->input_error;
+    tree->input_error = before;
+    return err;
+}
+
+gates_err_t gates_i_view_set_item_selected(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id, bool selected) {
+    struct gates_i_view *v = view_at(tree, idx);
+    gates_u64 row = 0;
+    if (v == nullptr || !v->multi || !v->has_model || id == 0 || !v->model.index_of(v->model.user, id, &row)) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    if (row_is_selected(v, row, id) == selected) return GATES_OK;
+    gates_err_t before = tree->input_error;
+    tree->input_error = GATES_OK;
+    select_request(tree, idx, v, GATES_SELECT_TOGGLE, id);
     gates_err_t err = tree->input_error;
     tree->input_error = before;
     return err;

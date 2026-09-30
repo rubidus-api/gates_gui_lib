@@ -87,6 +87,7 @@ typedef enum gates_role_t {
 #define GATES_ACCESS_OFFSCREEN   0x0800u   /* hidden, on another page, scrolled out */
 #define GATES_ACCESS_MODAL       0x1000u
 #define GATES_ACCESS_BUSY        0x2000u   /* a loading row */
+#define GATES_ACCESS_MULTISELECT 0x4000u   /* a view whose rows select together (0.9.0) */
 
 /* Action bits. */
 #define GATES_ACCESS_INVOKE      0x01u
@@ -193,6 +194,10 @@ gates_access_ref_t gates_access_focus_ref(gates_tree_t *tree);
 [[nodiscard]] gates_err_t gates_access_invoke(gates_tree_t *tree, gates_node_t node, gates_u64 item);
 [[nodiscard]] gates_err_t gates_access_toggle(gates_tree_t *tree, gates_node_t node);
 [[nodiscard]] gates_err_t gates_access_select(gates_tree_t *tree, gates_node_t node, gates_u64 item);
+/* A multi-select view's row joins or leaves the selection (a TOGGLE request
+ * when its state differs, else nothing); INVALID_ARG for other nodes (0.9.0). */
+[[nodiscard]] gates_err_t gates_access_set_item_selected(gates_tree_t *tree, gates_node_t node, gates_u64 item,
+                                                         bool selected);
 [[nodiscard]] gates_err_t gates_access_expand(gates_tree_t *tree, gates_node_t node, gates_u64 item,
                                               bool expand);
 [[nodiscard]] gates_err_t gates_access_set_value(gates_tree_t *tree, gates_node_t node,

@@ -19,7 +19,7 @@ with it, the keys, the events the program receives, and what a screen reader hea
 | choice | `gates_choice_create` | picks one from a list | Space, Enter, Alt+Down open; arrows, Enter, Escape | VALUE_CHANGED | combo box (Selection, Expand) |
 | progress | `gates_progress_create` | sees how far work has come | - | - | progress bar (percent) |
 | separator | `gates_separator_create` | sees a division | - | - | separator |
-| view | `gates_view_create`, `gates_log_create` | chooses in a list, table, tree or log | arrows, PageUp/PageDown, Home, End, Enter; tree: Left/Right; typing jumps to a row; Ctrl+C copies the row; Ctrl+Left/Right pick the column F2 and Space use | SELECTION_CHANGED, ACTIVATED, SORT_REQUESTED, EXPAND_REQUESTED, CELL_EDITED | list, table, tree (chapter 5) |
+| view | `gates_view_create`, `gates_log_create` | chooses in a list, table, tree or log | arrows, PageUp/PageDown, Home, End, Enter; tree: Left/Right; typing jumps to a row; Ctrl+C copies the row; Ctrl+Left/Right pick the column F2 and Space use; with multi_select Shift/Ctrl select many, Ctrl+A all | SELECTION_CHANGED, ACTIVATED, SORT_REQUESTED, EXPAND_REQUESTED, CELL_EDITED | list, table, tree (chapter 5) |
 | form | `gates_form_create` | fills labelled fields | - | the editors' events | group of fields (chapter 3) |
 | property grid | `gates_propgrid_create` | edits a record's typed fields | Tab, the editors' keys | VALUE_CHANGED (result = property id) | groups of named editors (chapter 5) |
 | dialog, menu | `gates_dialog_open`, `gates_menu_open` | answers once, picks a command | Enter, Escape, arrows | DIALOG_CLOSED, MENU_CLOSED | window, menu (chapter 4) |
