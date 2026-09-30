@@ -52,6 +52,7 @@
 #include <gates/geometry.h>
 #include <gates/theme.h>
 #include <gates/image.h>
+#include <gates/event.h>
 
 typedef gates_u64 gates_item_id_t;      /* stable, nonzero; 0 = none */
 typedef gates_u32 gates_column_id_t;
@@ -194,6 +195,50 @@ typedef enum gates_select_request_t {
 } gates_select_request_t;
 
 #define GATES_VIEW_COPY_MAX 10000u  /* rows a multi-select view copies itself */
+
+/* -- a selection store (0.10.0) --------------------------------------------------
+ *
+ * Rows kept as sorted, separate ranges, for a multi-select view's program:
+ * answer the model's next_selected with gates_selection_next and hand every
+ * SELECT_REQUESTED to gates_view_apply_selection. Rows are model positions,
+ * so tell the store when rows come or go (rows_inserted / rows_removed).
+ * A program may keep its own selection instead; the view never reads this. */
+typedef struct gates_selection gates_selection_t;
+
+/* `alloc` {0} = the heap. Every change below either happens whole or, on
+ * NOMEM, leaves the selection as it was. */
+[[nodiscard]] gates_err_t gates_selection_create(gates_allocator_t alloc, gates_selection_t **out);
+void gates_selection_destroy(gates_selection_t *sel);
+void gates_selection_clear(gates_selection_t *sel);
+/* Rows lo..hi (inclusive; INVALID_ARG when lo > hi or hi is GATES_ROW_NONE). */
+[[nodiscard]] gates_err_t gates_selection_add(gates_selection_t *sel, gates_u64 lo, gates_u64 hi);
+[[nodiscard]] gates_err_t gates_selection_remove(gates_selection_t *sel, gates_u64 lo, gates_u64 hi);
+[[nodiscard]] gates_err_t gates_selection_toggle(gates_selection_t *sel, gates_u64 row);
+bool gates_selection_contains(const gates_selection_t *sel, gates_u64 row);
+/* The first selected row at or after `row`, or GATES_ROW_NONE: what the
+ * model's next_selected answers. */
+gates_u64 gates_selection_next(const gates_selection_t *sel, gates_u64 row);
+/* Selected rows in all, and the ranges one by one (in row order). */
+gates_u64 gates_selection_count(const gates_selection_t *sel);
+gates_u32 gates_selection_range_count(const gates_selection_t *sel);
+bool gates_selection_range(const gates_selection_t *sel, gates_u32 index, gates_u64 *lo, gates_u64 *hi);
+/* A request in rows: ONE and RANGE replace the selection, TOGGLE flips the
+ * target, ADD_RANGE adds anchor..target, ALL selects rows 0..row_count - 1.
+ * An anchor at or past row_count (GATES_ROW_NONE: none) makes a range the
+ * target alone; a target past the end is OUT_OF_BOUNDS. */
+[[nodiscard]] gates_err_t gates_selection_apply(gates_selection_t *sel, gates_select_request_t what, gates_u64 target,
+                                                gates_u64 anchor, gates_u64 row_count);
+/* `count` rows were inserted before row `at`, or rows at..at + count - 1
+ * removed: later rows move. Inserted rows are not selected (a range they land
+ * in is split); ranges that meet once rows are removed join. */
+[[nodiscard]] gates_err_t gates_selection_rows_inserted(gates_selection_t *sel, gates_u64 at, gates_u64 count);
+[[nodiscard]] gates_err_t gates_selection_rows_removed(gates_selection_t *sel, gates_u64 at, gates_u64 count);
+/* Applies a view's SELECT_REQUESTED event (its ids turned into rows through
+ * the view's model) and calls gates_view_model_changed. INVALID_ARG for
+ * another event; NOT_FOUND when the view or the target row is gone (nothing
+ * changes). */
+[[nodiscard]] gates_err_t gates_view_apply_selection(gates_tree_t *tree, const gates_event_t *ev,
+                                                     gates_selection_t *sel);
 
 /* INVALID_ARG for bad columns (id 0, duplicates); nothing is left on failure.
  * A multi-select view refuses a model without next_selected (set_model). */

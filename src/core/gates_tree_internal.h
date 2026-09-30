@@ -154,6 +154,7 @@ typedef enum gates_drag_kind_i {
     GATES_DRAG_VIEW_VTHUMB,      /* a view's scrollbar thumbs and a header edge */
     GATES_DRAG_VIEW_HTHUMB,
     GATES_DRAG_VIEW_COLUMN,
+    GATES_DRAG_VIEW_ROWS,        /* 0.10.0: selecting rows of a multi-select view */
     GATES_DRAG_SLIDER,           /* a slider's thumb */
     GATES_DRAG_EDITOR_SELECT,    /* selecting text in an editor, its scrollbar thumbs */
     GATES_DRAG_EDITOR_VTHUMB,
@@ -575,6 +576,12 @@ static inline gates_i32 gates_i_adv(const gates_tree_t *tree, gates_u32 idx) {
 }
 /* A node's own line height from the text backend, as paint measures it. */
 gates_i32 gates_i_text_line_h(const gates_tree_t *tree, gates_u32 idx);
+/* A multi-select request's rows (0.10.0): the view's row count, the target's
+ * row and the anchor's (GATES_ROW_NONE when gone); false when the node is not
+ * a view with a model or the target is gone. Rows past the count are left to
+ * gates_selection_apply. */
+bool gates_i_view_rows_of(const gates_tree_t *tree, gates_node_t view, gates_item_id_t target, gates_item_id_t anchor,
+                          gates_u64 *count, gates_u64 *target_row, gates_u64 *anchor_row);
 /* Text box geometry (0.2.0): the x of a byte offset from the start of the
  * box's text, and the offset nearest to an x, in the box's font - a password
  * box by its stars. Everything that draws, hits or describes a text box uses

@@ -168,7 +168,9 @@ node per part.
   rows it paints, describes or copies, and turns every gesture into a request
   (SELECT_REQUESTED: ONE, TOGGLE, RANGE, ADD_RANGE, ALL) that the program applies. Nothing gates
   holds or walks grows with the number of rows or of selected rows; copying stops at 10000 rows
-  and asks the program (COPY_REQUESTED).
+  and asks the program (COPY_REQUESTED). Dragging over rows asks for anchor..row once per new row
+  (0.10.0). A selection store (`gates_selection_t`, 0.10.0) keeps rows as sorted ranges for a
+  program that wants one; its size grows with the number of ranges, not of rows.
 - Sorting and opening tree rows are requests (SORT_REQUESTED, EXPAND_REQUESTED): the program
   reorders or changes its rows. gates never walks rows it does not show.
 - Editable cells change through the model's `set_cell`, the one callback that may change the

@@ -87,7 +87,7 @@ typedef struct app_t {
     /* Editor page */
     gates_node_t code, find_box, code_status;
     /* Views page (0.9.0): the table selects many rows; the program keeps which. */
-    bool picked[ROWS];
+    gates_selection_t *picked;   /* the table's selection (0.10.0: the store) */
     gates_node_t pick_status;
 } app_t;
 
@@ -111,32 +111,17 @@ static gates_err_t m_cell(void *u, gates_item_id_t id, gates_column_id_t col, ga
     return GATES_OK;
 }
 
-/* The table's selection is the program's: one flag per row here (a large model would keep ranges). */
+/* The table's selection is the program's; gates' selection store keeps it as ranges. */
 static gates_u64 m_next_selected(void *u, gates_u64 row) {
-    app_t *a = u;
-    for (gates_u64 r = row; r < ROWS; r++) {
-        if (a->picked[r]) return r;
-    }
-    return GATES_ROW_NONE;
+    return gates_selection_next(((app_t *)u)->picked, row);
 }
 
 static void on_table(gates_tree_t *tree, const gates_event_t *ev, void *user) {
     app_t *a = user;
     if (ev->kind != GATES_EVENT_SELECT_REQUESTED) return;
-    gates_u64 t = ev->item - 1, an = ev->anchor != 0 ? ev->anchor - 1 : t;
-    gates_u64 lo = an < t ? an : t, hi = an < t ? t : an;
-    switch ((gates_select_request_t)ev->result) {
-    case GATES_SELECT_ONE: memset(a->picked, 0, sizeof a->picked); a->picked[t] = true; break;
-    case GATES_SELECT_TOGGLE: a->picked[t] = !a->picked[t]; break;
-    case GATES_SELECT_RANGE: memset(a->picked, 0, sizeof a->picked); /* fall through */
-    case GATES_SELECT_ADD_RANGE: for (gates_u64 r = lo; r <= hi && r < ROWS; r++) a->picked[r] = true; break;
-    case GATES_SELECT_ALL: for (gates_u64 r = 0; r < ROWS; r++) a->picked[r] = true; break;
-    }
-    (void)gates_view_model_changed(tree, ev->source);
-    int n = 0;
-    for (gates_u64 r = 0; r < ROWS; r++) n += a->picked[r];
+    (void)gates_view_apply_selection(tree, ev, a->picked); /* also repaints */
     char line[64];
-    snprintf(line, sizeof line, "%d of %d rows selected", n, ROWS);
+    snprintf(line, sizeof line, "%llu of %d rows selected", (unsigned long long)gates_selection_count(a->picked), ROWS);
     (void)gates_widget_set_text(tree, a->pick_status, cs(line));
 }
 
@@ -340,12 +325,13 @@ static gates_err_t page_views(app_t *a, gates_node_t page) {
     TRY(gates_view_create(t, a->split, &(gates_view_desc_t){ .columns = cols, .column_count = 2, .header = true,
                                                              .multi_select = true },
                           &a->table));
+    TRY(gates_selection_create((gates_allocator_t){0}, &a->picked));
     gates_rows_model_t model = { .user = a, .count = m_count, .id_at = m_id_at, .index_of = m_index_of,
                                  .cell = m_cell, .next_selected = m_next_selected };
     TRY(gates_view_set_model(t, a->table, &model));
     TRY(gates_node_set_access_name(t, a->table, cs("Items")));
     TRY(gates_node_set_automation_id(t, a->table, cs("views.table")));
-    TRY(tip(a, a->table, "A table: Shift and Ctrl select many rows; drag a header edge to resize a column"));
+    TRY(tip(a, a->table, "A table: Shift, Ctrl or a drag select many rows; drag a header edge to resize a column"));
     TRY(gates_widget_set_handler(t, a->table, on_table, a));
     TRY(gates_panel_create(t, a->split, &left));
     TRY(gates_layout_set(t, left, GATES_LAYOUT_KIND_COLUMN));
@@ -1143,5 +1129,6 @@ int main(void) {
     gates_undo_destroy(a.undo); /* before its tree goes */
     gates_window_destroy(a.win); /* a job still running is cancelled and waited for */
     gates_app_destroy(a.app);
+    gates_selection_destroy(a.picked);
     return gates_is_ok(err) ? 0 : 1;
 }

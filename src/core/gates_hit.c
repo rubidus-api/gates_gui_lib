@@ -296,7 +296,7 @@ static void drag_update(gates_tree_t *tree, gates_point_t p) {
     gates_node_slot_t *s = gates_i_slot(tree, idx);
 
     if (tree->drag_kind == GATES_DRAG_VIEW_VTHUMB || tree->drag_kind == GATES_DRAG_VIEW_HTHUMB ||
-        tree->drag_kind == GATES_DRAG_VIEW_COLUMN) {
+        tree->drag_kind == GATES_DRAG_VIEW_COLUMN || tree->drag_kind == GATES_DRAG_VIEW_ROWS) {
         gates_i_view_drag(tree, p);
         return;
     }

@@ -67,6 +67,8 @@ struct gates_i_view {
     gates_u64 sel_row;           /* last known row of the selection */
     gates_i32 press_col;         /* header cell pressed, -1 = none */
     gates_u64 drag_first;
+    gates_u64 drag_row;          /* dragging over rows: the row asked for last (0.10.0) */
+    bool drag_add;               /* ... with Ctrl at the press: ADD_RANGE */
     gates_i32 drag_value;
     gates_i32 drag_col;
     /* In-place editing (0.6.0): the editor text box child, GATES_NONE when
@@ -408,7 +410,7 @@ gates_err_t gates_view_set_model(gates_tree_t *tree, gates_node_t view,
     v->press_col = -1;
     if (tree->drag_node == view.index &&
         (tree->drag_kind == GATES_DRAG_VIEW_VTHUMB || tree->drag_kind == GATES_DRAG_VIEW_HTHUMB ||
-         tree->drag_kind == GATES_DRAG_VIEW_COLUMN)) {
+         tree->drag_kind == GATES_DRAG_VIEW_COLUMN || tree->drag_kind == GATES_DRAG_VIEW_ROWS)) {
         tree->drag_kind = GATES_DRAG_NONE;
         tree->drag_node = GATES_NONE;
     }
@@ -520,6 +522,16 @@ gates_err_t gates_view_scroll_to(gates_tree_t *tree, gates_node_t view, gates_it
 gates_u64 gates_view_first_row(const gates_tree_t *tree, gates_node_t view) {
     const struct gates_i_view *v = view_of(tree, view);
     return v != nullptr ? v->first : 0;
+}
+
+bool gates_i_view_rows_of(const gates_tree_t *tree, gates_node_t view, gates_item_id_t target, gates_item_id_t anchor,
+                          gates_u64 *count, gates_u64 *target_row, gates_u64 *anchor_row) {
+    struct gates_i_view *v = view_of(tree, view);
+    if (v == nullptr || !v->has_model || target == 0) return false;
+    *count = model_count(v);
+    if (!v->model.index_of(v->model.user, target, target_row)) return false;
+    if (anchor == 0 || !v->model.index_of(v->model.user, anchor, anchor_row)) *anchor_row = GATES_ROW_NONE;
+    return true;
 }
 
 gates_u32 gates_view_visible_rows(const gates_tree_t *tree, gates_node_t view) {
@@ -1601,6 +1613,13 @@ bool gates_i_view_pointer_down(gates_tree_t *tree, gates_u32 idx, gates_point_t 
                 p.x < col_left(v, &g, (gates_u32)c) + row_indent(v, c, id) + VIEW_CELL_PAD + GATES_CHECK_BOX +
                           VIEW_CELL_PAD) {
                 toggle_check(tree, idx, v, id, c); /* a click on the box (the row's height tall) */
+            } else if (v->multi && id != 0 && clicks < 2) {
+                /* Dragging on from here selects the rows passed over (0.10.0). */
+                tree->drag_kind = GATES_DRAG_VIEW_ROWS;
+                tree->drag_node = idx;
+                tree->drag_start = p;
+                v->drag_row = g.first + k;
+                v->drag_add = ctrl;
             } else if (clicks >= 2 && v->sel != 0 && v->sel == before) {
                 if (can_edit(v, c, true)) {
                     gates_err_t err = begin_edit(tree, idx, v, v->sel, c); /* double click on an editable cell */
@@ -1638,6 +1657,39 @@ void gates_i_view_pointer_up(gates_tree_t *tree, gates_u32 idx, gates_point_t p)
                           v->cols[c].id, 0);
 }
 
+/* Dragging over rows: the row under the pointer (above or below the body, the
+ * view scrolls one row per move and takes the row at that edge). A new row
+ * moves the focus there and asks for anchor..row, once per row. */
+static void drag_rows(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v, view_geom_t *g, gates_point_t p) {
+    if (!v->has_model || g->count == 0 || g->visible == 0) return;
+    gates_u64 row;
+    if (p.y < g->body.y) {
+        if (g->first > 0) {
+            v->first = g->first - 1u;
+            gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
+            note_scrolled(tree, idx, v, g);
+            geom_now(tree, idx, v, g);
+        }
+        row = g->first;
+    } else if (p.y >= g->body.y + g->body.h) {
+        if (g->first < g->max_first) {
+            v->first = g->first + 1u;
+            gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
+            note_scrolled(tree, idx, v, g);
+            geom_now(tree, idx, v, g);
+        }
+        row = g->first + g->visible - 1u;
+    } else {
+        row = g->first + (gates_u64)((p.y - g->body.y) / g->row_h);
+    }
+    if (row >= g->count) row = g->count - 1u;
+    if (row == v->drag_row) return;
+    v->drag_row = row;
+    pick(tree, idx, v, g, row);
+    gates_item_id_t id = v->model.id_at(v->model.user, row);
+    if (id != 0) select_request(tree, idx, v, v->drag_add ? GATES_SELECT_ADD_RANGE : GATES_SELECT_RANGE, id);
+}
+
 void gates_i_view_drag(gates_tree_t *tree, gates_point_t p) {
     gates_u32 idx = tree->drag_node;
     struct gates_i_view *v = view_at(tree, idx);
@@ -1652,6 +1704,10 @@ void gates_i_view_drag(gates_tree_t *tree, gates_point_t p) {
             c->width = w;
             gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
         }
+        return;
+    }
+    if (tree->drag_kind == GATES_DRAG_VIEW_ROWS) {
+        drag_rows(tree, idx, v, &g, p);
         return;
     }
     if (tree->drag_kind == GATES_DRAG_VIEW_HTHUMB) {

@@ -1116,6 +1116,213 @@ static void test_multi_select(void) {
     gates_tree_destroy(t);
 }
 
+/* -- drag-to-select and the selection store (0.10.0) ------------------------------------ */
+
+static void pmove(app_t *a, gates_point_t p) {
+    gates_pointer_event_t e = { .action = GATES_POINTER_MOVE, .pos = p };
+    (void)gates_input_pointer(a->t, &e);
+}
+
+static void pbutton(app_t *a, gates_pointer_action_t act, gates_point_t p, bool ctrl, gates_u32 clicks) {
+    gates_pointer_event_t e = { .action = act, .button = GATES_BUTTON_LEFT, .pos = p, .ctrl = ctrl, .clicks = clicks };
+    (void)gates_input_pointer(a->t, &e);
+}
+
+static int requests(const rec_t *r) { return count_kind(r, GATES_EVENT_SELECT_REQUESTED); }
+
+static void test_drag_select(void) {
+    app_t a;
+    make_multi(&a, 40);
+    /* Press row 0, drag to row 3: one RANGE 100..103; moving inside row 3 asks nothing more. */
+    pbutton(&a, GATES_POINTER_DOWN, at(cell_rect(&a, 0, 0), 10), false, 1);
+    dispatch(&a);
+    GT_ASSERT(only(&a.m, "1"));
+    a.rec.n = 0;
+    pmove(&a, at(cell_rect(&a, 3, 0), 10));
+    dispatch(&a);
+    GT_ASSERT(requests(&a.rec) == 1 && a.rec.result[a.rec.n - 1] == GATES_SELECT_RANGE &&
+              a.rec.item[a.rec.n - 1] == 103 && a.rec.anchor[a.rec.n - 1] == 100);
+    GT_ASSERT(only(&a.m, "1111") && gates_view_selected(a.t, a.view) == 103);
+    gates_point_t in3 = at(cell_rect(&a, 3, 0), 30);
+    in3.y += 2;
+    pmove(&a, in3);
+    dispatch(&a);
+    GT_ASSERT(requests(&a.rec) == 1);
+    /* Back up to row 1: the range follows. */
+    pmove(&a, at(cell_rect(&a, 1, 0), 10));
+    dispatch(&a);
+    GT_ASSERT(requests(&a.rec) == 2 && only(&a.m, "11") && gates_view_selected(a.t, a.view) == 101);
+    /* Released: moving asks nothing. */
+    pbutton(&a, GATES_POINTER_UP, at(cell_rect(&a, 1, 0), 10), false, 1);
+    pmove(&a, at(cell_rect(&a, 5, 0), 10));
+    dispatch(&a);
+    GT_ASSERT(requests(&a.rec) == 2 && only(&a.m, "11"));
+    /* Ctrl at the press: the rows passed are added (ADD_RANGE from the pressed row). */
+    pbutton(&a, GATES_POINTER_DOWN, at(cell_rect(&a, 5, 0), 10), true, 1); /* Ctrl+press toggles 5 in */
+    pmove(&a, at(cell_rect(&a, 6, 0), 10));
+    pbutton(&a, GATES_POINTER_UP, at(cell_rect(&a, 6, 0), 10), true, 1);
+    dispatch(&a);
+    GT_ASSERT(only(&a.m, "1100011") && a.rec.result[a.rec.n - 1] == GATES_SELECT_ADD_RANGE &&
+              a.rec.anchor[a.rec.n - 1] == 105);
+    /* Past the bottom of the body: the view scrolls a row per move and takes the edge row. */
+    gates_rect_t body = gates_view_part_rect(a.t, a.view, GATES_VIEW_PART_BODY, 0);
+    gates_u32 vis = gates_view_visible_rows(a.t, a.view);
+    GT_ASSERT(vis < 40);
+    pbutton(&a, GATES_POINTER_DOWN, at(cell_rect(&a, 0, 0), 10), false, 1);
+    gates_point_t below = { body.x + 10, body.y + body.h + 5 };
+    pmove(&a, below);
+    dispatch(&a);
+    GT_ASSERT(gates_view_first_row(a.t, a.view) == 1);
+    GT_ASSERT(gates_view_selected(a.t, a.view) == 100 + vis); /* the last whole row now shown */
+    below.y += 1;
+    pmove(&a, below);
+    dispatch(&a);
+    GT_ASSERT(gates_view_first_row(a.t, a.view) == 2 && gates_view_selected(a.t, a.view) == 101 + vis);
+    GT_ASSERT(a.m.selected[0] && a.m.selected[1 + vis] && !a.m.selected[2 + vis]);
+    /* And above it: back up. */
+    gates_point_t above = { body.x + 10, body.y - 3 };
+    pmove(&a, above);
+    dispatch(&a);
+    GT_ASSERT(gates_view_first_row(a.t, a.view) == 1 && gates_view_selected(a.t, a.view) == 101);
+    GT_ASSERT(only(&a.m, "11"));
+    pmove(&a, above);
+    pmove(&a, above);
+    dispatch(&a);
+    GT_ASSERT(gates_view_first_row(a.t, a.view) == 0 && gates_view_selected(a.t, a.view) == 100 && only(&a.m, "1"));
+    pbutton(&a, GATES_POINTER_UP, above, false, 1);
+    /* A double click starts no drag; nor does a press on a check box. */
+    a.rec.n = 0;
+    pbutton(&a, GATES_POINTER_DOWN, at(cell_rect(&a, 2, 0), 10), false, 1);
+    pbutton(&a, GATES_POINTER_UP, at(cell_rect(&a, 2, 0), 10), false, 1);
+    pbutton(&a, GATES_POINTER_DOWN, at(cell_rect(&a, 2, 0), 10), false, 2);
+    dispatch(&a);
+    int before = requests(&a.rec);
+    pmove(&a, at(cell_rect(&a, 4, 0), 10));
+    pbutton(&a, GATES_POINTER_UP, at(cell_rect(&a, 4, 0), 10), false, 2);
+    dispatch(&a);
+    GT_ASSERT(requests(&a.rec) == before && only(&a.m, "001"));
+    bool was = a.m.rows[2].done;
+    pbutton(&a, GATES_POINTER_DOWN, at(cell_rect(&a, 2, 1), 4), false, 1); /* the selected row's box */
+    dispatch(&a);
+    GT_ASSERT(a.m.rows[2].done != was);
+    before = requests(&a.rec);
+    pmove(&a, at(cell_rect(&a, 5, 0), 10));
+    pbutton(&a, GATES_POINTER_UP, at(cell_rect(&a, 5, 0), 10), false, 1);
+    dispatch(&a);
+    GT_ASSERT(requests(&a.rec) == before);
+    free_app(&a);
+    /* Fewer rows than fit: below the last row, inside the body, is the last row. */
+    make_multi(&a, 3);
+    gates_rect_t b3 = gates_view_part_rect(a.t, a.view, GATES_VIEW_PART_BODY, 0);
+    GT_ASSERT(gates_view_visible_rows(a.t, a.view) > 3);
+    pbutton(&a, GATES_POINTER_DOWN, at(cell_rect(&a, 0, 0), 10), false, 1);
+    pmove(&a, (gates_point_t){ b3.x + 10, b3.y + b3.h - 2 });
+    pbutton(&a, GATES_POINTER_UP, (gates_point_t){ b3.x + 10, b3.y + b3.h - 2 }, false, 1);
+    dispatch(&a);
+    GT_ASSERT(only(&a.m, "111") && gates_view_selected(a.t, a.view) == 102);
+    /* A new model during a drag ends it. */
+    pbutton(&a, GATES_POINTER_DOWN, at(cell_rect(&a, 0, 0), 10), false, 1);
+    gates_rows_model_t mb = bind(&a.m, true);
+    mb.next_selected = m_next_sel;
+    GT_ASSERT_OK(gates_view_set_model(a.t, a.view, &mb));
+    layout(a.t);
+    dispatch(&a);
+    before = requests(&a.rec);
+    pmove(&a, at(cell_rect(&a, 2, 0), 10));
+    dispatch(&a);
+    GT_ASSERT(requests(&a.rec) == before);
+    pbutton(&a, GATES_POINTER_UP, at(cell_rect(&a, 2, 0), 10), false, 1);
+    free_app(&a);
+}
+
+typedef struct store_app_t {
+    gates_selection_t *sel;
+    gates_u64 n;
+    gates_err_t last;
+} store_app_t;
+
+static gates_u64 s_count(void *u) { return ((store_app_t *)u)->n; }
+static gates_item_id_t s_id_at(void *u, gates_u64 row) { return row < ((store_app_t *)u)->n ? row + 1 : 0; }
+static bool s_index_of(void *u, gates_item_id_t id, gates_u64 *row) {
+    if (id == 0 || id > ((store_app_t *)u)->n) return false;
+    *row = id - 1;
+    return true;
+}
+static gates_err_t s_cell(void *u, gates_item_id_t id, gates_column_id_t col, gates_cell_t *out) {
+    (void)u; (void)id; (void)col;
+    out->text = GATES_STR("x");
+    return GATES_OK;
+}
+static gates_u64 s_next(void *u, gates_u64 row) { return gates_selection_next(((store_app_t *)u)->sel, row); }
+
+static void on_store(gates_tree_t *t, const gates_event_t *ev, void *user) {
+    store_app_t *s = user;
+    if (ev->kind == GATES_EVENT_SELECT_REQUESTED) s->last = gates_view_apply_selection(t, ev, s->sel);
+}
+
+static void test_view_apply_selection(void) {
+    store_app_t s = { .n = 1000000 };
+    GT_ASSERT_OK(gates_selection_create((gates_allocator_t){0}, &s.sel));
+    gates_tree_t *t;
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &t));
+    GT_ASSERT_OK(gates_layout_set(t, gates_tree_root(t), GATES_LAYOUT_KIND_COLUMN));
+    gates_node_t v;
+    GT_ASSERT_OK(gates_view_create(t, gates_tree_root(t), &(gates_view_desc_t){ .multi_select = true }, &v));
+    GT_ASSERT_OK(gates_layout_set_child_grow(t, v, 1));
+    GT_ASSERT_OK(gates_widget_set_handler(t, v, on_store, &s));
+    gates_rows_model_t m = { .user = &s, .count = s_count, .id_at = s_id_at, .index_of = s_index_of, .cell = s_cell,
+                             .next_selected = s_next };
+    GT_ASSERT_OK(gates_view_set_model(t, v, &m));
+    GT_ASSERT_OK(gates_layout_run(t, (gates_size_t){ VW, VH }, be));
+    gates_tree_set_focus(t, v);
+    /* The ex_05 walk, with the store: Down, Shift+End, Ctrl+Home, Ctrl+Space, Ctrl+A. */
+    GT_ASSERT(key(t, GATES_KEY_DOWN));
+    (void)gates_tree_dispatch_events(t, 0);
+    GT_ASSERT_OK(s.last);
+    GT_ASSERT(gates_selection_count(s.sel) == 1 && gates_selection_contains(s.sel, 0));
+    GT_ASSERT(keyc(t, GATES_KEY_END, false, true));
+    (void)gates_tree_dispatch_events(t, 0);
+    GT_ASSERT(gates_selection_range_count(s.sel) == 1 && gates_selection_count(s.sel) == 1000000);
+    GT_ASSERT(keyc(t, GATES_KEY_HOME, true, false) && keyc(t, GATES_KEY_SPACE, true, false));
+    (void)gates_tree_dispatch_events(t, 0);
+    GT_ASSERT(!gates_selection_contains(s.sel, 0) && gates_selection_next(s.sel, 0) == 1);
+    GT_ASSERT(keyc(t, GATES_KEY_A, true, false));
+    (void)gates_tree_dispatch_events(t, 0);
+    GT_ASSERT(gates_selection_count(s.sel) == 1000000 && gates_selection_range_count(s.sel) == 1);
+    /* What the view paints comes from the store (asked through next_selected). */
+    gates_access_info_t info;
+    GT_ASSERT_OK(gates_access_info(t, v, 1, &info));
+    GT_ASSERT(info.states & GATES_ACCESS_SELECTED);
+    /* A request whose rows are gone changes nothing; other events are refused. */
+    gates_event_t ev = { .kind = GATES_EVENT_SELECT_REQUESTED, .source = v, .item = 5, .anchor = 999999999,
+                         .result = GATES_SELECT_RANGE };
+    GT_ASSERT_OK(gates_view_apply_selection(t, &ev, s.sel)); /* the anchor is gone: row 4 alone */
+    GT_ASSERT(gates_selection_count(s.sel) == 1 && gates_selection_contains(s.sel, 4));
+    ev.item = 2000000;
+    GT_ASSERT(gates_view_apply_selection(t, &ev, s.sel) == PROVEN_ERR_NOT_FOUND);
+    ev.item = 0;
+    GT_ASSERT(gates_view_apply_selection(t, &ev, s.sel) == PROVEN_ERR_NOT_FOUND);
+    ev.item = 5;
+    ev.source = gates_tree_root(t);
+    GT_ASSERT(gates_view_apply_selection(t, &ev, s.sel) == PROVEN_ERR_NOT_FOUND);
+    ev.source = v;
+    ev.kind = GATES_EVENT_VALUE_CHANGED;
+    GT_ASSERT(gates_view_apply_selection(t, &ev, s.sel) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_view_apply_selection(nullptr, &ev, s.sel) == PROVEN_ERR_INVALID_ARG);
+    ev.kind = GATES_EVENT_SELECT_REQUESTED;
+    GT_ASSERT(gates_view_apply_selection(t, nullptr, s.sel) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_view_apply_selection(t, &ev, nullptr) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_selection_count(s.sel) == 1 && gates_selection_contains(s.sel, 4));
+    /* It repaints: the view is marked dirty. */
+    gates_tree_clear_dirty(t, GATES_TREE_DIRTY_PAINT);
+    ev.item = 8;
+    ev.result = GATES_SELECT_ONE;
+    GT_ASSERT_OK(gates_view_apply_selection(t, &ev, s.sel));
+    GT_ASSERT((gates_tree_dirty(t) & GATES_TREE_DIRTY_PAINT) != 0 && gates_selection_contains(s.sel, 7));
+    gates_tree_destroy(t);
+    gates_selection_destroy(s.sel);
+}
+
 /* -- edits across scrolling and model changes ---------------------------------------------- */
 
 static void test_scroll_and_model(void) {
@@ -1792,6 +1999,8 @@ int main(void) {
     test_checks();
     test_keyboard_extras();
     test_multi_select();
+    test_drag_select();
+    test_view_apply_selection();
     test_cells_access();
     test_scroll_and_model();
     test_create_failures();
