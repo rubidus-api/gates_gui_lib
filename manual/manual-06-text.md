@@ -80,7 +80,7 @@ A read-only or password box turns the IME off while it has focus. For a program 
 text itself - tests, automation - `gates_input_commit` delivers text as an IME would, and
 `gates_input_preedit` shows a composition.
 
-## Unicode limits in 0.8.0
+## Unicode limits in 0.9.0
 
 - Text is UTF-8 everywhere; invalid input is refused, never repaired silently.
 - Every character has its own advance, taken from the font: text is proportional in the UI

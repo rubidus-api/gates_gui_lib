@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 This project follows Keep a Changelog.
 
+## [0.9.0] - 2026-09-30
+
+Multi-selection, growing posting queues, and a public specification.
+
+### Added
+
+- Views: multi-selection owned by the model (`gates_view_desc_t.multi_select`, the model's
+  `next_selected`): gestures arrive as GATES_EVENT_SELECT_REQUESTED (ONE, TOGGLE, RANGE,
+  ADD_RANGE, ALL; `ev->item` the target, `ev->anchor` the anchor) for the program to apply; Shift
+  and Ctrl with clicks and keys, Ctrl+A, Ctrl+Space; Ctrl+C copies up to GATES_VIEW_COPY_MAX rows,
+  past that GATES_EVENT_COPY_REQUESTED. gates asks only about rows it paints, describes or copies.
+- Accessibility: GATES_ACCESS_MULTISELECT, `gates_access_set_item_selected`; UIA
+  CanSelectMultiple, GetSelection, AddToSelection and RemoveFromSelection for such views.
+- `spec/spec.md`: what gates guarantees, in one document (also in the package).
+- `gates_sender_capacity`; manual chapter 5 section on multi-selection (ex_05_multi: a million
+  rows kept as ranges); the gallery's Views table selects many rows.
+
+### Changed
+
+- Posting queues start with GATES_POST_INITIAL_MESSAGES (256) slots and grow on the UI thread,
+  doubling up to `max_messages`, as posts fill them; posting still never allocates. Limits and
+  defaults are unchanged.
+- Code comments and CHANGELOG no longer cite private design documents.
+
 ## [0.8.0] - 2026-09-30
 
 Backlog follow-ups across input, controls and the Windows backend.

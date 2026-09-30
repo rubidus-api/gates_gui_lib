@@ -3,7 +3,7 @@
 # Gates GUI Library
 
 A small retained-mode GUI library in C23 for tool-style Windows programs - settings panels,
-inspectors, log viewers, file browsers, build tools. Version **0.8.0**.
+inspectors, log viewers, file browsers, build tools. Version **0.9.0** (the latest release is 0.8.0).
 
 | | |
 |---|---|
@@ -49,7 +49,7 @@ What you get:
   Automation provider, so Narrator and automation tools can read and use every control; an
   audit of enforced rules (names, 24 x 24 targets, keyboard reach, contrast, focus cues).
 
-It is not a browser engine, a game UI or a pixel-exact drawing kit. Version 0.8.0 has one
+It is not a browser engine, a game UI or a pixel-exact drawing kit. Version 0.9.0 has one
 backend: Win32 with a software renderer. The core is platform-free C23 and runs its tests
 anywhere.
 
@@ -95,7 +95,7 @@ int main(void) {
 Build it with mingw-w64 against the SDK:
 
 ```sh
-x86_64-w64-mingw32-gcc -std=c23 -O2 -Igates-0.8.0/include hello.c -Lgates-0.8.0/lib/win64 \
+x86_64-w64-mingw32-gcc -std=c23 -O2 -Igates-0.9.0/include hello.c -Lgates-0.9.0/lib/win64 \
     -lgates -lproven -lgdi32 -luser32 -limm32 -ldwmapi -ladvapi32 -luiautomationcore \
     -lole32 -loleaut32 -luuid -mwindows -o hello.exe
 ```
@@ -135,7 +135,7 @@ headless use on any system.
 
 ## Status
 
-0.8.0 rounds out what came before: Shift+click, word and line clicks and row-wise Home/End in
+0.9.0 adds multi-selection in views (the program keeps the selection, so a million selected rows cost nothing), posting queues that grow as bursts need, and a public specification. 0.8.0 rounded out what came before: Shift+click, word and line clicks and row-wise Home/End in
 the editor and text boxes, spin arrows that repeat and a wheel for focused numbers, grid rows
 that grow, type-ahead, row copy and a current column in tables, a follow event for logs,
 several files from one open dialog, forms that measure their stacked height, and error
