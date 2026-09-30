@@ -74,7 +74,8 @@ Consequences a program can rely on:
 - Layout is measure (bottom-up, preferred sizes) then arrange (top-down rects), run by the
   window before painting (`gates_layout_run`).
 - Kinds (`gates/layout.h`): absolute, row, column, stack (one page shown), split (two panes and
-  a handle), scroll (a viewport with a scroll bar), form (label column and editors; stacks
+  a handle), scroll (a viewport with a scroll bar; sideways too when the program turns it on,
+  0.10.0), form (label column and editors; stacks
   labels above editors when narrow), grid (columns with grow weights and spans; rows with grow
   weights) and wrap (lines of children at their own size).
 - **Invariant:** after arrange, the layout rects of siblings in normal flow never overlap. The

@@ -101,4 +101,10 @@ int main(void) {
 ```
 
 A scroll container follows keyboard focus: Tab into a control below the viewport and it
-scrolls into view. A stack page that is not active is neither drawn nor reachable.
+scrolls into view. It scrolls up and down only unless you ask for more (0.10.0):
+`gates_layout_set_scroll_sideways(tree, area, true)` lays the children out as wide as the
+widest of them, and when that is wider than the viewport a bar appears along the bottom. The
+wheel's sideways motion (Shift+wheel on Windows) moves it, Tab brings the focused control
+into view across as well, and assistive technology can scroll it. `gates_layout_set_scroll_x`
+and `gates_layout_scroll_x` set and read the offset. Leave it off for forms: there, children
+as wide as the viewport are what you want. A stack page that is not active is neither drawn nor reachable.

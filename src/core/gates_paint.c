@@ -360,6 +360,13 @@ static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
                                       gates_theme_color(ctx->theme,
                                                         GATES_COLOR_CONTROL_BORDER)));
         }
+        if (gates_i_hscrollable(tree, idx)) { /* 0.10.0 */
+            emit(ctx, gates_draw_rect(ctx->dl, gates_i_hscroll_track(tree, idx),
+                                      gates_theme_color(ctx->theme, GATES_COLOR_PANEL_BG)));
+            emit(ctx, gates_draw_rect(ctx->dl, gates_i_hscroll_thumb(tree, idx),
+                                      gates_theme_color(ctx->theme,
+                                                        GATES_COLOR_CONTROL_BORDER)));
+        }
     } else {
         for (gates_u32 c = s->first_child; c != GATES_NONE;
              c = gates_i_slot(tree, c)->next_sibling) {

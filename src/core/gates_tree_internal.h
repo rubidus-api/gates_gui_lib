@@ -148,6 +148,7 @@ typedef enum gates_drag_kind_i {
     GATES_DRAG_NONE = 0,
     GATES_DRAG_SPLIT,
     GATES_DRAG_SCROLL_THUMB,
+    GATES_DRAG_SCROLL_HTHUMB,    /* 0.10.0: a scroll area's horizontal thumb */
     GATES_DRAG_TEXT_SELECT,
     GATES_DRAG_VIEW_VTHUMB,      /* a view's scrollbar thumbs and a header edge */
     GATES_DRAG_VIEW_HTHUMB,
@@ -306,6 +307,10 @@ typedef struct gates_node_slot_t {
     gates_i32 scroll_offset;
     gates_i32 scroll_arranged; /* scroll_offset used by the last arrange */
     gates_size_t content_size;
+    /* SCROLL sideways too (0.10.0, opt-in): offset (>=0) and the one the last arrange used. */
+    gates_u8 scroll_sideways;
+    gates_i32 scroll_x;
+    gates_i32 scroll_x_arranged;
     /* FORM: the label column width found by the last measure. */
     gates_i32 form_label_w;
     /* GRID (0.4.0): columns (0 = 2); a child's span (0 = 1). WRAP and
@@ -1039,6 +1044,12 @@ gates_rect_t gates_i_scroll_track(const gates_tree_t *tree, gates_u32 idx);
 gates_rect_t gates_i_scroll_thumb(const gates_tree_t *tree, gates_u32 idx);
 /* Clamps a scroll offset into the legal range; returns the clamped value. */
 gates_i32 gates_i_scroll_clamp(const gates_tree_t *tree, gates_u32 idx, gates_i32 offset);
+/* The same across (0.10.0): only for an area that scrolls sideways and whose
+ * content is wider than its viewport. */
+bool gates_i_hscrollable(const gates_tree_t *tree, gates_u32 idx);
+gates_rect_t gates_i_hscroll_track(const gates_tree_t *tree, gates_u32 idx);
+gates_rect_t gates_i_hscroll_thumb(const gates_tree_t *tree, gates_u32 idx);
+gates_i32 gates_i_hscroll_clamp(const gates_tree_t *tree, gates_u32 idx, gates_i32 offset);
 
 /* Text area inside a textbox's border and padding (empty for other kinds). */
 gates_rect_t gates_i_textbox_inner(const gates_tree_t *tree, gates_u32 idx);

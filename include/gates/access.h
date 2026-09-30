@@ -264,7 +264,8 @@ bool gates_access_text_line(gates_tree_t *tree, gates_node_t node, gates_u32 off
 #define GATES_ACCESS_SCROLL_MAX 10000u
 bool gates_access_scroll_info(gates_tree_t *tree, gates_node_t node, gates_u32 *pos, gates_u32 *page);
 [[nodiscard]] gates_err_t gates_access_scroll_to(gates_tree_t *tree, gates_node_t node, gates_u32 pos);
-/* Sideways, for a table wider than its view (0.10.0): the same units. */
+/* Sideways, for a table wider than its view or a scroll area that scrolls
+ * sideways (0.10.0): the same units. */
 bool gates_access_hscroll_info(gates_tree_t *tree, gates_node_t node, gates_u32 *pos, gates_u32 *page);
 [[nodiscard]] gates_err_t gates_access_hscroll_to(gates_tree_t *tree, gates_node_t node, gates_u32 pos);
 /* By `amount` lines (rows), or pages when `page`; negative goes up. */

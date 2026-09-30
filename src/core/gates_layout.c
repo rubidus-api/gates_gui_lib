@@ -93,6 +93,42 @@ gates_i32 gates_layout_scroll_offset(const gates_tree_t *tree, gates_node_t node
     return gates_i_valid(tree, node) ? gates_i_slot(tree, node.index)->scroll_offset : 0;
 }
 
+gates_err_t gates_layout_set_scroll_sideways(gates_tree_t *tree, gates_node_t node, bool on) {
+    gates_node_slot_t *s = slot_checked(tree, node);
+    if (s == nullptr) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    if (s->scroll_sideways != (gates_u8)on) {
+        s->scroll_sideways = (gates_u8)on;
+        if (!on) {
+            s->scroll_x = 0;
+        }
+        gates_i_mark_dirty(tree, node.index, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
+    }
+    return GATES_OK;
+}
+
+bool gates_layout_scroll_sideways(const gates_tree_t *tree, gates_node_t node) {
+    return gates_i_valid(tree, node) && gates_i_slot(tree, node.index)->scroll_sideways != 0;
+}
+
+gates_err_t gates_layout_set_scroll_x(gates_tree_t *tree, gates_node_t node, gates_i32 offset_x) {
+    gates_node_slot_t *s = slot_checked(tree, node);
+    if (s == nullptr) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    gates_i32 clamped = gates_i_hscroll_clamp(tree, node.index, offset_x);
+    if (clamped != s->scroll_x) {
+        s->scroll_x = clamped;
+        gates_i_mark_dirty(tree, node.index, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
+    }
+    return GATES_OK;
+}
+
+gates_i32 gates_layout_scroll_x(const gates_tree_t *tree, gates_node_t node) {
+    return gates_i_valid(tree, node) ? gates_i_slot(tree, node.index)->scroll_x : 0;
+}
+
 gates_size_t gates_layout_scroll_content(const gates_tree_t *tree, gates_node_t node) {
     return gates_i_valid(tree, node) ? gates_i_slot(tree, node.index)->content_size
                                      : (gates_size_t){ 0, 0 };
@@ -667,37 +703,62 @@ static void arrange_split(gates_tree_t *tree, gates_node_slot_t *s, gates_rect_t
     }
 }
 
+/* Which bars a scroll area shows in a content box: vertical when the content
+ * is taller than the box, horizontal (sideways areas only) when it is wider
+ * than what the vertical bar leaves; a horizontal bar can in turn make room
+ * too short and bring the vertical one. */
+static void scroll_bars(const gates_node_slot_t *s, gates_rect_t box, bool *v, bool *h) {
+    *v = s->content_size.h > box.h;
+    *h = false;
+    if (s->scroll_sideways) {
+        *h = s->content_size.w > box.w - (*v ? GATES_SCROLLBAR_PX : 0);
+        if (*h && !*v) {
+            *v = s->content_size.h > box.h - GATES_SCROLLBAR_PX;
+        }
+    }
+}
+
+static gates_i32 clamp_off(gates_i32 off, gates_i32 max_off) {
+    if (off > max_off) {
+        off = max_off; /* content shrank under a stale offset */
+    }
+    return off < 0 ? 0 : off;
+}
+
 /* SCROLL: children stack in a column at preferred heights, then the whole
- * content is translated by -offset. layout_rect therefore holds final window
+ * content is translated by -offset (and by -scroll_x when it scrolls sideways). layout_rect therefore holds final window
  * coordinates, so hit testing needs no scroll-specific case. */
 static void arrange_scroll(gates_tree_t *tree, gates_node_slot_t *s, gates_rect_t content) {
-    gates_i32 viewport_h = content.h;
-    bool bar = s->content_size.h > viewport_h;
+    bool bar = false, hbar = false;
+    scroll_bars(s, content, &bar, &hbar);
+    gates_i32 viewport_h = content.h - (hbar ? GATES_SCROLLBAR_PX : 0);
     gates_i32 viewport_w = content.w - (bar ? GATES_SCROLLBAR_PX : 0);
     if (viewport_w < 0) {
         viewport_w = 0;
     }
-    gates_i32 max_off = s->content_size.h - viewport_h;
-    if (max_off < 0) {
-        max_off = 0;
+    if (viewport_h < 0) {
+        viewport_h = 0;
     }
-    if (s->scroll_offset > max_off) {
-        s->scroll_offset = max_off; /* content shrank under a stale offset */
+    s->scroll_offset = clamp_off(s->scroll_offset, s->content_size.h - viewport_h);
+    /* Sideways, children are as wide as the widest of them (0.10.0). */
+    gates_i32 child_w = viewport_w;
+    if (s->scroll_sideways && s->content_size.w > child_w) {
+        child_w = s->content_size.w;
     }
-    if (s->scroll_offset < 0) {
-        s->scroll_offset = 0;
-    }
+    s->scroll_x = clamp_off(s->scroll_x, child_w - viewport_w); /* 0 when not sideways */
 
+    gates_i32 x = content.x - s->scroll_x;
     gates_i32 y = content.y - s->scroll_offset;
     s->scroll_arranged = s->scroll_offset;
+    s->scroll_x_arranged = s->scroll_x;
     for (gates_u32 c = s->first_child; c != GATES_NONE; c = gates_i_slot(tree, c)->next_sibling) {
         gates_node_slot_t *cs = gates_i_slot(tree, c);
         if (cs->hidden) {
             cs->layout_rect = (gates_rect_t){ content.x, content.y, 0, 0 };
             continue;
         }
-        cs->layout_rect = (gates_rect_t){ content.x, y, viewport_w, cs->pref.h };
-        place_cross(cs, content.x, viewport_w, false);
+        cs->layout_rect = (gates_rect_t){ x, y, child_w, cs->pref.h };
+        place_cross(cs, x, child_w, false);
         y += cs->pref.h + s->gap;
     }
 }
@@ -1001,9 +1062,34 @@ gates_rect_t gates_i_split_handle(const gates_tree_t *tree, gates_u32 idx) {
     return (gates_rect_t){ a.x + a.w, content.y, GATES_SPLIT_HANDLE_PX, content.h };
 }
 
+static void bars_of(const gates_node_slot_t *s, bool *v, bool *h) {
+    scroll_bars(s, content_box(s), v, h);
+}
+
+/* The content box less the bars shown (whatever the node's layout kind). */
+static gates_rect_t viewport_of(const gates_node_slot_t *s) {
+    bool v = false, h = false;
+    bars_of(s, &v, &h);
+    gates_rect_t c = content_box(s);
+    if (v) c.w -= GATES_SCROLLBAR_PX;
+    if (h) c.h -= GATES_SCROLLBAR_PX;
+    if (c.w < 0) c.w = 0;
+    if (c.h < 0) c.h = 0;
+    return c;
+}
+
 bool gates_i_scrollable(const gates_tree_t *tree, gates_u32 idx) {
     const gates_node_slot_t *s = gates_i_slot(tree, idx);
-    return s->layout_kind == GATES_LAYOUT_SCROLL && s->content_size.h > content_box(s).h;
+    bool v = false, h = false;
+    bars_of(s, &v, &h);
+    return s->layout_kind == GATES_LAYOUT_SCROLL && v;
+}
+
+bool gates_i_hscrollable(const gates_tree_t *tree, gates_u32 idx) {
+    const gates_node_slot_t *s = gates_i_slot(tree, idx);
+    bool v = false, h = false;
+    bars_of(s, &v, &h);
+    return s->layout_kind == GATES_LAYOUT_SCROLL && h;
 }
 
 gates_rect_t gates_i_scroll_viewport(const gates_tree_t *tree, gates_u32 idx) {
@@ -1011,20 +1097,41 @@ gates_rect_t gates_i_scroll_viewport(const gates_tree_t *tree, gates_u32 idx) {
     if (s->layout_kind != GATES_LAYOUT_SCROLL) {
         return (gates_rect_t){ 0, 0, 0, 0 };
     }
-    gates_rect_t c = content_box(s);
-    if (gates_i_scrollable(tree, idx)) {
-        c.w -= GATES_SCROLLBAR_PX;
-        if (c.w < 0) c.w = 0;
-    }
-    return c;
+    return viewport_of(s);
 }
 
 gates_rect_t gates_i_scroll_track(const gates_tree_t *tree, gates_u32 idx) {
     if (!gates_i_scrollable(tree, idx)) {
         return (gates_rect_t){ 0, 0, 0, 0 };
     }
-    gates_rect_t c = content_box(gates_i_slot(tree, idx));
-    return (gates_rect_t){ c.x + c.w - GATES_SCROLLBAR_PX, c.y, GATES_SCROLLBAR_PX, c.h };
+    const gates_node_slot_t *s = gates_i_slot(tree, idx);
+    gates_rect_t c = content_box(s);
+    return (gates_rect_t){ c.x + c.w - GATES_SCROLLBAR_PX, c.y, GATES_SCROLLBAR_PX, viewport_of(s).h };
+}
+
+gates_rect_t gates_i_hscroll_track(const gates_tree_t *tree, gates_u32 idx) {
+    if (!gates_i_hscrollable(tree, idx)) {
+        return (gates_rect_t){ 0, 0, 0, 0 };
+    }
+    const gates_node_slot_t *s = gates_i_slot(tree, idx);
+    gates_rect_t c = content_box(s);
+    return (gates_rect_t){ c.x, c.y + c.h - GATES_SCROLLBAR_PX, viewport_of(s).w, GATES_SCROLLBAR_PX };
+}
+
+/* A thumb along a track of `len` px: its length and start for a view of
+ * `view` px over `content` px scrolled by `off`. */
+static void thumb_span(gates_i32 len, gates_i32 view, gates_i32 content, gates_i32 off,
+                       gates_i32 *start, gates_i32 *size) {
+    gates_i32 t = (gates_i32)(((gates_i64)len * view) / content);
+    if (t < GATES_SCROLLBAR_PX) {
+        t = GATES_SCROLLBAR_PX;
+    }
+    if (t > len) {
+        t = len;
+    }
+    gates_i32 max_off = content - view;
+    *start = max_off > 0 ? (gates_i32)(((gates_i64)(len - t) * off) / max_off) : 0;
+    *size = t;
 }
 
 gates_rect_t gates_i_scroll_thumb(const gates_tree_t *tree, gates_u32 idx) {
@@ -1033,33 +1140,30 @@ gates_rect_t gates_i_scroll_thumb(const gates_tree_t *tree, gates_u32 idx) {
         return track;
     }
     const gates_node_slot_t *s = gates_i_slot(tree, idx);
-    gates_i32 content_h = s->content_size.h;
-    gates_i32 view_h = content_box(s).h;
-    gates_i32 thumb_h = (gates_i32)(((gates_i64)track.h * view_h) / content_h);
-    if (thumb_h < GATES_SCROLLBAR_PX) {
-        thumb_h = GATES_SCROLLBAR_PX;
+    gates_i32 y = 0, h = 0;
+    thumb_span(track.h, viewport_of(s).h, s->content_size.h, s->scroll_offset, &y, &h);
+    return (gates_rect_t){ track.x, track.y + y, track.w, h };
+}
+
+gates_rect_t gates_i_hscroll_thumb(const gates_tree_t *tree, gates_u32 idx) {
+    gates_rect_t track = gates_i_hscroll_track(tree, idx);
+    if (gates_rect_is_empty(track)) {
+        return track;
     }
-    if (thumb_h > track.h) {
-        thumb_h = track.h;
-    }
-    gates_i32 max_off = content_h - view_h;
-    gates_i32 travel = track.h - thumb_h;
-    gates_i32 y = max_off > 0
-                      ? (gates_i32)(((gates_i64)travel * s->scroll_offset) / max_off)
-                      : 0;
-    return (gates_rect_t){ track.x, track.y + y, track.w, thumb_h };
+    const gates_node_slot_t *s = gates_i_slot(tree, idx);
+    gates_i32 x = 0, w = 0;
+    thumb_span(track.w, viewport_of(s).w, s->content_size.w, s->scroll_x, &x, &w);
+    return (gates_rect_t){ track.x + x, track.y, w, track.h };
 }
 
 gates_i32 gates_i_scroll_clamp(const gates_tree_t *tree, gates_u32 idx, gates_i32 offset) {
     const gates_node_slot_t *s = gates_i_slot(tree, idx);
-    gates_i32 max_off = s->content_size.h - content_box(s).h;
-    if (max_off < 0) {
-        max_off = 0;
-    }
-    if (offset < 0) {
-        return 0;
-    }
-    return offset > max_off ? max_off : offset;
+    return clamp_off(offset, s->content_size.h - viewport_of(s).h);
+}
+
+gates_i32 gates_i_hscroll_clamp(const gates_tree_t *tree, gates_u32 idx, gates_i32 offset) {
+    const gates_node_slot_t *s = gates_i_slot(tree, idx);
+    return s->scroll_sideways ? clamp_off(offset, s->content_size.w - viewport_of(s).w) : 0;
 }
 
 gates_rect_t gates_i_textbox_inner(const gates_tree_t *tree, gates_u32 idx) {

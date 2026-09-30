@@ -159,42 +159,59 @@ void gates_i_focus_leave_subtree(gates_tree_t *tree, gates_u32 idx) {
 }
 
 /* How far scroll offsets above `idx` moved since the last arrange: layout
- * rects are stale by that much until the next layout run. */
-static gates_i32 pending_shift(const gates_tree_t *tree, gates_u32 idx) {
+ * rects are stale by that much until the next layout run (down, or across). */
+static gates_i32 pending_shift(const gates_tree_t *tree, gates_u32 idx, bool across) {
     gates_i32 shift = 0;
     for (gates_u32 a = gates_i_slot(tree, idx)->parent; a != GATES_NONE;
          a = gates_i_slot(tree, a)->parent) {
         const gates_node_slot_t *as = gates_i_slot(tree, a);
         if (as->layout_kind == GATES_LAYOUT_SCROLL) {
-            shift += as->scroll_offset - as->scroll_arranged;
+            shift += across ? as->scroll_x - as->scroll_x_arranged : as->scroll_offset - as->scroll_arranged;
         }
     }
     return shift;
+}
+
+/* How far a span [lo, lo + len) must move to be inside [vlo, vlo + vlen): its
+ * start wins when it is longer. */
+static gates_i32 into_view(gates_i32 lo, gates_i32 len, gates_i32 vlo, gates_i32 vlen) {
+    if (lo < vlo) {
+        return lo - vlo;
+    }
+    if (lo + len > vlo + vlen) {
+        gates_i32 d = (lo + len) - (vlo + vlen);
+        return d > lo - vlo ? lo - vlo : d;
+    }
+    return 0;
 }
 
 void gates_i_scroll_into_view(gates_tree_t *tree, gates_u32 idx) {
     for (gates_u32 a = gates_i_slot(tree, idx)->parent; a != GATES_NONE;
          a = gates_i_slot(tree, a)->parent) {
         gates_node_slot_t *as = gates_i_slot(tree, a);
-        if (as->layout_kind != GATES_LAYOUT_SCROLL || !gates_i_scrollable(tree, a)) {
+        if (as->layout_kind != GATES_LAYOUT_SCROLL) {
             continue;
         }
         /* Where the node and this viewport are now, not at the last layout. */
         gates_rect_t r = gates_i_slot(tree, idx)->layout_rect;
-        r.y -= pending_shift(tree, idx);
+        r.y -= pending_shift(tree, idx, false);
+        r.x -= pending_shift(tree, idx, true);
         gates_rect_t vp = gates_i_scroll_viewport(tree, a);
-        vp.y -= pending_shift(tree, a);
-        gates_i32 delta = 0;
-        if (r.y < vp.y) {
-            delta = r.y - vp.y;
-        } else if (r.y + r.h > vp.y + vp.h) {
-            delta = (r.y + r.h) - (vp.y + vp.h);
-        }
-        if (delta != 0) {
+        vp.y -= pending_shift(tree, a, false);
+        vp.x -= pending_shift(tree, a, true);
+        if (gates_i_scrollable(tree, a)) {
+            gates_i32 delta = r.y < vp.y ? r.y - vp.y
+                              : r.y + r.h > vp.y + vp.h ? (r.y + r.h) - (vp.y + vp.h) : 0;
             gates_i32 off = gates_i_scroll_clamp(tree, a, as->scroll_offset + delta);
-            gates_i32 moved = off - as->scroll_offset;
-            if (moved != 0) {
+            if (off != as->scroll_offset) {
                 as->scroll_offset = off;
+                gates_i_mark_dirty(tree, a, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
+            }
+        }
+        if (gates_i_hscrollable(tree, a)) { /* 0.10.0 */
+            gates_i32 off = gates_i_hscroll_clamp(tree, a, as->scroll_x + into_view(r.x, r.w, vp.x, vp.w));
+            if (off != as->scroll_x) {
+                as->scroll_x = off;
                 gates_i_mark_dirty(tree, a, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
             }
         }

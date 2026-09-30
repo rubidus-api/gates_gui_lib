@@ -37,8 +37,12 @@ static gates_u32 hit_idx(const gates_tree_t *tree, gates_u32 idx, gates_point_t 
         }
         return idx;
     }
+    /* A scroll area's children are only where they are painted: in its viewport
+     * (0.10.0: not under its bars or in its padding). */
+    bool children = s->layout_kind != GATES_LAYOUT_SCROLL ||
+                    gates_rect_contains(gates_i_scroll_viewport(tree, idx), p);
     /* Later siblings paint on top; walk from the last child backwards. */
-    for (gates_u32 c = s->last_child; c != GATES_NONE;
+    for (gates_u32 c = children ? s->last_child : GATES_NONE; c != GATES_NONE;
          c = gates_i_slot(tree, c)->prev_sibling) {
         gates_u32 deep = hit_idx(tree, c, p);
         if (deep != GATES_NONE) {
@@ -197,6 +201,16 @@ static void textbox_select_unit(gates_tree_t *tree, gates_u32 idx, gates_u32 cli
 /* Starts a drag when the point lands on a split handle or a scroll thumb.
  * Those areas belong to the container itself (children never cover them), so
  * the ordinary hit result is enough to detect them. */
+/* Scrolls an area sideways, clamped (0.10.0). */
+static void set_scroll_x(gates_tree_t *tree, gates_u32 idx, gates_i32 off) {
+    gates_node_slot_t *s = gates_i_slot(tree, idx);
+    off = gates_i_hscroll_clamp(tree, idx, off);
+    if (off != s->scroll_x) {
+        s->scroll_x = off;
+        gates_i_mark_dirty(tree, idx, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
+    }
+}
+
 static bool drag_begin(gates_tree_t *tree, gates_u32 idx, const gates_pointer_event_t *ev) {
     gates_point_t p = ev->pos;
     gates_u32 clicks = ev->clicks != 0 ? ev->clicks : 1;
@@ -228,6 +242,22 @@ static bool drag_begin(gates_tree_t *tree, gates_u32 idx, const gates_pointer_ev
         tree->drag_node = idx;
         tree->drag_start = p;
         tree->drag_start_value = s->scroll_offset;
+        return true;
+    }
+    if (s->layout_kind == GATES_LAYOUT_SCROLL &&
+        gates_rect_contains(gates_i_hscroll_thumb(tree, idx), p)) {
+        tree->drag_kind = GATES_DRAG_SCROLL_HTHUMB;
+        tree->drag_node = idx;
+        tree->drag_start = p;
+        tree->drag_start_value = s->scroll_x;
+        return true;
+    }
+    if (s->layout_kind == GATES_LAYOUT_SCROLL && gates_rect_contains(gates_i_hscroll_track(tree, idx), p)) {
+        /* Off the thumb, a press pages across toward it (0.10.0). */
+        gates_rect_t thumb = gates_i_hscroll_thumb(tree, idx);
+        gates_i32 page = gates_i_scroll_viewport(tree, idx).w;
+        if (page < 1) page = 1;
+        set_scroll_x(tree, idx, s->scroll_x + (p.x < thumb.x ? -page : page));
         return true;
     }
     if (s->layout_kind == GATES_LAYOUT_SCROLL && gates_rect_contains(gates_i_scroll_track(tree, idx), p)) {
@@ -312,6 +342,19 @@ static void drag_update(gates_tree_t *tree, gates_point_t p) {
         return;
     }
 
+    if (tree->drag_kind == GATES_DRAG_SCROLL_HTHUMB) {
+        gates_rect_t track = gates_i_hscroll_track(tree, idx);
+        gates_rect_t thumb = gates_i_hscroll_thumb(tree, idx);
+        gates_i32 travel = track.w - thumb.w;
+        if (travel <= 0) {
+            return;
+        }
+        gates_i32 max_off = gates_i_hscroll_clamp(tree, idx, INT32_MAX);
+        gates_i32 delta = p.x - tree->drag_start.x;
+        set_scroll_x(tree, idx, tree->drag_start_value + (gates_i32)(((gates_i64)delta * max_off) / travel));
+        return;
+    }
+
     if (tree->drag_kind == GATES_DRAG_SCROLL_THUMB) {
         gates_rect_t track = gates_i_scroll_track(tree, idx);
         gates_rect_t thumb = gates_i_scroll_thumb(tree, idx);
@@ -331,10 +374,11 @@ static void drag_update(gates_tree_t *tree, gates_point_t p) {
     }
 }
 
-/* Nearest scrollable ancestor (or the node itself) for wheel events. */
-static gates_u32 scroll_target(const gates_tree_t *tree, gates_u32 idx) {
+/* Nearest scrollable ancestor (or the node itself) for wheel events, up and
+ * down or (across) sideways. */
+static gates_u32 scroll_target(const gates_tree_t *tree, gates_u32 idx, bool across) {
     for (gates_u32 cur = idx; cur != GATES_NONE; cur = gates_i_slot(tree, cur)->parent) {
-        if (gates_i_scrollable(tree, cur)) {
+        if (across ? gates_i_hscrollable(tree, cur) : gates_i_scrollable(tree, cur)) {
             return cur;
         }
     }
@@ -342,17 +386,21 @@ static gates_u32 scroll_target(const gates_tree_t *tree, gates_u32 idx) {
 }
 
 static void wheel_scroll(gates_tree_t *tree, gates_u32 from, gates_vec2_t wheel) {
-    gates_u32 idx = scroll_target(tree, from);
-    if (idx == GATES_NONE || wheel.y == 0.0f) {
-        return;
-    }
     gates_i32 line = tree->line_height > 0 ? tree->line_height : 16;
-    gates_i32 step = (gates_i32)(wheel.y * (float)(GATES_SCROLL_WHEEL_LINES * line));
-    gates_node_slot_t *s = gates_i_slot(tree, idx);
-    gates_i32 off = gates_i_scroll_clamp(tree, idx, s->scroll_offset - step);
-    if (off != s->scroll_offset) {
-        s->scroll_offset = off;
-        gates_i_mark_dirty(tree, idx, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
+    gates_u32 idx = scroll_target(tree, from, false);
+    if (idx != GATES_NONE && wheel.y != 0.0f) {
+        gates_i32 step = (gates_i32)(wheel.y * (float)(GATES_SCROLL_WHEEL_LINES * line));
+        gates_node_slot_t *s = gates_i_slot(tree, idx);
+        gates_i32 off = gates_i_scroll_clamp(tree, idx, s->scroll_offset - step);
+        if (off != s->scroll_offset) {
+            s->scroll_offset = off;
+            gates_i_mark_dirty(tree, idx, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
+        }
+    }
+    idx = scroll_target(tree, from, true);
+    if (idx != GATES_NONE) { /* 0.10.0: positive x moves right */
+        gates_i32 step = (gates_i32)(wheel.x * (float)(GATES_SCROLL_WHEEL_LINES * line));
+        set_scroll_x(tree, idx, gates_i_slot(tree, idx)->scroll_x + step);
     }
 }
 

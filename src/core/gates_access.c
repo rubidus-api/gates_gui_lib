@@ -1152,7 +1152,9 @@ gates_err_t gates_access_info(gates_tree_t *tree, gates_node_t node, gates_u64 i
         break;
     }
     default:
-        if (s->layout_kind == GATES_LAYOUT_SCROLL && gates_i_scrollable(tree, idx)) actions |= GATES_ACCESS_SCROLL;
+        if (s->layout_kind == GATES_LAYOUT_SCROLL && (gates_i_scrollable(tree, idx) || gates_i_hscrollable(tree, idx))) {
+            actions |= GATES_ACCESS_SCROLL;
+        }
         break;
     }
     out->states = states;
@@ -1684,20 +1686,36 @@ gates_err_t gates_access_cell_set_value(gates_tree_t *tree, gates_node_t node, g
     return gates_i_view_cell_set_text(tree, node.index, item, cell - 1, text);
 }
 
+/* A scroll area sideways (0.10.0): its offset over the part that does not fit. */
+static bool area_hscroll(gates_tree_t *tree, gates_node_t node, gates_i32 *max) {
+    if (!gates_i_hscrollable(tree, node.index)) return false;
+    *max = gates_i_hscroll_clamp(tree, node.index, INT32_MAX);
+    return *max > 0;
+}
+
 bool gates_access_hscroll_info(gates_tree_t *tree, gates_node_t node, gates_u32 *pos, gates_u32 *page) {
-    if (tree == nullptr || pos == nullptr || page == nullptr || !gates_i_valid(tree, node) ||
-        gates_i_slot(tree, node.index)->kind != GATES_NODE_VIEW) {
-        return false;
-    }
-    return gates_i_view_hscroll_info(tree, node.index, pos, page);
+    if (tree == nullptr || pos == nullptr || page == nullptr || !gates_i_valid(tree, node)) return false;
+    if (gates_i_slot(tree, node.index)->kind == GATES_NODE_VIEW) return gates_i_view_hscroll_info(tree, node.index, pos, page);
+    gates_i32 max = 0;
+    if (!area_hscroll(tree, node, &max)) return false;
+    gates_i32 off = gates_layout_scroll_x(tree, node);
+    gates_i32 content = gates_layout_scroll_content(tree, node).w;
+    *pos = (gates_u32)(((gates_u64)off * GATES_ACCESS_SCROLL_MAX) / (gates_u64)max);
+    *page = (gates_u32)(((gates_u64)gates_i_scroll_viewport(tree, node.index).w * GATES_ACCESS_SCROLL_MAX) /
+                        (gates_u64)content);
+    return true;
 }
 
 gates_err_t gates_access_hscroll_to(gates_tree_t *tree, gates_node_t node, gates_u32 pos) {
     gates_widget_state_t *st = nullptr;
-    gates_err_t err = usable(tree, node, &st);
-    if (!gates_is_ok(err)) return err;
-    if (gates_i_slot(tree, node.index)->kind != GATES_NODE_VIEW) return PROVEN_ERR_INVALID_ARG;
-    return gates_i_view_hscroll_set(tree, node.index, pos);
+    if (tree == nullptr || !gates_i_valid(tree, node)) return PROVEN_ERR_INVALID_ARG;
+    if (gates_i_slot(tree, node.index)->kind == GATES_NODE_VIEW) {
+        gates_err_t err = usable(tree, node, &st);
+        return gates_is_ok(err) ? gates_i_view_hscroll_set(tree, node.index, pos) : err;
+    }
+    gates_i32 max = 0;
+    if (!area_hscroll(tree, node, &max)) return PROVEN_ERR_INVALID_ARG;
+    return gates_layout_set_scroll_x(tree, node, (gates_i32)(((gates_u64)max * pos) / GATES_ACCESS_SCROLL_MAX)); /* clamps */
 }
 
 gates_err_t gates_access_set_item_selected(gates_tree_t *tree, gates_node_t node, gates_u64 item, bool selected) {

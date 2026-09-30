@@ -102,11 +102,23 @@ gates_u32 gates_layout_stack_active(const gates_tree_t *tree, gates_node_t node)
                                                  gates_i32 ratio_permille);
 gates_i32 gates_layout_split_ratio(const gates_tree_t *tree, gates_node_t node);
 
-/* SCROLL: vertical offset in px, clamped to [0, content_h - viewport_h].
- * Horizontal scrolling is not implemented in this version. */
+/* SCROLL: vertical offset in px, clamped to [0, content_h - viewport_h]. */
 [[nodiscard]] gates_err_t gates_layout_set_scroll_offset(gates_tree_t *tree, gates_node_t node,
                                                          gates_i32 offset_y);
 gates_i32 gates_layout_scroll_offset(const gates_tree_t *tree, gates_node_t node);
+/* SCROLL sideways (0.10.0, off by default): children are laid out as wide as
+ * the widest of them (at least the viewport), and when that is wider than the
+ * viewport a horizontal bar appears along the bottom. The wheel's sideways
+ * motion (Shift+wheel on Windows) scrolls it, focus moves bring the focused
+ * control into view across too, and assistive technology can scroll it
+ * (gates_access_hscroll_info). Off, children are exactly the viewport's width
+ * as before. The offset is in px, clamped to [0, content_w - viewport_w]. */
+[[nodiscard]] gates_err_t gates_layout_set_scroll_sideways(gates_tree_t *tree, gates_node_t node,
+                                                           bool on);
+bool gates_layout_scroll_sideways(const gates_tree_t *tree, gates_node_t node);
+[[nodiscard]] gates_err_t gates_layout_set_scroll_x(gates_tree_t *tree, gates_node_t node,
+                                                    gates_i32 offset_x);
+gates_i32 gates_layout_scroll_x(const gates_tree_t *tree, gates_node_t node);
 /* Measured content size (valid after gates_layout_run). */
 gates_size_t gates_layout_scroll_content(const gates_tree_t *tree, gates_node_t node);
 
