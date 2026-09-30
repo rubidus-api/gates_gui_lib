@@ -57,7 +57,7 @@ pkg=dist/gates-$ver
 for f in include/gates/gates.h include/gates/version.h include/proven/types.h include/proven/u8str.h \
          lib/host/libgates_core.a lib/host/libproven.a LICENSE LICENSE-proven README.md CHANGELOG.md \
          examples/consumer/Makefile examples/consumer/headless.c examples/consumer/main.c \
-         manual/manual.md manual-ko/manual-ko.md; do
+         manual/manual.md manual-ko/manual-ko.md spec/spec.md; do
     check "[ -f $pkg/$f ]" "package lacks $f"
 done
 check "[ ! -e $pkg/src ] && [ ! -e $pkg/include/gates/gates_tree_internal.h ]" "package carries sources"

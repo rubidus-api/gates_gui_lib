@@ -128,6 +128,8 @@ headless use on any system.
   build.
 - [examples/README.md](examples/README.md): one example per control and interaction, the
   reference and sample applications, each with what to check by hand.
+- [Specification](spec/spec.md): what gates guarantees - the tree, errors, layout, input and
+  events, text, views, threads, accessibility and limits.
 - `include/gates/*.h`: the public API; each header opens with what it is for and its rules.
 - [CHANGELOG.md](CHANGELOG.md): what changed.
 

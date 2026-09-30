@@ -16,6 +16,7 @@
 !/examples/
 !/manual/
 !/manual-ko/
+!/spec/
 !/screenshots/
 
 # Never public, even inside the directories above.

@@ -94,7 +94,7 @@ text itself - tests, automation - `gates_input_commit` delivers text as an IME w
 - The Win32 backend draws real system glyphs, taking characters its face lacks (Hangul in
   Segoe UI) from the system's fallback fonts; the builtin backend (tests, headless) is
   fixed-pitch and draws ASCII, with a box of the right width for everything else.
-- One line per text box; there is no multi-line editor yet.
+- A text box is one line; many lines are the editor's (below).
 
 ## The clipboard
 

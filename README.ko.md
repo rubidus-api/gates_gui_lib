@@ -99,6 +99,8 @@ gates 와 기반 라이브러리 proven 은 따로 된 정적 라이브러리입
   영문판이 기준입니다.
 - [examples/README.md](examples/README.md): 컨트롤마다 하나씩인 예제, 참조 응용과 예제 응용,
   손으로 확인할 것.
+- [Specification](spec/spec.md)(영어): gates 가 보장하는 것. 트리, 오류, 배치, 입력과 이벤트, 글자, 뷰,
+  스레드, 접근성, 한도를 다룹니다.
 - `include/gates/*.h`: 공개 API. 헤더마다 첫머리에 쓰임과 규칙이 있습니다.
 - [CHANGELOG.md](CHANGELOG.md): 바뀐 것.
 

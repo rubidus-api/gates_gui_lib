@@ -228,7 +228,7 @@ dist: lib
 	cp vendor/proven/LICENSE $(PKG)/LICENSE-proven
 	cp examples/consumer/Makefile examples/consumer/README.md examples/consumer/headless.c \
 	   examples/consumer/main.c $(PKG)/examples/consumer/
-	cp -R manual manual-ko $(PKG)/
+	cp -R manual manual-ko spec $(PKG)/
 
 # Windows binaries of every example (release asset), from `make win`.
 BIN := dist/gates-$(VERSION)-examples-win64
