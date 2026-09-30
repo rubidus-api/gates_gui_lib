@@ -8,6 +8,7 @@
 #include <gates/timer.h>
 #include "gates_test.h"
 
+#include <proven/heap.h>
 #include <string.h>
 
 /* -- a counting lock that also catches re-entry (a release or wake under it) ---------- */
@@ -185,6 +186,93 @@ static void test_limits(void) {
     for (int i = 0; i < 5; i++) GT_ASSERT(p[i].releases == 1);
     GT_ASSERT(p[5].releases == 0);
     gates_tree_destroy(x.t);
+    gates_sender_close(s);
+    gates_sender_release(s);
+}
+
+/* 0.9.0: the queue starts small and grows on the UI thread up to its limit. */
+typedef struct gate_alloc_t { bool refuse_big; int big_allocs; } gate_alloc_t;
+static gate_alloc_t g_gate;
+static proven_result_mem_mut_t ga_alloc(void *ctx, proven_size_t size, proven_size_t align) {
+    (void)ctx;
+    if (size > 300 * sizeof(gates_message_t)) {
+        g_gate.big_allocs++;
+        if (g_gate.refuse_big) return (proven_result_mem_mut_t){ .err = PROVEN_ERR_NOMEM };
+    }
+    proven_allocator_t h = proven_heap_allocator();
+    return h.alloc_fn(h.ctx, size, align);
+}
+static proven_result_mem_mut_t ga_realloc(void *ctx, void *p, proven_size_t os, proven_size_t ns, proven_size_t al) {
+    (void)ctx;
+    proven_allocator_t h = proven_heap_allocator();
+    return h.realloc_fn(h.ctx, p, os, ns, al);
+}
+static void ga_free(void *ctx, void *p) {
+    (void)ctx;
+    proven_allocator_t h = proven_heap_allocator();
+    h.free_fn(h.ctx, p);
+}
+
+static void test_growth(void) {
+    memset(&g_lock, 0, sizeof g_lock);
+    g_wake_allowed = true;
+    memset(&g_gate, 0, sizeof g_gate);
+    gates_sender_desc_t d = { .allocator = { .alloc_fn = ga_alloc, .realloc_fn = ga_realloc, .free_fn = ga_free },
+                              .sync = { fl_init, fl_fini, fl_lock, fl_unlock }, .wake = on_wake,
+                              .max_messages = 1000, .max_bytes = 1 << 20 };
+    gates_sender_t *s = nullptr;
+    GT_ASSERT_OK(gates_sender_create(&d, &s));
+    GT_ASSERT(gates_sender_capacity(s) == GATES_POST_INITIAL_MESSAGES);
+    app_t x;
+    make_tree(&x);
+    GT_ASSERT_OK(gates_sender_attach(s, x.t));
+    gates_target_t to = gates_target(x.t, x.a);
+    static payload_t p[1100];
+    memset(p, 0, sizeof p);
+    int posted = 0;
+    for (; posted < 256; posted++) {
+        p[posted].value = posted;
+        gates_message_t m = msg(to, 1, &p[posted], 1);
+        GT_ASSERT_OK(gates_sender_post(s, &m));
+    }
+    gates_message_t m = msg(to, 1, &p[posted], 1);
+    GT_ASSERT(gates_sender_post(s, &m) == GATES_POST_FULL); /* refused now, not held */
+    GT_ASSERT(p[posted].releases == 0 && gates_sender_capacity(s) == 256);
+    /* A refused growth keeps the queue working as it is. */
+    g_gate.refuse_big = true;
+    (void)gates_sender_dispatch(s, 1);
+    GT_ASSERT(gates_sender_capacity(s) == 256 && x.seen.n == 1 && g_gate.big_allocs == 1);
+    g_gate.refuse_big = false;
+    (void)gates_sender_dispatch(s, 1); /* asked again: now it grows, the order is kept */
+    GT_ASSERT(gates_sender_capacity(s) == 512 && x.seen.n == 2 && x.seen.values[1] == 1);
+    (void)gates_sender_dispatch(s, 1); /* room enough now: no further growth */
+    GT_ASSERT(gates_sender_capacity(s) == 512 && x.seen.n == 3);
+    while (posted < 510) { /* 253 queued: room up to 512 */
+        p[posted].value = posted;
+        m = msg(to, 1, &p[posted], 1);
+        GT_ASSERT_OK(gates_sender_post(s, &m));
+        posted++;
+    }
+    (void)gates_sender_dispatch(s, 1); /* three quarters used: doubles again, up to the limit */
+    GT_ASSERT(gates_sender_capacity(s) == 1000);
+    while (posted < 1000 + 10) {
+        p[posted].value = posted;
+        m = msg(to, 1, &p[posted], 1);
+        if (!gates_is_ok(gates_sender_post(s, &m))) break;
+        posted++;
+    }
+    GT_ASSERT(gates_sender_pending(s) == 1000 && gates_sender_capacity(s) == 1000); /* never past the limit */
+    while (gates_sender_dispatch(s, 0) > 0) {}
+    GT_ASSERT(x.seen.n == 256); /* the recorder keeps 256; every value in order: */
+    for (int i = 0; i < 256; i++) GT_ASSERT(x.seen.values[i] == i);
+    for (int i = 0; i < posted; i++) GT_ASSERT(p[i].releases == 1);
+    GT_ASSERT(gates_sender_capacity(s) == 1000); /* it keeps the room it grew to */
+    gates_sender_close(s);
+    gates_sender_release(s);
+    gates_tree_destroy(x.t);
+    /* A limit below the initial size is the size from the start. */
+    s = new_sender(4, 100);
+    GT_ASSERT(gates_sender_capacity(s) == 4);
     gates_sender_close(s);
     gates_sender_release(s);
 }
@@ -503,6 +591,7 @@ static void test_timers(void) {
 int main(void) {
     test_basic();
     test_limits();
+    test_growth();
     test_replaceable();
     test_stale();
     test_bounded_and_reentrant();

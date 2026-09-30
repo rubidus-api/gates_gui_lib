@@ -1,4 +1,4 @@
-# gates Specification (v0.8.0)
+# gates Specification (v0.9.0)
 
 This document states what gates guarantees: the contract a program may rely on. The manual
 (`manual/`) teaches how to use gates; the public headers (`include/gates/*.h`) give every
@@ -176,7 +176,8 @@ node per part.
 
 - **Posting** (`gates/post.h`). A worker holds a sender and posts messages (a target node, a
   kind, a payload). Posting never blocks and never allocates. The queue has a limit in messages
-  and in payload bytes (defaults 1024 and 1 MiB, set per app); a full queue answers
+  and in payload bytes (defaults 1024 and 1 MiB, set per app); it starts with 256 slots and grows
+  on the UI thread, never in a post, up to the limit as it fills; a full queue answers
   GATES_POST_FULL and the payload stays with the caller (backpressure); a closed one
   GATES_POST_CLOSED. The UI thread delivers a bounded number per turn (64) at a safe point.
   Every payload is released exactly once: after delivery, when its target is gone, or at shutdown.
@@ -221,7 +222,7 @@ window's placement is kept the same way (`gates_window_placement`).
 | text box undo | 64 entries, 16384 bytes (settable) |
 | text buffer | 2^30 bytes |
 | image side | 16384 pixels |
-| post queue | 1024 messages, 1 MiB payload (settable per app); 64 delivered per turn |
+| post queue | 1024 messages, 1 MiB payload (settable per app; starts at 256 slots and grows); 64 delivered per turn |
 | log | 1000 lines, 1 MiB (settable per log) |
 | pointer target | at least 24 x 24 units |
 | type-ahead | 4096 rows looked at per character |

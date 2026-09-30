@@ -104,6 +104,11 @@ The rules that make this safe:
 - Release functions may run on any thread; they only free.
 - The queue is bounded (1024 messages and 1 MiB of payload by default, `gates_app_desc_t`),
   and at most 64 messages are delivered per turn, so a flood never starves input and painting.
+  It starts with 256 slots and grows on the UI thread as it fills, up to the limit, so a
+  large limit costs memory only when bursts use it. Choose the limit by the delay you accept:
+  a queue holds about limit / delivery-rate of waiting (at about 55000 messages a second, 1024
+  is under 20 ms; 65536 is over a second). No limit at all would only turn a flood into
+  minutes of delay and unbounded memory: the delivery rate, not the queue, sets throughput.
 - A sender stays valid on every thread until its last reference is released, even after the
   app is gone.
 

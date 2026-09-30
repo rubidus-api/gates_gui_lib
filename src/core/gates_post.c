@@ -16,9 +16,13 @@ struct gates_sender {
     void *wake_ctx;
     gates_u32 refs;              /* under the lock */
     bool closed;                 /* under the lock */
-    /* Ring of queued messages (under the lock); fixed at creation: posting never allocates. */
+    /* Ring of queued messages (under the lock). Posting never allocates: a post
+     * that finds it (nearly) full asks for room, and the UI thread grows it at
+     * the next dispatch, doubling up to max_cap (0.9.0). */
     gates_message_t *ring;
     gates_u32 cap;
+    gates_u32 max_cap;
+    bool want_grow;
     gates_u32 head;
     gates_u32 count;
     gates_usize_t bytes;
@@ -43,7 +47,8 @@ gates_err_t gates_sender_create(const gates_sender_desc_t *desc, gates_sender_t 
     *out_sender = nullptr;
     gates_allocator_t a = proven_alloc_is_valid(desc->allocator) ? desc->allocator
                                                                  : proven_heap_allocator();
-    gates_u32 cap = desc->max_messages != 0 ? desc->max_messages : GATES_POST_DEFAULT_MESSAGES;
+    gates_u32 max_cap = desc->max_messages != 0 ? desc->max_messages : GATES_POST_DEFAULT_MESSAGES;
+    gates_u32 cap = max_cap < GATES_POST_INITIAL_MESSAGES ? max_cap : GATES_POST_INITIAL_MESSAGES;
     proven_result_mem_mut_t r = a.alloc_fn(a.ctx, sizeof(gates_sender_t), alignof(gates_sender_t));
     if (!proven_is_ok(r.err)) {
         return r.err;
@@ -56,6 +61,7 @@ gates_err_t gates_sender_create(const gates_sender_desc_t *desc, gates_sender_t 
     s->wake_ctx = desc->wake_ctx;
     s->refs = 1;
     s->cap = cap;
+    s->max_cap = max_cap;
     s->max_bytes = desc->max_bytes != 0 ? desc->max_bytes : GATES_POST_DEFAULT_BYTES;
     proven_result_mem_mut_t rr = a.alloc_fn(a.ctx, (gates_usize_t)cap * sizeof(gates_message_t),
                                             alignof(gates_message_t));
@@ -145,6 +151,7 @@ gates_err_t gates_sender_post(gates_sender_t *s, const gates_message_t *msg) {
         s->ring[(s->head + s->count) % s->cap] = *msg;
         s->count++;
         s->bytes += msg->bytes;
+        if (s->count >= s->cap - s->cap / 4 && s->cap < s->max_cap) s->want_grow = true;
         if (was_empty && s->wake != nullptr) {
             s->wake(s->wake_ctx); /* under the lock: close cannot slip in between */
         }
@@ -213,10 +220,42 @@ static const gates_i_msg_handler_t *find_handler(const gates_tree_t *tree, gates
     return nullptr;
 }
 
+/* UI thread: more room when posts asked for it. The new ring is allocated
+ * outside the lock; a failure keeps the queue as it is (posts keep working). */
+static void grow(gates_sender_t *s) {
+    s->sync.lock(s->lock);
+    gates_u32 to = s->want_grow && !s->closed && s->cap < s->max_cap
+                       ? (s->cap > s->max_cap / 2 ? s->max_cap : s->cap * 2) : 0;
+    s->sync.unlock(s->lock);
+    if (to == 0) return;
+    gates_allocator_t a = s->alloc;
+    proven_result_mem_mut_t r = a.alloc_fn(a.ctx, (gates_usize_t)to * sizeof(gates_message_t), alignof(gates_message_t));
+    if (!proven_is_ok(r.err)) return; /* asked again at the next turn */
+    gates_message_t *ring = (gates_message_t *)r.value.ptr, *old;
+    s->sync.lock(s->lock);
+    for (gates_u32 i = 0; i < s->count; i++) ring[i] = s->ring[(s->head + i) % s->cap];
+    old = s->ring;
+    s->ring = ring;
+    s->head = 0;
+    s->cap = to;
+    s->want_grow = false;
+    s->sync.unlock(s->lock);
+    a.free_fn(a.ctx, old);
+}
+
+gates_u32 gates_sender_capacity(gates_sender_t *s) {
+    if (s == nullptr) return 0;
+    s->sync.lock(s->lock);
+    gates_u32 cap = s->cap;
+    s->sync.unlock(s->lock);
+    return cap;
+}
+
 gates_u32 gates_sender_dispatch(gates_sender_t *s, gates_u32 max) {
     if (s == nullptr) return 0;
     if (max == 0 || max > GATES_POST_PER_TURN) max = GATES_POST_PER_TURN;
     gates_sender_retain(s); /* a handler may drop the last outside reference */
+    grow(s);
     /* One batch per turn: later posts (from handlers too) wait for the next one. */
     gates_message_t batch[GATES_POST_PER_TURN];
     s->sync.lock(s->lock);

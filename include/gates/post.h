@@ -11,7 +11,11 @@
  * caller.
  *
  * Posting never blocks on the UI and never allocates. The queue has a limit
- * in messages and in payload bytes; a full queue answers GATES_POST_FULL
+ * in messages and in payload bytes. It starts with GATES_POST_INITIAL_MESSAGES
+ * slots (or the limit, when smaller) and grows on the UI thread - doubling at
+ * the next delivery turn after posts filled three quarters of it - up to the
+ * limit, so a program pays for the room it used, never for more (0.9.0). A
+ * post that finds it full is refused, not held. A full queue answers GATES_POST_FULL
  * (try again later, drop, or coalesce); a closed one GATES_POST_CLOSED (stop
  * producing and release the sender). A sender stays valid on every thread
  * until its last reference is released, even after the app is destroyed.
@@ -31,6 +35,7 @@
 #define GATES_POST_CLOSED PROVEN_ERR_EOF     /* app shutting down: stop and release the sender */
 
 #define GATES_POST_DEFAULT_MESSAGES 1024u
+#define GATES_POST_INITIAL_MESSAGES 256u     /* slots before the queue grows (0.9.0) */
 #define GATES_POST_DEFAULT_BYTES    ((gates_usize_t)1 << 20)
 #define GATES_POST_PER_TURN         64u      /* messages delivered per event turn */
 
@@ -116,6 +121,8 @@ gates_u32 gates_sender_dispatch(gates_sender_t *sender, gates_u32 max);
  * reference is released. */
 void gates_sender_close(gates_sender_t *sender);
 gates_u32 gates_sender_pending(gates_sender_t *sender);
+/* Slots the queue has now: grows toward max_messages as it is used (0.9.0). */
+gates_u32 gates_sender_capacity(gates_sender_t *sender);
 gates_usize_t gates_sender_pending_bytes(gates_sender_t *sender);
 
 #endif /* GATES_POST_H */
