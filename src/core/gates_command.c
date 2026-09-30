@@ -139,11 +139,19 @@ gates_err_t gates_command_register(gates_tree_t *tree, gates_node_t scope,
     return GATES_OK;
 }
 
+/* Frees what a command owns (its label and submenu list). */
+static void cmd_release(gates_tree_t *tree, gates_i_command_t *c) {
+    if (c->label != nullptr) tree->alloc.free_fn(tree->alloc.ctx, c->label);
+    if (c->sub != nullptr) tree->alloc.free_fn(tree->alloc.ctx, c->sub);
+    c->label = nullptr;
+    c->sub = nullptr;
+}
+
 void gates_i_commands_drop_scope(gates_tree_t *tree, gates_u32 idx, gates_u32 generation) {
     for (gates_u32 i = 0; i < tree->command_count; i++) {
         gates_i_command_t *c = &tree->commands[i];
         if (c->alive && c->scope_index == idx && c->scope_generation == generation) {
-            if (c->label != nullptr) tree->alloc.free_fn(tree->alloc.ctx, c->label);
+            cmd_release(tree, c);
             *c = (gates_i_command_t){0}; /* its scope is gone: nothing can reach it again */
         }
     }
@@ -155,9 +163,7 @@ gates_err_t gates_command_unregister(gates_tree_t *tree, gates_node_t scope,
     if (c == nullptr) {
         return PROVEN_ERR_NOT_FOUND;
     }
-    if (c->label != nullptr) {
-        tree->alloc.free_fn(tree->alloc.ctx, c->label);
-    }
+    cmd_release(tree, c);
     *c = (gates_i_command_t){0}; /* queued invocations find nothing and do nothing */
     commands_changed(tree, true);
     return GATES_OK;
@@ -214,6 +220,35 @@ gates_err_t gates_command_set_label(gates_tree_t *tree, gates_node_t scope,
     c->label_len = (gates_u32)label.size;
     commands_changed(tree, true);
     return GATES_OK;
+}
+
+gates_err_t gates_command_set_submenu(gates_tree_t *tree, gates_node_t scope, gates_command_id_t id,
+                                     const gates_command_id_t *ids, gates_u32 count) {
+    gates_i_command_t *c = tree != nullptr ? find_h(tree, scope, id) : nullptr;
+    if (c == nullptr) return PROVEN_ERR_NOT_FOUND;
+    if (count > 0 && ids == nullptr) return PROVEN_ERR_INVALID_ARG;
+    for (gates_u32 k = 0; k < count; k++) {
+        if (ids[k] == id) return PROVEN_ERR_INVALID_ARG; /* a menu inside itself */
+    }
+    gates_command_id_t *copy = nullptr;
+    if (count > 0) {
+        proven_result_mem_mut_t r = tree->alloc.alloc_fn(tree->alloc.ctx, count * sizeof *copy, alignof(gates_command_id_t));
+        if (!proven_is_ok(r.err)) return r.err; /* the old list kept */
+        copy = (gates_command_id_t *)r.value.ptr;
+        memcpy(copy, ids, count * sizeof *copy);
+    }
+    if (c->sub != nullptr) tree->alloc.free_fn(tree->alloc.ctx, c->sub);
+    c->sub = copy;
+    c->sub_count = count;
+    commands_changed(tree, true);
+    return GATES_OK;
+}
+
+const gates_command_id_t *gates_command_submenu(const gates_tree_t *tree, gates_node_t scope, gates_command_id_t id,
+                                                gates_u32 *count) {
+    const gates_i_command_t *c = tree != nullptr ? find_h(tree, scope, id) : nullptr;
+    if (count != nullptr) *count = c != nullptr ? c->sub_count : 0;
+    return c != nullptr ? c->sub : nullptr;
 }
 
 bool gates_command_exists(const gates_tree_t *tree, gates_node_t scope, gates_command_id_t id) {
@@ -331,11 +366,7 @@ gates_i_command_t *gates_i_command_with_role(const gates_tree_t *tree,
 }
 
 void gates_i_commands_free(gates_tree_t *tree) {
-    for (gates_u32 i = 0; i < tree->command_count; i++) {
-        if (tree->commands[i].label != nullptr) {
-            tree->alloc.free_fn(tree->alloc.ctx, tree->commands[i].label);
-        }
-    }
+    for (gates_u32 i = 0; i < tree->command_count; i++) cmd_release(tree, &tree->commands[i]);
     if (tree->commands != nullptr) {
         tree->alloc.free_fn(tree->alloc.ctx, tree->commands);
     }

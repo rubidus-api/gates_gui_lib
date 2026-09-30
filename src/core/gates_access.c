@@ -793,6 +793,11 @@ static gates_err_t item_info(gates_tree_t *tree, gates_u32 idx, gates_u64 item, 
             accel_str(b, &out->accelerator, &c->shortcut);
             out->states = (c->enabled ? 0u : GATES_ACCESS_DISABLED) | (c->checked ? GATES_ACCESS_CHECKED : 0u);
             out->actions = c->enabled ? GATES_ACCESS_INVOKE : 0u;
+            bool open = false;
+            if (gates_i_menu_sub_state(tree, idx, (gates_command_id_t)item, &open)) { /* a submenu (0.10.0) */
+                out->states |= GATES_ACCESS_EXPANDABLE | (open ? GATES_ACCESS_EXPANDED : 0u);
+                out->actions = c->enabled ? GATES_ACCESS_EXPAND : 0u;
+            }
         } else {
             out->states = GATES_ACCESS_DISABLED;
         }
@@ -1248,6 +1253,9 @@ gates_err_t gates_access_expand(gates_tree_t *tree, gates_node_t node, gates_u64
     if (gates_i_slot(tree, node.index)->kind == GATES_NODE_GROUP && item == 0) {
         if (!gates_i_group_foldable(tree, node.index)) return PROVEN_ERR_INVALID_ARG;
         return gates_i_group_toggle(tree, node.index, expand);
+    }
+    if (gates_i_slot(tree, node.index)->kind == GATES_NODE_MENU && item != 0 && !st->menu_is_list) {
+        return gates_i_menu_expand(tree, node.index, (gates_command_id_t)item, expand); /* a submenu entry */
     }
     if (gates_i_slot(tree, node.index)->kind == GATES_NODE_MENUBAR && item != 0) {
         if (st->mbar == nullptr || item > st->mbar->count) return PROVEN_ERR_INVALID_ARG;

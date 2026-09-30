@@ -1336,6 +1336,219 @@ static void test_tooltip_without_clock(void) {
 }
 
 
+/* -- submenus (0.10.0) ------------------------------------------------------------------ */
+
+enum { S_NEW = 1, S_RECENT, S_ALPHA, S_BETA, S_QUIT, S_DEEP, S_IN, S_INNER };
+
+typedef struct sub_app_t {
+    gates_tree_t *t;
+    gates_u64 now;
+    rec_t rec, mrec;
+} sub_app_t;
+
+static void make_sub(sub_app_t *a) {
+    memset(a, 0, sizeof *a);
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &a->t));
+    gates_tree_set_clock(a->t, fake_now, fake_changed, &a->now);
+    gates_node_t root = gates_tree_root(a->t);
+    static const char *labels[] = { "", "&New", "&Recent", "Alpha", "Beta", "&Quit", "&Deep", "In", "Innermost" };
+    for (gates_command_id_t id = S_NEW; id <= S_INNER; id++) {
+        gates_command_desc_t d = cmd(id, labels[id], (gates_shortcut_t){0}, &a->rec);
+        GT_ASSERT_OK(gates_command_register(a->t, root, &d));
+    }
+    static const gates_command_id_t recent[] = { S_ALPHA, S_BETA }, deep[] = { S_IN }, in[] = { S_INNER };
+    GT_ASSERT_OK(gates_command_set_submenu(a->t, root, S_RECENT, recent, 2));
+    GT_ASSERT_OK(gates_command_set_submenu(a->t, root, S_DEEP, deep, 1));
+    GT_ASSERT_OK(gates_command_set_submenu(a->t, root, S_IN, in, 1));
+    layout(a->t);
+}
+
+static gates_node_t open_ctx(sub_app_t *a, gates_point_t at) {
+    static const gates_command_id_t ids[] = { S_NEW, S_RECENT, 0, S_QUIT, S_DEEP };
+    gates_node_t m;
+    GT_ASSERT_OK(gates_menu_open(a->t, at, gates_tree_root(a->t), ids, 5, &m));
+    GT_ASSERT_OK(gates_widget_set_handler(a->t, m, record, &a->mrec));
+    layout(a->t);
+    return m;
+}
+
+static gates_node_t top_menu(gates_tree_t *t) {
+    return gates_access_last_child(t, (gates_access_ref_t){ gates_tree_root(t), 0 }).node;
+}
+
+static gates_point_t row_center(gates_tree_t *t, gates_node_t menu, gates_command_id_t id) {
+    gates_access_info_t i;
+    GT_ASSERT_OK(gates_access_info(t, menu, id, &i));
+    return (gates_point_t){ i.bounds.x + i.bounds.w / 2, i.bounds.y + i.bounds.h / 2 };
+}
+
+static void test_submenus(void) {
+    sub_app_t a;
+    make_sub(&a);
+    gates_tree_t *t = a.t;
+    gates_node_t root = gates_tree_root(t);
+    /* The API: a menu inside itself is refused; unknown commands are not found; 0 clears. */
+    static const gates_command_id_t self[] = { S_ALPHA, S_RECENT };
+    GT_ASSERT(gates_command_set_submenu(t, root, S_RECENT, self, 2) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_command_set_submenu(t, root, 99, self, 1) == PROVEN_ERR_NOT_FOUND);
+    GT_ASSERT(gates_command_set_submenu(t, root, S_RECENT, nullptr, 1) == PROVEN_ERR_INVALID_ARG);
+    gates_u32 n = 0;
+    const gates_command_id_t *list = gates_command_submenu(t, root, S_RECENT, &n);
+    GT_ASSERT(n == 2 && list[1] == S_BETA);
+    /* Keys: Right opens (the first entry selected), Left closes, Enter on the entry opens,
+     * choosing in the submenu invokes and closes the chain; the program's menu reports the id. */
+    gates_node_t m = open_ctx(&a, (gates_point_t){ 20, 20 });
+    GT_ASSERT(key(t, GATES_KEY_DOWN) && key(t, GATES_KEY_DOWN)); /* Recent */
+    gates_access_info_t info;
+    GT_ASSERT_OK(gates_access_info(t, m, S_RECENT, &info));
+    GT_ASSERT((info.states & GATES_ACCESS_EXPANDABLE) && !(info.states & GATES_ACCESS_EXPANDED) &&
+              (info.actions & GATES_ACCESS_EXPAND));
+    GT_ASSERT(key(t, GATES_KEY_RIGHT));
+    layout(t);
+    GT_ASSERT(gates_tree_overlay_count(t) == 2);
+    gates_node_t child = top_menu(t);
+    GT_ASSERT(gates_access_focus_ref(t).item == S_ALPHA && gates_node_eq(gates_access_focus_ref(t).node, child));
+    GT_ASSERT_OK(gates_access_info(t, m, S_RECENT, &info));
+    GT_ASSERT(info.states & GATES_ACCESS_EXPANDED);
+    gates_rect_t pr = gates_node_layout_rect(t, m), cr = gates_node_layout_rect(t, child);
+    GT_ASSERT(cr.x >= pr.x + pr.w - 4); /* beside the parent, at its right */
+    GT_ASSERT(key(t, GATES_KEY_DOWN)); /* Beta in the submenu */
+    GT_ASSERT_OK(gates_access_expand(t, m, S_RECENT, true)); /* open already: kept as it is */
+    GT_ASSERT(gates_node_eq(top_menu(t), child) && gates_access_focus_ref(t).item == S_BETA);
+    GT_ASSERT(key(t, GATES_KEY_LEFT));
+    GT_ASSERT(gates_tree_overlay_count(t) == 1 && gates_access_focus_ref(t).item == S_RECENT);
+    GT_ASSERT(key(t, GATES_KEY_ENTER));
+    GT_ASSERT(gates_tree_overlay_count(t) == 2 && a.rec.cmd[S_RECENT] == 0); /* opened, not invoked */
+    GT_ASSERT(key(t, GATES_KEY_ESCAPE)); /* Escape in a submenu: back to the parent only */
+    GT_ASSERT(gates_tree_overlay_count(t) == 1);
+    GT_ASSERT(key(t, GATES_KEY_RIGHT) && key(t, GATES_KEY_DOWN) && key(t, GATES_KEY_ENTER)); /* Beta */
+    dispatch(t);
+    GT_ASSERT(a.rec.cmd[S_BETA] == 1 && gates_tree_overlay_count(t) == 0);
+    GT_ASSERT(a.mrec.n == 1 && a.mrec.kind[0] == GATES_EVENT_MENU_CLOSED && a.mrec.result[0] == S_BETA);
+    /* Pointer: resting on the entry opens it after the pause; another row closes it; a click opens at once. */
+    a.mrec.n = 0;
+    m = open_ctx(&a, (gates_point_t){ 20, 20 });
+    pointer(t, GATES_POINTER_MOVE, row_center(t, m, S_RECENT));
+    a.now += GATES_MENU_SUB_DELAY_MS - 1;
+    (void)gates_tree_run_timers(t);
+    GT_ASSERT(gates_tree_overlay_count(t) == 1);
+    a.now += 1;
+    (void)gates_tree_run_timers(t);
+    GT_ASSERT(gates_tree_overlay_count(t) == 2);
+    layout(t);
+    child = top_menu(t);
+    gates_point_t rc = row_center(t, m, S_RECENT);
+    pointer(t, GATES_POINTER_MOVE, (gates_point_t){ rc.x + 5, rc.y }); /* moving along its row: it stays */
+    GT_ASSERT(gates_tree_overlay_count(t) == 2);
+    pointer(t, GATES_POINTER_MOVE, row_center(t, child, S_ALPHA)); /* into the submenu: it stays */
+    GT_ASSERT(gates_tree_overlay_count(t) == 2);
+    pointer(t, GATES_POINTER_MOVE, row_center(t, m, S_NEW)); /* another row of the parent */
+    GT_ASSERT(gates_tree_overlay_count(t) == 1);
+    pointer(t, GATES_POINTER_MOVE, row_center(t, m, S_RECENT)); /* resting, then moving on before the pause */
+    pointer(t, GATES_POINTER_MOVE, row_center(t, m, S_QUIT));
+    a.now += GATES_MENU_SUB_DELAY_MS;
+    (void)gates_tree_run_timers(t);
+    GT_ASSERT(gates_tree_overlay_count(t) == 1);
+    pointer(t, GATES_POINTER_MOVE, row_center(t, m, S_RECENT)); /* resting, then the entry is disabled */
+    GT_ASSERT_OK(gates_command_set_enabled(t, root, S_RECENT, false));
+    a.now += GATES_MENU_SUB_DELAY_MS;
+    (void)gates_tree_run_timers(t);
+    GT_ASSERT(gates_tree_overlay_count(t) == 1);
+    GT_ASSERT_OK(gates_command_set_enabled(t, root, S_RECENT, true));
+    click_at(t, row_center(t, m, S_RECENT));
+    GT_ASSERT(gates_tree_overlay_count(t) == 2);
+    layout(t);
+    child = top_menu(t);
+    click_at(t, row_center(t, child, S_ALPHA));
+    dispatch(t);
+    GT_ASSERT(a.rec.cmd[S_ALPHA] == 1 && gates_tree_overlay_count(t) == 0 && a.mrec.result[0] == S_ALPHA);
+    /* Nested three deep; a press outside every menu closes them all. */
+    m = open_ctx(&a, (gates_point_t){ 20, 20 });
+    GT_ASSERT_OK(gates_access_expand(t, m, S_DEEP, true));
+    layout(t);
+    GT_ASSERT_OK(gates_access_expand(t, top_menu(t), S_IN, true));
+    layout(t);
+    GT_ASSERT(gates_tree_overlay_count(t) == 3);
+    GT_ASSERT_OK(gates_access_expand(t, m, S_DEEP, false)); /* collapsing closes what is under it */
+    GT_ASSERT(gates_tree_overlay_count(t) == 1);
+    GT_ASSERT_OK(gates_access_invoke(t, m, S_DEEP)); /* invoking a submenu entry opens it */
+    GT_ASSERT(gates_tree_overlay_count(t) == 2 && a.rec.cmd[S_DEEP] == 0);
+    layout(t);
+    GT_ASSERT_OK(gates_access_expand(t, top_menu(t), S_IN, true));
+    layout(t);
+    click_at(t, (gates_point_t){ VW - 2, VH - 2 });
+    GT_ASSERT(gates_tree_overlay_count(t) == 0);
+    GT_ASSERT(gates_access_expand(t, root, S_DEEP, true) == PROVEN_ERR_INVALID_ARG);
+    /* Near the right edge a submenu opens at the parent's left. */
+    m = open_ctx(&a, (gates_point_t){ VW - 10, 20 });
+    GT_ASSERT_OK(gates_access_expand(t, m, S_RECENT, true));
+    layout(t);
+    pr = gates_node_layout_rect(t, m);
+    cr = gates_node_layout_rect(t, top_menu(t));
+    GT_ASSERT(cr.x + cr.w <= pr.x + 4);
+    /* The entry shows an arrow; the menu keeps room for it. */
+    gates_draw_list_t dl;
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    GT_ASSERT_OK(gates_paint_tree(t, &dl, theme, be));
+    char buf[1024];
+    draw_texts(&dl, buf, sizeof buf);
+    GT_ASSERT(strstr(buf, ">") != nullptr);
+    gates_draw_list_deinit(&dl);
+    gates_tree_dismiss_menus(t);
+    GT_ASSERT(gates_tree_overlay_count(t) == 0);
+    /* A cleared submenu is an ordinary entry again (and the menu needs no room for its arrow). */
+    static const gates_command_id_t short_ids[] = { S_NEW, S_RECENT };
+    gates_node_t wm;
+    GT_ASSERT_OK(gates_menu_open(t, (gates_point_t){ 20, 20 }, root, short_ids, 2, &wm));
+    layout(t);
+    gates_i32 with_arrow = gates_node_layout_rect(t, wm).w;
+    gates_tree_dismiss_menus(t);
+    GT_ASSERT_OK(gates_command_set_submenu(t, root, S_RECENT, nullptr, 0));
+    GT_ASSERT_OK(gates_menu_open(t, (gates_point_t){ 20, 20 }, root, short_ids, 2, &wm));
+    layout(t);
+    GT_ASSERT(gates_node_layout_rect(t, wm).w < with_arrow);
+    gates_tree_dismiss_menus(t);
+    m = open_ctx(&a, (gates_point_t){ 20, 20 });
+    GT_ASSERT_OK(gates_access_info(t, m, S_RECENT, &info));
+    GT_ASSERT(!(info.states & GATES_ACCESS_EXPANDABLE));
+    GT_ASSERT_OK(gates_access_invoke(t, m, S_RECENT));
+    dispatch(t);
+    GT_ASSERT(a.rec.cmd[S_RECENT] == 1);
+    gates_tree_destroy(t); /* frees the submenu lists (ASan) */
+}
+
+/* In a menu bar's menu: Right on a submenu entry opens it, Right in the submenu goes to the
+ * next title, Left in the submenu only closes it. */
+static void test_submenus_in_bar(void) {
+    bapp_t a;
+    make_bapp(&a, (gates_allocator_t){0});
+    gates_tree_t *t = a.t;
+    gates_node_t root = gates_tree_root(t);
+    static const gates_command_id_t more[] = { C_CUT, C_PASTE };
+    GT_ASSERT_OK(gates_command_set_submenu(t, root, C_OPEN, more, 2));
+    layout(t);
+    GT_ASSERT_OK(gates_menubar_open(t, a.bar, 0)); /* File, keyboard: New selected */
+    layout(t);
+    GT_ASSERT(key(t, GATES_KEY_DOWN)); /* Open... */
+    GT_ASSERT(key(t, GATES_KEY_RIGHT));
+    layout(t);
+    GT_ASSERT(gates_tree_overlay_count(t) == 2 && gates_menubar_open_index(t, a.bar) == 0);
+    GT_ASSERT(key(t, GATES_KEY_LEFT)); /* out of the submenu, File stays */
+    GT_ASSERT(gates_tree_overlay_count(t) == 1 && gates_menubar_open_index(t, a.bar) == 0);
+    GT_ASSERT(key(t, GATES_KEY_RIGHT)); /* into it again */
+    GT_ASSERT(gates_tree_overlay_count(t) == 2);
+    GT_ASSERT(key(t, GATES_KEY_RIGHT)); /* Cut has no submenu: the next title */
+    layout(t);
+    GT_ASSERT(gates_menubar_open_index(t, a.bar) == 1 && gates_tree_overlay_count(t) == 1);
+    GT_ASSERT(key(t, GATES_KEY_LEFT)); /* back to File */
+    layout(t);
+    GT_ASSERT(gates_menubar_open_index(t, a.bar) == 0);
+    GT_ASSERT(key(t, GATES_KEY_DOWN) && key(t, GATES_KEY_RIGHT) && key(t, GATES_KEY_DOWN) && key(t, GATES_KEY_ENTER));
+    dispatch(t);
+    GT_ASSERT(a.rec.cmd[C_PASTE] == 1 && gates_tree_overlay_count(t) == 0 && !gates_menubar_active(t, a.bar));
+    gates_tree_destroy(t);
+}
+
 /* -- tabs -------------------------------------------------------------------------------- */
 
 typedef struct tabs_app_t {
@@ -1773,6 +1986,8 @@ int main(void) {
     test_tooltips();
     test_tooltip_changes();
     test_tooltip_without_clock();
+    test_submenus();
+    test_submenus_in_bar();
     test_tabs();
     test_tabs_overflow();
     test_state();

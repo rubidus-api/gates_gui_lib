@@ -24,7 +24,9 @@
  * move, Down/Up/Enter/Space open, a title's mnemonic letter opens it, Escape
  * leaves. In an open menu Left/Right go to the neighbouring menu, Escape goes
  * back to the highlighted title, an entry's mnemonic letter chooses it. The bar
- * is not a Tab stop; a modal dialog makes it unreachable. No submenus yet.
+ * is not a Tab stop; a modal dialog makes it unreachable. Entries may open
+ * submenus (gates_command_set_submenu, gates/overlay.h); in one, Right on an
+ * entry without a submenu goes to the next title and Left closes the submenu.
  * Platform-free. */
 #ifndef GATES_FRAME_H
 #define GATES_FRAME_H

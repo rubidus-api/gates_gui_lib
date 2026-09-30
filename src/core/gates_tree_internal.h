@@ -51,6 +51,8 @@ typedef struct gates_i_overlay_t {
     gates_u32 prev_scope;        /* dialog: focus_scope to restore */
     bool needs_focus;            /* dialog: focus its first control at the next layout */
     bool pressed_inside;         /* menu: a press started inside it */
+    bool flip_left;              /* submenu: when it does not fit at the right, end at alt_right */
+    gates_i32 alt_right;
 } gates_i_overlay_t;
 
 /* A node's message handler (gates_post.c). */
@@ -103,6 +105,8 @@ typedef struct gates_i_command_t {
     gates_command_fn invoke;
     void *user;
     gates_u32 icon;              /* 0 = none */
+    gates_command_id_t *sub;     /* a submenu's entries (owned copy), null = none (0.10.0) */
+    gates_u32 sub_count;
 } gates_i_command_t;
 
 #define GATES_NONE UINT32_MAX
@@ -217,6 +221,11 @@ typedef struct gates_widget_state_t {
     bool menu_from_bar;          /* opened from the menu bar (0.3.0): title menu_bar_title */
     gates_u32 menu_bar_title;
     gates_i32 menu_min_w;        /* a choice's list: at least as wide as the choice */
+    /* Submenus (0.10.0): the menu that opened this one (GATES_NONE for a
+     * menu the program opened) and the row whose submenu is open here (-1). */
+    gates_u32 menu_parent_index;
+    gates_u32 menu_parent_generation;
+    gates_i32 menu_child_row;
     /* Radio group / choice: one allocation holds array and labels. */
     bool has_options;
     gates_i_option_t *opts;
@@ -450,6 +459,10 @@ struct gates_tree {
     gates_u8 tip_state;          /* GATES_I_TIP_OFF / _PENDING / _SHOWN */
     bool tip_by_focus;           /* armed by keyboard focus, not the pointer */
     gates_timer_id_t tip_timer;  /* 0 = none */
+    /* A submenu row the pointer rests on opens after a pause (0.10.0). */
+    gates_timer_id_t sub_timer;
+    gates_u32 sub_menu_index, sub_menu_generation;
+    gates_i32 sub_row;
     gates_rect_t tip_box;
     gates_u8 *tip_text;          /* the shown text (a toolbar button's is composed) */
     gates_u32 tip_len;
@@ -734,6 +747,9 @@ bool gates_i_form_field_info(const gates_tree_t *tree, gates_u32 editor_idx,
                              gates_i_field_info_t *out);
 /* Chooses and invokes a menu entry by command id, like a click (gates_overlay.c). */
 gates_err_t gates_i_menu_invoke(gates_tree_t *tree, gates_u32 menu_idx, gates_command_id_t id);
+/* A submenu entry's state and its opening or closing (0.10.0). */
+bool gates_i_menu_sub_state(const gates_tree_t *tree, gates_u32 menu_idx, gates_command_id_t id, bool *open);
+gates_err_t gates_i_menu_expand(gates_tree_t *tree, gates_u32 menu_idx, gates_command_id_t id, bool expand);
 /* Menu row geometry for accessibility bounds. */
 gates_rect_t gates_i_menu_row_rect(const gates_tree_t *tree, gates_u32 menu_idx, gates_u32 row);
 

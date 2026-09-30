@@ -5,6 +5,7 @@
 #include <gates/widget.h>
 #include <gates/layout.h>
 #include <gates/ui.h>
+#include <gates/timer.h>
 #include "gates_tree_internal.h"
 
 #include <string.h>
@@ -224,6 +225,7 @@ typedef struct menu_row_t {
     bool checked;
     gates_str_t label;
     const gates_shortcut_t *shortcut;
+    bool sub;                    /* opens a submenu (0.10.0) */
 } menu_row_t;
 
 /* The choice a list belongs to (its state), or null for a command menu. */
@@ -259,7 +261,7 @@ static menu_row_t menu_row(const gates_tree_t *tree, const gates_widget_state_t 
     if (c != nullptr) {
         row = (menu_row_t){ .present = true, .markup = true, .icon = c->icon, .enabled = c->enabled, .checked = c->checked,
                             .label = { .ptr = c->label, .size = c->label_len },
-                            .shortcut = &c->shortcut };
+                            .shortcut = &c->shortcut, .sub = c->sub_count > 0 };
     }
     return row;
 }
@@ -270,9 +272,97 @@ static bool menu_selectable(const gates_tree_t *tree, const gates_widget_state_t
     return mr.present && mr.enabled;
 }
 
-static void menu_remove(gates_tree_t *tree, gates_u32 i, gates_u32 result) {
+/* -- submenus (0.10.0) ------------------------------------------------------------ */
+
+/* The overlay record of a menu's parent, or -1 (a menu the program opened). */
+static gates_i32 parent_overlay(const gates_tree_t *tree, gates_u32 i) {
+    const gates_widget_state_t *st = state_at(tree, tree->overlays[i].index);
+    if (st == nullptr || st->menu_parent_index == GATES_NONE) return -1;
+    return find_overlay(tree, st->menu_parent_index, st->menu_parent_generation);
+}
+
+/* The menu the program opened at the start of this one's chain. */
+static gates_u32 chain_root(const gates_tree_t *tree, gates_u32 i) {
+    for (gates_i32 p = parent_overlay(tree, i); p >= 0; p = parent_overlay(tree, (gates_u32)p)) i = (gates_u32)p;
+    return i;
+}
+
+static bool in_chain_of(const gates_tree_t *tree, gates_u32 i, gates_u32 ancestor) {
+    for (gates_i32 p = (gates_i32)i; p >= 0; p = parent_overlay(tree, (gates_u32)p)) {
+        if ((gates_u32)p == ancestor) return true;
+    }
+    return false;
+}
+
+static void menu_remove(gates_tree_t *tree, gates_u32 i, gates_u32 result);
+
+/* Closes the submenus open above menu i (its children, theirs...). */
+static void close_children(gates_tree_t *tree, gates_u32 i) {
+    while (tree->overlay_count > i + 1) {
+        gates_u32 top = tree->overlay_count - 1;
+        if (tree->overlays[top].kind != GATES_NODE_MENU || !in_chain_of(tree, top, i)) break;
+        menu_remove(tree, top, 0);
+    }
+    gates_widget_state_t *st = i < tree->overlay_count ? state_at(tree, tree->overlays[i].index) : nullptr;
+    if (st != nullptr && st->menu_child_row >= 0) {
+        st->menu_child_row = -1;
+        gates_i_mark_dirty(tree, tree->overlays[i].index, GATES_DIRTY_PAINT);
+    }
+}
+
+static gates_err_t menu_create(gates_tree_t *tree, gates_point_t at, gates_i32 above_y,
+                               gates_node_t scope, const gates_command_id_t *ids, gates_u32 count,
+                               gates_node_t *out_menu);
+static void menu_step(gates_tree_t *tree, gates_u32 idx, gates_i32 from, gates_i32 dir);
+gates_rect_t gates_i_menu_row_rect(const gates_tree_t *tree, gates_u32 menu_idx, gates_u32 row);
+
+/* Opens the submenu of menu i's row (its command's list), beside the row. */
+static gates_err_t open_sub(gates_tree_t *tree, gates_u32 i, gates_i32 row, bool keyboard) {
     gates_u32 idx = tree->overlays[i].index;
+    gates_widget_state_t *st = state_at(tree, idx);
+    if (st == nullptr || row < 0 || (gates_u32)row >= st->menu_count) return PROVEN_ERR_INVALID_ARG;
+    if (st->menu_child_row == row && tree->overlay_count > i + 1) return GATES_OK; /* open already */
+    close_children(tree, i);
+    const gates_i_command_t *c = gates_i_command_find(tree, st->menu_scope_index, st->menu_scope_generation,
+                                                      st->menu_ids[row]);
+    if (c == nullptr || c->sub_count == 0 || !c->enabled) return PROVEN_ERR_INVALID_STATE;
+    gates_rect_t rr = gates_i_menu_row_rect(tree, idx, (gates_u32)row);
+    gates_rect_t mr = gates_i_slot(tree, idx)->layout_rect;
+    gates_node_t child;
+    gates_err_t err = menu_create(tree, (gates_point_t){ mr.x + mr.w - 2, rr.y - MENU_PAD }, rr.y + rr.h,
+                                  (gates_node_t){ .index = st->menu_scope_index, .generation = st->menu_scope_generation },
+                                  c->sub, c->sub_count, &child);
+    if (!gates_is_ok(err)) return err;
+    gates_widget_state_t *cs = state_at(tree, child.index);
+    cs->menu_parent_index = idx;
+    cs->menu_parent_generation = gates_i_slot(tree, idx)->generation;
+    gates_i_overlay_t *co = &tree->overlays[tree->overlay_count - 1];
+    co->flip_left = true;
+    co->alt_right = mr.x + 2;
+    st = state_at(tree, idx);
+    st->menu_child_row = row;
+    gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
+    gates_i_access_log(tree, GATES_ACCESS_CHANGED, idx, st->menu_ids[row]); /* expanded */
+    if (keyboard) menu_step(tree, child.index, -1, 1);
+    return GATES_OK;
+}
+
+static void menu_remove(gates_tree_t *tree, gates_u32 i, gates_u32 result) {
+    close_children(tree, i);
+    if (tree->sub_timer != 0 && tree->sub_menu_index == tree->overlays[i].index) {
+        (void)gates_timer_cancel(tree, tree->sub_timer);
+        tree->sub_timer = 0;
+    }
+    gates_u32 idx = tree->overlays[i].index;
+    gates_i32 parent = parent_overlay(tree, i);
     drop_record(tree, i);
+    if (parent >= 0) { /* a submenu: its parent's row is no longer open */
+        gates_widget_state_t *ps = state_at(tree, tree->overlays[parent].index);
+        if (ps != nullptr) {
+            ps->menu_child_row = -1;
+            gates_i_mark_dirty(tree, tree->overlays[parent].index, GATES_DIRTY_PAINT);
+        }
+    }
     gates_widget_state_t *st = state_at(tree, idx);
     bool from_bar = st != nullptr && st->menu_from_bar;
     if (st != nullptr && gates_i_wants_events(tree, idx)) {
@@ -312,6 +402,11 @@ static void menu_choose(gates_tree_t *tree, gates_u32 i) {
     if (st == nullptr || !menu_selectable(tree, st, st->menu_sel)) {
         return;
     }
+    if (menu_row(tree, st, st->menu_sel).sub) { /* a submenu entry opens, never invokes */
+        gates_err_t err = open_sub(tree, i, st->menu_sel, true);
+        if (!gates_is_ok(err)) tree->input_error = err;
+        return;
+    }
     gates_command_id_t id = st->menu_ids[st->menu_sel];
     if (st->menu_is_list) {
         /* A choice's list: the choice takes the option (its own VALUE_CHANGED). */
@@ -336,14 +431,14 @@ static void menu_choose(gates_tree_t *tree, gates_u32 i) {
         tree->input_error = err;
         id = 0; /* nothing was invoked */
     }
-    menu_remove(tree, i, id);
+    menu_remove(tree, chain_root(tree, i), id); /* the whole chain; the program's menu reports it */
 }
 
 /* Builds a menu overlay (commands of `scope`, or a choice's option list). */
 static gates_err_t menu_create(gates_tree_t *tree, gates_point_t at, gates_i32 above_y,
                                gates_node_t scope, const gates_command_id_t *ids, gates_u32 count,
                                gates_node_t *out_menu) {
-    if (tree->overlay_count >= GATES_I_OVERLAY_MAX) {
+    if (count == 0 || tree->overlay_count >= GATES_I_OVERLAY_MAX) {
         return PROVEN_ERR_OUT_OF_BOUNDS;
     }
     gates_allocator_t a = tree->alloc;
@@ -375,6 +470,8 @@ static gates_err_t menu_create(gates_tree_t *tree, gates_point_t at, gates_i32 a
     st->menu_sel = -1;
     st->menu_scope_index = scope.index;
     st->menu_scope_generation = scope.generation;
+    st->menu_parent_index = GATES_NONE;
+    st->menu_child_row = -1;
     tree->overlays[tree->overlay_count++] = (gates_i_overlay_t){
         .index = m.index,
         .generation = m.generation,
@@ -555,6 +652,7 @@ gates_rect_t gates_i_overlay_place(const gates_tree_t *tree, gates_u32 i, gates_
         return (gates_rect_t){ (viewport.w - w) / 2, (viewport.h - h) / 2, w, h };
     }
     gates_i32 x = o->at.x, y = o->at.y;
+    if (x + w > viewport.w && o->flip_left && o->alt_right - w >= 0) x = o->alt_right - w; /* a submenu opens left */
     if (x + w > viewport.w) x = viewport.w - w;
     if (y + h > viewport.h) y = o->above_y - h >= 0 ? o->above_y - h : viewport.h - h;
     if (x < 0) x = 0;
@@ -611,6 +709,10 @@ gates_size_t gates_i_menu_measure(const gates_tree_t *tree, const gates_widget_s
         if (lw > label_w) label_w = lw;
         char buf[24];
         gates_usize_t n = mr.shortcut != nullptr ? shortcut_text(mr.shortcut, buf, sizeof buf) : 0;
+        if (mr.sub) { /* room for the submenu arrow */
+            buf[0] = '>';
+            n = 1;
+        }
         if (n > 0) {
             gates_size_t ks = text->measure(text->ctx, font_size,
                                             (gates_str_t){ .ptr = (const gates_u8 *)buf, .size = n });
@@ -684,6 +786,10 @@ gates_err_t gates_i_menu_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
         }
         char buf[24];
         gates_usize_t n = c.shortcut != nullptr ? shortcut_text(c.shortcut, buf, sizeof buf) : 0;
+        if (c.sub) { /* a submenu: an arrow where a shortcut would be */
+            buf[0] = '>';
+            n = 1;
+        }
         if (gates_is_ok(err) && n > 0) {
             gates_str_t ks = { .ptr = (const gates_u8 *)buf, .size = n };
             gates_size_t sz = text->measure(text->ctx, font, ks);
@@ -721,6 +827,44 @@ static void menu_select(gates_tree_t *tree, gates_u32 idx, gates_i32 row) {
     }
 }
 
+/* Resting on a submenu row: it opens after GATES_MENU_SUB_DELAY_MS (at once
+ * without a clock); resting on another row of a parent closes its children. */
+static void sub_fire(gates_tree_t *tree, gates_node_t node, gates_timer_id_t id, void *user) {
+    (void)node;
+    (void)user;
+    if (id != tree->sub_timer) return;
+    tree->sub_timer = 0;
+    gates_i32 i = find_overlay(tree, tree->sub_menu_index, tree->sub_menu_generation);
+    if (i < 0) return;
+    const gates_widget_state_t *st = state_at(tree, tree->overlays[i].index);
+    if (st == nullptr || st->menu_sel != tree->sub_row) return; /* moved on */
+    gates_err_t err = open_sub(tree, (gates_u32)i, tree->sub_row, false);
+    if (!gates_is_ok(err)) tree->input_error = err;
+}
+
+static void hover_row(gates_tree_t *tree, gates_u32 i, gates_i32 row) {
+    gates_u32 idx = tree->overlays[i].index;
+    gates_widget_state_t *st = state_at(tree, idx);
+    if (st == nullptr || row == st->menu_child_row) return; /* on the row whose submenu is open */
+    if (tree->sub_timer != 0) {
+        (void)gates_timer_cancel(tree, tree->sub_timer);
+        tree->sub_timer = 0;
+    }
+    if (st->menu_child_row >= 0) close_children(tree, i);
+    if (row < 0 || !menu_row(tree, st, row).sub || !menu_selectable(tree, st, row)) return;
+    tree->sub_menu_index = idx;
+    tree->sub_menu_generation = gates_i_slot(tree, idx)->generation;
+    tree->sub_row = row;
+    gates_timer_id_t t = 0;
+    if (gates_is_ok(gates_timer_start(tree, gates_i_handle(tree, tree->root), GATES_MENU_SUB_DELAY_MS, false, sub_fire,
+                                      nullptr, &t))) {
+        tree->sub_timer = t;
+    } else {
+        gates_err_t err = open_sub(tree, i, row, false); /* no clock: at once */
+        if (!gates_is_ok(err)) tree->input_error = err;
+    }
+}
+
 gates_u32 gates_i_overlay_pointer(gates_tree_t *tree, const gates_pointer_event_t *ev,
                                   bool *consumed) {
     *consumed = false;
@@ -728,23 +872,32 @@ gates_u32 gates_i_overlay_pointer(gates_tree_t *tree, const gates_pointer_event_
         return tree->root;
     }
     gates_u32 top = tree->overlay_count - 1;
-    gates_i_overlay_t *o = &tree->overlays[top];
-    if (o->kind == GATES_NODE_DIALOG) {
-        return o->index; /* modal: nothing below is hit */
+    if (tree->overlays[top].kind == GATES_NODE_DIALOG) {
+        return tree->overlays[top].index; /* modal: nothing below is hit */
     }
     *consumed = true;
-    gates_u32 idx = o->index;
-    gates_widget_state_t *st = state_at(tree, idx);
-    gates_i32 row = menu_row_at(tree, idx, ev->pos);
+    /* The menu of the top chain under the pointer (a submenu over its parents). */
+    gates_u32 root_i = chain_root(tree, top);
+    gates_i32 hit = -1, row = -2;
+    for (gates_i32 k = (gates_i32)top; k >= (gates_i32)root_i; k--) {
+        if (tree->overlays[k].kind != GATES_NODE_MENU || !in_chain_of(tree, top, (gates_u32)k)) continue;
+        gates_i32 r = menu_row_at(tree, tree->overlays[k].index, ev->pos);
+        if (r != -2) {
+            hit = k;
+            row = r;
+            break;
+        }
+    }
+    gates_widget_state_t *rst = state_at(tree, tree->overlays[root_i].index);
     /* over the menu bar while one of its menus is open. */
-    if (st != nullptr && st->menu_from_bar && row == -2 && tree->menubar != GATES_NONE &&
+    if (hit < 0 && rst != nullptr && rst->menu_from_bar && tree->menubar != GATES_NONE &&
         gates_rect_contains(gates_i_slot(tree, tree->menubar)->layout_rect, ev->pos)) {
         gates_i32 t = gates_i_menubar_title_at(tree, tree->menubar, ev->pos);
         gates_err_t err = GATES_OK;
-        if (ev->action == GATES_POINTER_MOVE && t >= 0 && (gates_u32)t != st->menu_bar_title) {
+        if (ev->action == GATES_POINTER_MOVE && t >= 0 && (gates_u32)t != rst->menu_bar_title) {
             err = gates_i_menubar_open(tree, (gates_u32)t, false);
         } else if (ev->action == GATES_POINTER_DOWN) {
-            if (t < 0 || (gates_u32)t == st->menu_bar_title) {
+            if (t < 0 || (gates_u32)t == rst->menu_bar_title) {
                 gates_i_menubar_leave(tree);
             } else {
                 err = gates_i_menubar_open(tree, (gates_u32)t, false);
@@ -755,15 +908,20 @@ gates_u32 gates_i_overlay_pointer(gates_tree_t *tree, const gates_pointer_event_
         }
         return GATES_NONE;
     }
+    gates_u32 i = hit >= 0 ? (gates_u32)hit : top;
+    gates_i_overlay_t *o = &tree->overlays[i];
+    gates_u32 idx = o->index;
+    gates_widget_state_t *st = state_at(tree, idx);
     switch (ev->action) {
     case GATES_POINTER_MOVE:
-        if (row >= 0) {
+        if (hit >= 0 && row >= 0) {
             menu_select(tree, idx, menu_selectable(tree, st, row) ? row : -1);
+            hover_row(tree, i, row);
         }
         break;
     case GATES_POINTER_DOWN:
-        if (row == -2) {
-            menu_remove(tree, top, 0); /* outside: only closes (owner decision) */
+        if (hit < 0) {
+            menu_remove(tree, root_i, 0); /* outside every menu of the chain: only closes (owner decision) */
             return GATES_NONE;
         }
         o->pressed_inside = true;
@@ -772,9 +930,10 @@ gates_u32 gates_i_overlay_pointer(gates_tree_t *tree, const gates_pointer_event_
         }
         break;
     case GATES_POINTER_UP:
-        if (o->pressed_inside && row >= 0 && menu_selectable(tree, st, row)) {
+        if (hit >= 0 && o->pressed_inside && row >= 0 && menu_selectable(tree, st, row)) {
+            o->pressed_inside = false;
             menu_select(tree, idx, row);
-            menu_choose(tree, top);
+            menu_choose(tree, i); /* a submenu row opens it at once */
             return GATES_NONE;
         }
         o->pressed_inside = false;
@@ -832,21 +991,35 @@ bool gates_i_overlay_key(gates_tree_t *tree, const gates_key_event_t *ev) {
         }
         break;
     case GATES_KEY_LEFT:
-    case GATES_KEY_RIGHT:
-        if (st->menu_from_bar && tree->menubar != GATES_NONE) {
+    case GATES_KEY_RIGHT: {
+        bool right = ev->key == GATES_KEY_RIGHT;
+        if (right && menu_selectable(tree, st, st->menu_sel) && menu_row(tree, st, st->menu_sel).sub) {
+            gates_err_t err = open_sub(tree, top, st->menu_sel, true); /* into the submenu */
+            if (!gates_is_ok(err)) tree->input_error = err;
+            break;
+        }
+        if (!right && parent_overlay(tree, top) >= 0) {
+            menu_remove(tree, top, 0); /* out of the submenu */
+            break;
+        }
+        const gates_widget_state_t *rs = state_at(tree, tree->overlays[chain_root(tree, top)].index);
+        if (rs != nullptr && rs->menu_from_bar && tree->menubar != GATES_NONE) {
             gates_u32 bn = gates_menubar_count(tree, gates_i_handle(tree, tree->menubar));
             if (bn > 0) {
-                gates_u32 t = (st->menu_bar_title + (ev->key == GATES_KEY_LEFT ? bn - 1 : 1)) % bn;
+                gates_u32 t = (rs->menu_bar_title + (right ? 1 : bn - 1)) % bn;
                 gates_err_t err = gates_i_menubar_open(tree, t, true);
                 if (!gates_is_ok(err)) tree->input_error = err;
             }
         }
         break;
-    case GATES_KEY_F10:
-        if (st->menu_from_bar) {
+    }
+    case GATES_KEY_F10: {
+        const gates_widget_state_t *rs = state_at(tree, tree->overlays[chain_root(tree, top)].index);
+        if (rs != nullptr && rs->menu_from_bar) {
             gates_i_menubar_leave(tree);
         }
         break;
+    }
     default:
         /* A letter chooses the entry whose mnemonic it is (0.3.0). */
         if (ev->letter != 0 && !ev->ctrl && !st->menu_is_list) {
@@ -891,6 +1064,40 @@ gates_err_t gates_i_menu_invoke(gates_tree_t *tree, gates_u32 menu_idx, gates_co
             tree->input_error = before;
             return err;
         }
+    }
+    return PROVEN_ERR_INVALID_ARG;
+}
+
+/* Whether an entry opens a submenu (and whether it is open). */
+bool gates_i_menu_sub_state(const gates_tree_t *tree, gates_u32 menu_idx, gates_command_id_t id, bool *open) {
+    const gates_widget_state_t *st = state_at(tree, menu_idx);
+    *open = false;
+    for (gates_u32 r = 0; st != nullptr && r < st->menu_count; r++) {
+        if (st->menu_ids[r] != id || id == 0) continue;
+        if (!menu_row(tree, st, (gates_i32)r).sub) return false;
+        *open = st->menu_child_row == (gates_i32)r;
+        return true;
+    }
+    return false;
+}
+
+gates_err_t gates_i_menu_expand(gates_tree_t *tree, gates_u32 menu_idx, gates_command_id_t id, bool expand) {
+    gates_i32 i = -1;
+    for (gates_u32 k = 0; k < tree->overlay_count; k++) {
+        if (tree->overlays[k].index == menu_idx && tree->overlays[k].kind == GATES_NODE_MENU) i = (gates_i32)k;
+    }
+    gates_widget_state_t *st = state_at(tree, menu_idx);
+    bool open = false;
+    if (i < 0 || st == nullptr || !gates_i_menu_sub_state(tree, menu_idx, id, &open)) return PROVEN_ERR_INVALID_ARG;
+    for (gates_u32 r = 0; r < st->menu_count; r++) {
+        if (st->menu_ids[r] != id) continue;
+        if (!expand) {
+            if (open) close_children(tree, (gates_u32)i);
+            return GATES_OK;
+        }
+        if (!menu_selectable(tree, st, (gates_i32)r)) return PROVEN_ERR_INVALID_STATE;
+        menu_select(tree, menu_idx, (gates_i32)r);
+        return open_sub(tree, (gates_u32)i, (gates_i32)r, true);
     }
     return PROVEN_ERR_INVALID_ARG;
 }

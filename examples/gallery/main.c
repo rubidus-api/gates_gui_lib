@@ -36,7 +36,7 @@ enum {
     CMD_UNDO = 60, CMD_REDO, CMD_COLUMNS,
     CMD_OPEN_PIC = 40, CMD_SAVE_AS, CMD_FOLDER, CMD_COLOUR, CMD_ASK, CMD_OPEN_MANY,
     CMD_SAVE = 1, CMD_QUIT, CMD_SYSTEM, CMD_LIGHT, CMD_DARK, CMD_ZOOM_IN, CMD_ZOOM_OUT, CMD_ZOOM_RESET,
-    CMD_ABOUT, CMD_ABOUT_OK, CMD_STEP,
+    CMD_ABOUT, CMD_ABOUT_OK, CMD_STEP, CMD_THEME,
 };
 
 #define ROWS 200
@@ -1022,6 +1022,7 @@ static gates_err_t build(app_t *a) {
         { CMD_UNDO, "&Undo", { .letter = 'Z', .ctrl = true } },
         { CMD_REDO, "&Redo", { .letter = 'Y', .ctrl = true } },
         { CMD_COLUMNS, "&Columns...", {0} },
+        { CMD_THEME, "&Theme", {0} },
     };
     for (size_t i = 0; i < sizeof cmds / sizeof cmds[0]; i++) {
         gates_command_desc_t d = { .id = cmds[i].id, .label = cs(cmds[i].label), .shortcut = cmds[i].k,
@@ -1031,13 +1032,15 @@ static gates_err_t build(app_t *a) {
     }
     TRY(gates_menubar_create(t, root, root, &bar));
     static const gates_command_id_t file[] = { CMD_SAVE, 0, CMD_QUIT };
-    static const gates_command_id_t view[] = { CMD_SYSTEM, CMD_LIGHT, CMD_DARK, 0, CMD_ZOOM_IN, CMD_ZOOM_OUT,
-                                               CMD_ZOOM_RESET };
+    /* The themes are a submenu of View (0.10.0). */
+    static const gates_command_id_t themes[] = { CMD_SYSTEM, CMD_LIGHT, CMD_DARK };
+    TRY(gates_command_set_submenu(t, root, CMD_THEME, themes, 3));
+    static const gates_command_id_t view[] = { CMD_THEME, 0, CMD_ZOOM_IN, CMD_ZOOM_OUT, CMD_ZOOM_RESET };
     static const gates_command_id_t help[] = { CMD_ABOUT };
     static const gates_command_id_t edit[] = { CMD_UNDO, CMD_REDO, 0, CMD_COLUMNS };
     TRY(gates_menubar_add(t, bar, cs("&File"), file, 3, nullptr));
     TRY(gates_menubar_add(t, bar, cs("&Edit"), edit, 4, nullptr));
-    TRY(gates_menubar_add(t, bar, cs("&View"), view, 7, nullptr));
+    TRY(gates_menubar_add(t, bar, cs("&View"), view, 5, nullptr));
     TRY(gates_menubar_add(t, bar, cs("&Help"), help, 1, nullptr));
 
     TRY(gates_toolbar_create(t, root, root, &tools));

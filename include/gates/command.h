@@ -63,6 +63,16 @@ typedef struct gates_command_desc_t {
 [[nodiscard]] gates_err_t gates_command_set_label(gates_tree_t *tree, gates_node_t scope,
                                                   gates_command_id_t id, gates_str_t label);
 bool gates_command_exists(const gates_tree_t *tree, gates_node_t scope, gates_command_id_t id);
+/* Submenus (0.10.0): in a menu, this command's entry opens a menu of `ids`
+ * (commands of the same scope, 0 = separator; copied) instead of invoking it;
+ * a count of 0 makes it an ordinary entry again. Invoked any other way
+ * (shortcut, button) it runs as usual. INVALID_ARG when ids contain the
+ * command itself. */
+[[nodiscard]] gates_err_t gates_command_set_submenu(gates_tree_t *tree, gates_node_t scope, gates_command_id_t id,
+                                                    const gates_command_id_t *ids, gates_u32 count);
+/* The submenu's entries (borrowed until the next change), or null. */
+const gates_command_id_t *gates_command_submenu(const gates_tree_t *tree, gates_node_t scope, gates_command_id_t id,
+                                                gates_u32 *count);
 bool gates_command_enabled(const gates_tree_t *tree, gates_node_t scope, gates_command_id_t id);
 bool gates_command_checked(const gates_tree_t *tree, gates_node_t scope, gates_command_id_t id);
 gates_str_t gates_command_label(const gates_tree_t *tree, gates_node_t scope,

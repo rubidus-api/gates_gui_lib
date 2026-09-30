@@ -46,7 +46,15 @@ typedef struct gates_dialog_desc_t {
 /* Opens a context menu at `at` (window coordinates) listing the commands of
  * `scope` in order; id 0 draws a separator. Labels, checked marks, shortcuts
  * and enabled states come from the commands. Choosing an entry invokes its
- * command through the same queued, re-checked path as a shortcut. */
+ * command through the same queued, re-checked path as a shortcut.
+ * Submenus (0.10.0, gates_command_set_submenu): an entry that has one shows an
+ * arrow and opens it beside itself - Right, Enter, Space, a click, or the
+ * pointer resting on it for GATES_MENU_SUB_DELAY_MS; Left or Escape close it;
+ * another row of the parent closes it. Choosing in a submenu closes the whole
+ * chain, and the menu the program opened reports MENU_CLOSED with the id. A
+ * press outside every menu of the chain closes them all. Submenus count
+ * against the 8 overlays. */
+#define GATES_MENU_SUB_DELAY_MS 300u
 [[nodiscard]] gates_err_t gates_menu_open(gates_tree_t *tree, gates_point_t at,
                                           gates_node_t scope, const gates_command_id_t *ids,
                                           gates_u32 count, gates_node_t *out_menu);

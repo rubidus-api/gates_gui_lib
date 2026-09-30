@@ -90,6 +90,12 @@ enabled states come from the commands. Choosing an entry invokes its command thr
 queued, checked path as a shortcut. Arrows move, Enter chooses, Escape or a click outside only
 closes (a click outside never also clicks what is under it).
 
+`gates_command_set_submenu(tree, scope, id, ids, count)` gives an entry a submenu of other
+commands of the same scope. The entry shows an arrow; Right, Enter, a click, or resting the
+pointer on it opens the submenu beside it, and Left or Escape closes it again. Choosing inside a
+submenu invokes that command and closes every menu of the chain; the menu you opened reports
+MENU_CLOSED with the command's id. The same works in menu bar menus.
+
 ## Undo and redo
 
 Text boxes undo their own typing. For the program's own data - a renamed item, a moved row, a
