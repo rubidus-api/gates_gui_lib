@@ -447,6 +447,7 @@ static gates_role_t role_of(const gates_tree_t *tree, gates_u32 idx) {
 
 gates_u64 gates_access_item_count(gates_tree_t *tree, gates_node_t node) {
     if (tree == nullptr || !gates_i_valid(tree, node)) return 0;
+    if (node.index == tree->root) return gates_tooltip_shown(tree, nullptr, nullptr, nullptr, nullptr) ? 1u : 0u;
     const gates_node_slot_t *s = gates_i_slot(tree, node.index);
     const gates_widget_state_t *st = state_of(tree, node.index);
     if (st == nullptr) return 0;
@@ -470,6 +471,9 @@ gates_u64 gates_access_item_count(gates_tree_t *tree, gates_node_t node) {
 
 gates_u64 gates_access_item_at(gates_tree_t *tree, gates_node_t node, gates_u64 index) {
     if (tree == nullptr || !gates_i_valid(tree, node)) return 0;
+    if (node.index == tree->root) {
+        return index == 0 && gates_tooltip_shown(tree, nullptr, nullptr, nullptr, nullptr) ? GATES_ACCESS_TOOLTIP_ITEM : 0;
+    }
     const gates_node_slot_t *s = gates_i_slot(tree, node.index);
     const gates_widget_state_t *st = state_of(tree, node.index);
     if (st == nullptr) return 0;
@@ -605,9 +609,10 @@ gates_access_ref_t gates_access_next(gates_tree_t *tree, gates_access_ref_t ref)
         gates_i64 at = item_pos(tree, ref.node, ref.item);
         if (at < 0) return NO_REF; /* a selected row scrolled away has no siblings */
         gates_u64 i = (gates_u64)at + 1;
-        return i < gates_access_item_count(tree, ref.node)
-                   ? (gates_access_ref_t){ ref.node, gates_access_item_at(tree, ref.node, i) }
-                   : NO_REF;
+        if (i >= gates_access_item_count(tree, ref.node)) {
+            return ref.node.index == tree->root ? ref_of(tree, overlay_from(tree, 0, 1), 0) : NO_REF;
+        }
+        return (gates_access_ref_t){ ref.node, gates_access_item_at(tree, ref.node, i) };
     }
     gates_i32 op = overlay_pos(tree, ref.node.index);
     if (op >= 0) return ref_of(tree, overlay_from(tree, op + 1, 1), 0);
@@ -635,6 +640,9 @@ gates_access_ref_t gates_access_prev(gates_tree_t *tree, gates_access_ref_t ref)
     if (op >= 0) {
         gates_u32 o = overlay_from(tree, op - 1, -1);
         if (o != GATES_NONE) return ref_of(tree, o, 0);
+        gates_node_t root = gates_i_handle(tree, tree->root);
+        gates_u64 n = gates_access_item_count(tree, root);
+        if (n > 0) return (gates_access_ref_t){ root, gates_access_item_at(tree, root, n - 1) };
         return ref_of(tree, shown_from(tree, gates_i_slot(tree, tree->root)->last_child, false), 0);
     }
     const gates_node_slot_t *s = gates_i_slot(tree, idx);
@@ -722,6 +730,18 @@ gates_access_ref_t gates_access_focus_ref(gates_tree_t *tree) {
 
 static gates_err_t item_info(gates_tree_t *tree, gates_u32 idx, gates_u64 item, sbuf_t *b,
                              gates_access_info_t *out) {
+    if (idx == tree->root) { /* the tooltip shown now (0.10.0) */
+        gates_str_t text;
+        gates_rect_t box;
+        if (item != GATES_ACCESS_TOOLTIP_ITEM || !gates_tooltip_shown(tree, nullptr, nullptr, &text, &box)) {
+            return PROVEN_ERR_INVALID_ARG;
+        }
+        gates_u32 at = put(b, text);
+        bind(b, &out->name, at, text.size);
+        out->role = GATES_ROLE_TOOLTIP;
+        out->bounds = box;
+        return GATES_OK;
+    }
     const gates_node_slot_t *s = gates_i_slot(tree, idx);
     const gates_widget_state_t *st = state_of(tree, idx);
     if (st == nullptr) return PROVEN_ERR_INVALID_ARG;

@@ -127,8 +127,10 @@ gates_u32 gates_toolbar_shown(const gates_tree_t *tree, gates_node_t bar);
  * after keyboard focus reaches it; it hides on a press, a key, when the pointer
  * or the focus leaves, when the node is disabled, hidden or destroyed, and
  * after GATES_TOOLTIP_SHOW_MS. Moving from one node with a tooltip to another
- * while one is shown switches at once. It never takes input. Assistive
- * technology reads it as the node's help text. Tooltips need the tree's clock
+ * while one is shown switches at once; a modal dialog opening hides it. It never
+ * takes input. Assistive technology reads it as the node's help text, and the
+ * shown tooltip is also an element (a ToolTip, announced when it opens): item
+ * GATES_ACCESS_TOOLTIP_ITEM of the root (0.10.0). Tooltips need the tree's clock
  * (every window has one); nothing is timed while no hovered or focused node has
  * a tooltip. */
 #define GATES_TOOLTIP_DELAY_MS 500u

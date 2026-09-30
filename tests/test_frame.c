@@ -1159,8 +1159,45 @@ static void test_tooltips(void) {
     gates_access_info_t info;
     GT_ASSERT_OK(gates_access_info(t, a.other, 0, &info));
     GT_ASSERT(seq(info.description, GATES_STR("Does the other thing")));
+    /* 0.10.0: the shown tooltip is an element too - the root's item, after its nodes. */
+    gates_access_ref_t root = { gates_tree_root(t), 0 };
+    GT_ASSERT(gates_access_item_count(t, root.node) == 1);
+    gates_access_ref_t tipref = gates_access_last_child(t, root);
+    GT_ASSERT(gates_node_eq(tipref.node, root.node) && tipref.item == GATES_ACCESS_TOOLTIP_ITEM);
+    GT_ASSERT_OK(gates_access_info(t, root.node, GATES_ACCESS_TOOLTIP_ITEM, &info));
+    GT_ASSERT(info.role == GATES_ROLE_TOOLTIP && seq(info.name, GATES_STR("Does the other thing")));
+    GT_ASSERT(info.bounds.x == box.x && info.bounds.y == box.y && info.bounds.w == box.w);
+    gates_access_ref_t before = gates_access_prev(t, tipref); /* the root's last shown node */
+    GT_ASSERT(before.item == 0 && gates_node_eq(gates_access_next(t, before).node, root.node) &&
+              gates_access_next(t, before).item == GATES_ACCESS_TOOLTIP_ITEM);
+    GT_ASSERT(gates_node_eq(gates_access_parent(t, tipref).node, root.node));
+    { /* a menu the program opens comes after the tooltip in the root's children */
+        gates_node_t menu;
+        static const gates_command_id_t ids[] = { C_UNDO };
+        GT_ASSERT_OK(gates_menu_open(t, (gates_point_t){ 5, 5 }, gates_tree_root(t), ids, 1, &menu));
+        GT_ASSERT(gates_tooltip_shown(t, nullptr, nullptr, nullptr, nullptr));
+        GT_ASSERT(gates_node_eq(gates_access_next(t, tipref).node, menu));
+        gates_access_ref_t back = gates_access_prev(t, (gates_access_ref_t){ menu, 0 });
+        GT_ASSERT(gates_node_eq(back.node, root.node) && back.item == GATES_ACCESS_TOOLTIP_ITEM);
+        GT_ASSERT_OK(gates_menu_close(t, menu));
+        (void)gates_tree_dispatch_events(t, 0);
+        (void)gates_tree_flush_destroys(t);
+        /* A modal dialog covers the tooltip's node: the tooltip goes. */
+        gates_node_t dlg, content;
+        GT_ASSERT_OK(gates_dialog_open(t, &(gates_dialog_desc_t){ .title = GATES_STR("d") }, &dlg, &content));
+        GT_ASSERT(!gates_tooltip_shown(t, nullptr, nullptr, nullptr, nullptr));
+        GT_ASSERT_OK(gates_dialog_close(t, dlg, GATES_DIALOG_CANCELED));
+        (void)gates_tree_dispatch_events(t, 0);
+        (void)gates_tree_flush_destroys(t);
+        pointer(t, GATES_POINTER_MOVE, (gates_point_t){ 1, VH - 1 }); /* rest on it again */
+        pointer(t, GATES_POINTER_MOVE, center(t, a.other));
+        advance(&a, GATES_TOOLTIP_DELAY_MS);
+        GT_ASSERT(gates_tooltip_shown(t, nullptr, nullptr, nullptr, &box));
+    }
     advance(&a, GATES_TOOLTIP_SHOW_MS);
     GT_ASSERT(tip_is(t, a.other, nullptr));
+    GT_ASSERT(gates_access_item_count(t, root.node) == 0 &&
+              gates_access_info(t, root.node, GATES_ACCESS_TOOLTIP_ITEM, &info) == PROVEN_ERR_INVALID_ARG);
     GT_ASSERT(gates_tree_timer_count(t) == 0);
     /* The tooltip never takes input: a click lands on what is under it. */
     pointer(t, GATES_POINTER_MOVE, (gates_point_t){ 1, VH - 1 });
@@ -1247,6 +1284,44 @@ static void test_tooltips(void) {
 }
 
 /* Without a clock (a bare tree) a tooltip is kept but never timed. */
+/* Showing records the change for the platform adapter (UIA ToolTipOpened); hiding a structure change. */
+static void test_tooltip_changes(void) {
+    tapp_t a;
+    make_tapp(&a, VW);
+    gates_tree_t *t = a.t;
+    GT_ASSERT_OK(gates_node_set_tooltip(t, a.other, GATES_STR("tip one")));
+    layout(t);
+    gates_access_enable(t, true);
+    gates_access_change_t ch[64];
+    (void)gates_access_take_changes(t, ch, 64, nullptr);
+    pointer(t, GATES_POINTER_MOVE, center(t, a.other));
+    advance(&a, GATES_TOOLTIP_DELAY_MS);
+    gates_u32 n = gates_access_take_changes(t, ch, 64, nullptr);
+    bool opened = false, structure = false;
+    for (gates_u32 i = 0; i < n; i++) {
+        if (ch[i].kind == GATES_ACCESS_TOOLTIP_OPENED && ch[i].item == GATES_ACCESS_TOOLTIP_ITEM) opened = true;
+        if (ch[i].kind == GATES_ACCESS_STRUCTURE && gates_node_eq(ch[i].node, gates_tree_root(t))) structure = true;
+    }
+    GT_ASSERT(opened && structure);
+    GT_ASSERT_OK(gates_node_set_tooltip(t, a.other, GATES_STR("tip two"))); /* shown: the new text */
+    n = gates_access_take_changes(t, ch, 64, nullptr);
+    bool changed = false;
+    for (gates_u32 i = 0; i < n; i++) {
+        if (ch[i].kind == GATES_ACCESS_CHANGED && ch[i].item == GATES_ACCESS_TOOLTIP_ITEM) changed = true;
+    }
+    GT_ASSERT(changed);
+    pointer(t, GATES_POINTER_DOWN, center(t, a.other)); /* a press hides it */
+    n = gates_access_take_changes(t, ch, 64, nullptr);
+    structure = false;
+    for (gates_u32 i = 0; i < n; i++) {
+        if (ch[i].kind == GATES_ACCESS_STRUCTURE && gates_node_eq(ch[i].node, gates_tree_root(t))) structure = true;
+        GT_ASSERT(ch[i].kind != GATES_ACCESS_TOOLTIP_OPENED);
+    }
+    GT_ASSERT(structure);
+    pointer(t, GATES_POINTER_UP, center(t, a.other));
+    gates_tree_destroy(t);
+}
+
 static void test_tooltip_without_clock(void) {
     gates_tree_t *t;
     GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &t));
@@ -1592,6 +1667,7 @@ int main(void) {
     test_toolbar_overflow();
     test_statusbar();
     test_tooltips();
+    test_tooltip_changes();
     test_tooltip_without_clock();
     test_tabs();
     test_state();

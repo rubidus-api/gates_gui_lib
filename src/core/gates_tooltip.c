@@ -36,6 +36,7 @@ static void hide(gates_tree_t *tree) {
     cancel_timer(tree);
     if (tree->tip_state == GATES_I_TIP_SHOWN) {
         gates_i_mark_dirty(tree, GATES_NONE, GATES_DIRTY_PAINT);
+        gates_i_access_log(tree, GATES_ACCESS_STRUCTURE, tree->root, 0); /* the root's tooltip item goes */
     }
     tree->tip_state = GATES_I_TIP_OFF;
 }
@@ -119,6 +120,8 @@ static void show(gates_tree_t *tree) {
     place(tree);
     tree->tip_state = GATES_I_TIP_SHOWN;
     gates_i_mark_dirty(tree, GATES_NONE, GATES_DIRTY_PAINT);
+    gates_i_access_log(tree, GATES_ACCESS_STRUCTURE, tree->root, 0); /* an item of the root (0.10.0) */
+    gates_i_access_log(tree, GATES_ACCESS_TOOLTIP_OPENED, tree->root, GATES_ACCESS_TOOLTIP_ITEM);
     (void)arm(tree, GATES_TOOLTIP_SHOW_MS);
 }
 
@@ -222,6 +225,7 @@ void gates_i_tip_check(gates_tree_t *tree) {
     } else if (tree->tip_state == GATES_I_TIP_SHOWN && compose(tree)) {
         place(tree);
         gates_i_mark_dirty(tree, GATES_NONE, GATES_DIRTY_PAINT);
+        gates_i_access_log(tree, GATES_ACCESS_CHANGED, tree->root, GATES_ACCESS_TOOLTIP_ITEM); /* new text */
     }
 }
 

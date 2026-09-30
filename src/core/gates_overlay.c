@@ -136,6 +136,7 @@ gates_err_t gates_dialog_open(gates_tree_t *tree, const gates_dialog_desc_t *des
         .needs_focus = true,
     };
     gates_input_cancel_pointer(tree); /* a drag begun below must not go on behind it */
+    gates_i_tip_dismiss(tree);        /* nor a tooltip for a node the dialog now covers (0.10.0) */
     gates_tree_set_focus(tree, GATES_NODE_NULL);
     tree->focus_scope = dlg.index;
     gates_i_mark_dirty(tree, dlg.index, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);

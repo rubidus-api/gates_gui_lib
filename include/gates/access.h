@@ -70,7 +70,12 @@ typedef enum gates_role_t {
     GATES_ROLE_SPINNER,          /* spin box (RangeValue); its text box is an EDIT inside it */
     GATES_ROLE_SLIDER,           /* slider (RangeValue) */
     GATES_ROLE_IMAGE,            /* a named image (0.5.0); unnamed ones are not exposed */
+    GATES_ROLE_TOOLTIP,          /* the tooltip shown now: an item of the root (0.10.0) */
 } gates_role_t;
+
+/* The shown tooltip is item GATES_ACCESS_TOOLTIP_ITEM of the root, after the
+ * root's nodes and before overlays; its name is the tooltip's text (0.10.0). */
+#define GATES_ACCESS_TOOLTIP_ITEM 0xFFFFFFFFFFFFFF00ull
 
 /* State bits. */
 #define GATES_ACCESS_FOCUSABLE   0x0001u
@@ -258,6 +263,7 @@ typedef enum gates_access_change_kind_t {
     GATES_ACCESS_REMOVED,
     GATES_ACCESS_LIVE,
     GATES_ACCESS_ANNOUNCE,       /* gates_access_announce; node = root */
+    GATES_ACCESS_TOOLTIP_OPENED, /* node = root, item = GATES_ACCESS_TOOLTIP_ITEM (0.10.0) */
 } gates_access_change_kind_t;
 
 typedef struct gates_access_change_t {

@@ -358,6 +358,7 @@ static int control_type(gates_role_t role) {
     case GATES_ROLE_SPINNER:      return UIA_SpinnerControlTypeId;
     case GATES_ROLE_SLIDER:       return UIA_SliderControlTypeId;
     case GATES_ROLE_IMAGE:        return UIA_ImageControlTypeId;
+    case GATES_ROLE_TOOLTIP:      return UIA_ToolTipControlTypeId;
     default:                      return UIA_PaneControlTypeId;
     }
 }
@@ -1995,6 +1996,9 @@ void gates_win32_uia_events(gates_window_t *win) {
                 break;
             case GATES_ACCESS_ANNOUNCE:
                 if (listening) announce(win);
+                break;
+            case GATES_ACCESS_TOOLTIP_OPENED:
+                if (listening) raise_on(win, ref, UIA_ToolTipOpenedEventId); /* 0.10.0 */
                 break;
             default:
                 break;

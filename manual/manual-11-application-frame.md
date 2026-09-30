@@ -174,7 +174,8 @@ box below the node (above near the bottom of the window) after the pointer rests
 on a press, a key, when the pointer or focus leaves, and after `GATES_TOOLTIP_SHOW_MS`. Moving
 from one tooltip to the next while one shows switches at once. Toolbar buttons have one without
 asking: the command's label and shortcut, `"Paste (Ctrl+V)"`. Tooltips never take input, and
-screen readers read the text as the node's help text. They are timed by the tree's clock, and
+screen readers read the text as the node's help text; the shown tooltip is also a ToolTip element
+of its own, announced when it opens. A modal dialog opening hides it. They are timed by the tree's clock, and
 nothing is timed while no hovered or focused node has one.
 
 <!-- example: manual/examples/ex_11_toolbar.c -->
