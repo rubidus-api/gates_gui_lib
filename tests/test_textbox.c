@@ -142,6 +142,49 @@ static void test_drag_selects(void) {
     gates_tree_destroy(t);
 }
 
+static void press_n(gates_tree_t *t, gates_i32 x, gates_i32 y, gates_u32 clicks, bool shift) {
+    gates_pointer_event_t e = { .action = GATES_POINTER_DOWN, .button = GATES_BUTTON_LEFT,
+                                .pos = { x, y }, .clicks = clicks, .shift = shift };
+    (void)gates_input_pointer(t, &e);
+    release(t, x, y);
+}
+
+/* 0.8.0: Shift+press extends, a double press selects a word, a triple press all. */
+static void test_click_units(void) {
+    gates_node_t tb = GATES_NODE_NULL;
+    gates_tree_t *t = make_ui(&tb, nullptr);
+    GT_ASSERT_OK(gates_textbox_set_text(t, tb, GATES_STR("ab cd.e")));
+    gates_rect_t r = gates_node_layout_rect(t, tb);
+    gates_i32 x0 = r.x + 5, y = r.y + r.h / 2;
+    gates_text_edit_t *ed = gates_textbox_edit(t, tb);
+    press_n(t, x0 + 3 * M.advance + 2, y, 2, false); /* on 'c' */
+    GT_ASSERT(gates_text_edit_sel_begin(ed) == 3 && gates_text_edit_sel_end(ed) == 5);
+    press_n(t, x0 + M.advance + 1, y, 1, true); /* Shift: from the anchor to 1 */
+    GT_ASSERT(gates_text_edit_sel_begin(ed) == 1 && gates_text_edit_sel_end(ed) == 3);
+    press_n(t, x0 + 5 * M.advance + 2, y, 2, false); /* on '.': punctuation is its own run */
+    GT_ASSERT(gates_text_edit_sel_begin(ed) == 5 && gates_text_edit_sel_end(ed) == 6);
+    press_n(t, x0 + 2 * M.advance + 2, y, 2, false); /* on the blank */
+    GT_ASSERT(gates_text_edit_sel_begin(ed) == 2 && gates_text_edit_sel_end(ed) == 3);
+    press_n(t, x0 + 20 * M.advance, y, 2, false); /* past the end: the last run */
+    GT_ASSERT(gates_text_edit_sel_begin(ed) == 6 && gates_text_edit_sel_end(ed) == 7);
+    press_n(t, x0 + M.advance, y, 3, false);
+    GT_ASSERT(gates_text_edit_sel_begin(ed) == 0 && gates_text_edit_sel_end(ed) == 7);
+    press_n(t, x0 + 20 * M.advance, y, 1, false); /* a plain press collapses */
+    GT_ASSERT(!gates_text_edit_has_selection(ed) && gates_text_edit_caret(ed) == 7);
+    GT_ASSERT_OK(gates_textbox_set_text(t, tb, GATES_STR("x \ty")));
+    press_n(t, x0 + M.advance + 2, y, 2, false); /* a tab is a blank too */
+    GT_ASSERT(gates_text_edit_sel_begin(ed) == 1 && gates_text_edit_sel_end(ed) == 3);
+    GT_ASSERT_OK(gates_textbox_set_password(t, tb, true));
+    GT_ASSERT_OK(gates_textbox_set_text(t, tb, GATES_STR("ab cd")));
+    press_n(t, x0 + M.advance, y, 2, false); /* a password box has no words to show: all */
+    GT_ASSERT(gates_text_edit_sel_begin(ed) == 0 && gates_text_edit_sel_end(ed) == 5);
+    GT_ASSERT_OK(gates_textbox_set_password(t, tb, false));
+    GT_ASSERT_OK(gates_textbox_set_text(t, tb, GATES_STR("")));
+    press_n(t, x0, y, 2, false); /* empty: nothing to select, no crash */
+    GT_ASSERT(!gates_text_edit_has_selection(ed));
+    gates_tree_destroy(t);
+}
+
 static void test_typing_and_editing_keys(void) {
     gates_node_t tb = GATES_NODE_NULL;
     gates_tree_t *t = make_ui(&tb, nullptr);
@@ -280,6 +323,7 @@ int main(void) {
     test_creation_and_intrinsic_size();
     test_click_focuses_and_places_caret();
     test_drag_selects();
+    test_click_units();
     test_typing_and_editing_keys();
     test_unfocused_and_disabled_ignore_keys();
     test_paint_chrome();

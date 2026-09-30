@@ -4,6 +4,7 @@
 
 #include <windowsx.h> /* GET_X_LPARAM / GET_Y_LPARAM */
 #include <imm.h>
+#include <stdlib.h> /* abs */
 
 #include <gates/widget.h>
 
@@ -64,6 +65,9 @@ static void fill_common(gates_window_t *win, gates_pointer_event_t *ev,
     ev->buttons = win->buttons;
     ev->pressure = win->buttons != 0 ? 1.0f : 0.0f;
     ev->primary = true;
+    ev->shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0; /* Shift+click extends (0.8.0) */
+    ev->ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+    ev->alt = (GetKeyState(VK_MENU) & 0x8000) != 0;
     win->last_pos = pos;
     win->have_last_pos = true;
 }
@@ -104,6 +108,23 @@ static void button_event(gates_window_t *win, gates_point_t pos, gates_u32 butto
     }
 }
 
+/* Windows reports one and two clicks; a press within the double-click time
+ * and distance of the last double click is the third (0.8.0). */
+static gates_u32 left_clicks(gates_window_t *win, gates_point_t pos, bool dbl) {
+    DWORD now = (DWORD)GetMessageTime();
+    if (dbl) {
+        win->dbl_valid = true;
+        win->dbl_time = now;
+        win->dbl_pos = (POINT){ pos.x, pos.y };
+        return 2;
+    }
+    bool third = win->dbl_valid && now - win->dbl_time <= GetDoubleClickTime() &&
+                 abs(pos.x - win->dbl_pos.x) <= GetSystemMetrics(SM_CXDOUBLECLK) / 2 &&
+                 abs(pos.y - win->dbl_pos.y) <= GetSystemMetrics(SM_CYDOUBLECLK) / 2;
+    win->dbl_valid = false;
+    return third ? 3 : 1;
+}
+
 bool gates_win32_handle_input(gates_window_t *win, UINT msg, WPARAM wparam, LPARAM lparam) {
     gates_point_t pos = { GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam) };
 
@@ -128,8 +149,8 @@ bool gates_win32_handle_input(gates_window_t *win, UINT msg, WPARAM wparam, LPAR
     }
     /* The class has CS_DBLCLKS: the second press of a double click arrives as
      * WM_*BUTTONDBLCLK instead of WM_*BUTTONDOWN (plan-0011 views). */
-    case WM_LBUTTONDOWN:   button_event(win, pos, GATES_BUTTON_LEFT, true, 1);   return true;
-    case WM_LBUTTONDBLCLK: button_event(win, pos, GATES_BUTTON_LEFT, true, 2);   return true;
+    case WM_LBUTTONDOWN:   button_event(win, pos, GATES_BUTTON_LEFT, true, left_clicks(win, pos, false)); return true;
+    case WM_LBUTTONDBLCLK: button_event(win, pos, GATES_BUTTON_LEFT, true, left_clicks(win, pos, true));  return true;
     case WM_LBUTTONUP:     button_event(win, pos, GATES_BUTTON_LEFT, false, 1);  return true;
     case WM_RBUTTONDOWN:   button_event(win, pos, GATES_BUTTON_RIGHT, true, 1);  return true;
     case WM_RBUTTONDBLCLK: button_event(win, pos, GATES_BUTTON_RIGHT, true, 2);  return true;

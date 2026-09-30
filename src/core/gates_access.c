@@ -1528,6 +1528,12 @@ bool gates_access_text_rect(gates_tree_t *tree, gates_node_t node, gates_u32 sta
     return !clipped(tree, node.index, *out);
 }
 
+bool gates_access_text_line(gates_tree_t *tree, gates_node_t node, gates_u32 offset, gates_u32 *begin,
+                            gates_u32 *end) {
+    if (begin == nullptr || end == nullptr || !is_editor(tree, node)) return false;
+    return gates_i_editor_row_of(tree, node.index, offset, begin, end);
+}
+
 gates_u32 gates_access_text_offset_at(gates_tree_t *tree, gates_node_t node, gates_point_t p) {
     if (is_editor(tree, node)) return gates_i_editor_offset_at_point(tree, node.index, p);
     const gates_widget_state_t *st = text_box(tree, node);

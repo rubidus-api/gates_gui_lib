@@ -907,6 +907,7 @@ void gates_i_editor_blur(gates_tree_t *tree, gates_u32 idx);
 gates_u32 gates_i_editor_text_rects(gates_tree_t *tree, gates_u32 idx, gates_u32 start, gates_u32 end, gates_rect_t *out,
                                     gates_u32 cap);
 gates_u32 gates_i_editor_offset_at_point(gates_tree_t *tree, gates_u32 idx, gates_point_t p);
+bool gates_i_editor_row_of(gates_tree_t *tree, gates_u32 idx, gates_u32 offset, gates_u32 *begin, gates_u32 *end);
 gates_err_t gates_i_editor_user_set(gates_tree_t *tree, gates_u32 idx, gates_str_t text);
 void gates_i_node_undo(gates_tree_t *tree, gates_node_t node);
 /* Background tasks (plan-0021): message kinds from GATES_I_TASK_KIND_BASE are

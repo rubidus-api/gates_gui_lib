@@ -160,10 +160,45 @@ static void textbox_caret_at(gates_tree_t *tree, gates_u32 idx, gates_point_t p,
 }
 
 
+/* A word class for double-click selection in a text box: letters, digits, '_'
+ * and anything past ASCII form words; blanks and punctuation form their own runs. */
+static int word_class(gates_u8 c) {
+    if (c == ' ' || c == '\t') return 0;
+    if (c >= 0x80 || c == '_' || (c >= '0' && c <= '9') || ((c | 0x20) >= 'a' && (c | 0x20) <= 'z')) return 1;
+    return 2;
+}
+
+/* A double click selects the run under the caret; a triple click all the text (0.8.0). */
+static void textbox_select_unit(gates_tree_t *tree, gates_u32 idx, gates_u32 clicks) {
+    gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
+    if (st == nullptr || st->edit == nullptr) return;
+    gates_str_t t = gates_text_edit_text(st->edit);
+    if (clicks >= 3 || st->password) {
+        gates_text_edit_select_all(st->edit);
+    } else {
+        gates_u32 at = gates_text_edit_caret(st->edit), b = at, e = at;
+        if (at < t.size || at > 0) {
+            gates_u32 probe = at < t.size ? at : at - 1;
+            int c = word_class(t.ptr[probe]);
+            b = probe;
+            while (b > 0 && word_class(t.ptr[b - 1]) == c) b--;
+            e = at;
+            while (e < t.size && word_class(t.ptr[e]) == c) e++;
+            while (b > 0 && (t.ptr[b] & 0xC0) == 0x80) b--; /* whole code points */
+        }
+        gates_text_edit_set_caret(st->edit, b, false);
+        gates_text_edit_set_caret(st->edit, e, true);
+    }
+    gates_i_box_seal(st);
+    gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
+}
+
 /* Starts a drag when the point lands on a split handle or a scroll thumb.
  * Those areas belong to the container itself (children never cover them), so
  * the ordinary hit result is enough to detect them. */
-static bool drag_begin(gates_tree_t *tree, gates_u32 idx, gates_point_t p, gates_u32 clicks) {
+static bool drag_begin(gates_tree_t *tree, gates_u32 idx, const gates_pointer_event_t *ev) {
+    gates_point_t p = ev->pos;
+    gates_u32 clicks = ev->clicks != 0 ? ev->clicks : 1;
     gates_node_slot_t *s = gates_i_slot(tree, idx);
     if (s->kind == GATES_NODE_SLIDER) {
         return gates_i_slider_press(tree, idx, p); /* plan-0019 */
@@ -176,7 +211,7 @@ static bool drag_begin(gates_tree_t *tree, gates_u32 idx, gates_point_t p, gates
         return gates_i_view_pointer_down(tree, idx, p, clicks); /* rows, header, bars */
     }
     if (s->kind == GATES_NODE_EDITOR) {
-        return gates_i_editor_press(tree, idx, p, clicks, false); /* plan-0022 */
+        return gates_i_editor_press(tree, idx, p, clicks, ev->shift); /* plan-0022 */
     }
     if (s->layout_kind == GATES_LAYOUT_SPLIT &&
         gates_rect_contains(gates_i_split_handle(tree, idx), p)) {
@@ -195,11 +230,27 @@ static bool drag_begin(gates_tree_t *tree, gates_u32 idx, gates_point_t p, gates
         tree->drag_start_value = s->scroll_offset;
         return true;
     }
+    if (s->layout_kind == GATES_LAYOUT_SCROLL && gates_rect_contains(gates_i_scroll_track(tree, idx), p)) {
+        /* A press on the track, off the thumb, pages toward the press (0.8.0). */
+        gates_rect_t thumb = gates_i_scroll_thumb(tree, idx);
+        gates_i32 page = s->layout_rect.h - 2 * s->padding;
+        if (page < 1) page = 1;
+        gates_i32 off = gates_i_scroll_clamp(tree, idx, s->scroll_offset + (p.y < thumb.y ? -page : page));
+        if (off != s->scroll_offset) {
+            s->scroll_offset = off;
+            gates_i_mark_dirty(tree, idx, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
+        }
+        return true;
+    }
     if (s->kind == GATES_NODE_TEXTBOX) {
         gates_widget_state_t *st = gates_i_state(tree, s->state_index);
         if (st != nullptr && !st->disabled) {
             gates_tree_set_focus(tree, gates_i_handle(tree, idx));
-            textbox_caret_at(tree, idx, p, false);
+            textbox_caret_at(tree, idx, p, ev->shift); /* Shift extends (0.8.0) */
+            if (clicks >= 2 && !ev->shift) {
+                textbox_select_unit(tree, idx, clicks);
+                return true;
+            }
             tree->drag_kind = GATES_DRAG_TEXT_SELECT;
             tree->drag_node = idx;
             tree->drag_start = p;
@@ -413,7 +464,7 @@ gates_node_t gates_input_pointer(gates_tree_t *tree, const gates_pointer_event_t
         return hit == GATES_NONE ? GATES_NODE_NULL : gates_i_handle(tree, hit);
     }
     if (ev->action == GATES_POINTER_DOWN && ev->button == GATES_BUTTON_LEFT &&
-        hit != GATES_NONE && drag_begin(tree, hit, ev->pos, ev->clicks != 0 ? ev->clicks : 1)) {
+        hit != GATES_NONE && drag_begin(tree, hit, ev)) {
         return gates_i_handle(tree, hit);
     }
     gates_u32 target = GATES_NONE;

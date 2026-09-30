@@ -1252,8 +1252,9 @@ static bool word_start(const WCHAR *w, LONG n, LONG p) {
     return p == 0 || p >= n || (!space_at(w, p) && space_at(w, p - 1));
 }
 
-/* Page, Format and Document span the whole text; Line and Paragraph end
- * after each line break (a single-line box is one line) (plan-0022). */
+/* Page, Format and Document span the whole text; Paragraph ends after each
+ * line break (a single-line box is one), and Line after each shown row: an
+ * editor with wrap answers by rows (0.8.0), others as Paragraph (plan-0022). */
 static bool whole_unit(enum TextUnit u) {
     return u != TextUnit_Character && u != TextUnit_Word && u != TextUnit_Line && u != TextUnit_Paragraph;
 }
@@ -1266,10 +1267,31 @@ static bool line_start(const WCHAR *w, LONG p) {
     return p == 0 || w[p - 1] == L'\n';
 }
 
-static LONG unit_start(enum TextUnit u, const WCHAR *w, LONG n, LONG p) {
+/* The text the unit functions walk: UTF-16, and the node that lays it out. */
+typedef struct unit_text_t {
+    const WCHAR *w;
+    LONG n;
+    gates_tree_t *tree;
+    gates_node_t node;
+    gates_str_t u8;
+} unit_text_t;
+
+/* The shown row holding UTF-16 offset p, from the model; false when it lays out no rows. */
+static bool row_of(const unit_text_t *x, enum TextUnit u, LONG p, LONG *b, LONG *e) {
+    gates_u32 rb, re;
+    if (u != TextUnit_Line || !gates_access_text_line(x->tree, x->node, u8_of(x->u8, p), &rb, &re)) return false;
+    *b = u16_of(x->u8, rb);
+    *e = u16_of(x->u8, re);
+    return true;
+}
+
+static LONG unit_start(enum TextUnit u, const unit_text_t *x, LONG p) {
+    const WCHAR *w = x->w;
+    LONG n = x->n, b, e;
     if (whole_unit(u)) return 0;
     if (p >= n) return n;
     if (u == TextUnit_Character) return p > 0 && IS_LOW_SURROGATE(w[p]) ? p - 1 : p;
+    if (row_of(x, u, p, &b, &e)) return b;
     if (line_unit(u)) {
         while (p > 0 && !line_start(w, p)) p--;
         return p;
@@ -1278,10 +1300,13 @@ static LONG unit_start(enum TextUnit u, const WCHAR *w, LONG n, LONG p) {
     return p;
 }
 
-static LONG unit_next(enum TextUnit u, const WCHAR *w, LONG n, LONG p) {
+static LONG unit_next(enum TextUnit u, const unit_text_t *x, LONG p) {
+    const WCHAR *w = x->w;
+    LONG n = x->n, b, e;
     if (whole_unit(u)) return n;
     if (u == TextUnit_Character) return next_char(w, n, p);
     if (p >= n) return n;
+    if (row_of(x, u, p, &b, &e) && e > p) return e;
     if (line_unit(u)) {
         do p++; while (p < n && !line_start(w, p));
         return p;
@@ -1290,10 +1315,13 @@ static LONG unit_next(enum TextUnit u, const WCHAR *w, LONG n, LONG p) {
     return p;
 }
 
-static LONG unit_prev(enum TextUnit u, const WCHAR *w, LONG n, LONG p) {
+static LONG unit_prev(enum TextUnit u, const unit_text_t *x, LONG p) {
+    const WCHAR *w = x->w;
+    LONG n = x->n, b, e;
     if (whole_unit(u)) return 0;
     if (u == TextUnit_Character) return prev_char(w, p);
     if (p <= 0) return 0;
+    if (row_of(x, u, prev_char(w, p), &b, &e)) return b; /* the row before p's place */
     if (line_unit(u)) {
         do p--; while (p > 0 && !line_start(w, p));
         return p;
@@ -1359,8 +1387,9 @@ static HRESULT STDMETHODCALLTYPE rt_expand(ITextRangeProvider *This, enum TextUn
     LONG n = 0;
     HRESULT hr = range_text(r, &i, &w, &n);
     if (FAILED(hr)) return hr;
-    r->start = unit_start(unit, w, n, r->start);
-    r->end = unit_next(unit, w, n, r->start);
+    unit_text_t ut = { w, n, r->el->win->tree, r->el->ref.node, i.value };
+    r->start = unit_start(unit, &ut, r->start);
+    r->end = unit_next(unit, &ut, r->start);
     SysFreeString(w);
     return S_OK;
 }
@@ -1492,23 +1521,24 @@ static HRESULT STDMETHODCALLTYPE rt_move(ITextRangeProvider *This, enum TextUnit
     LONG n = 0;
     HRESULT hr = range_text(r, &i, &w, &n);
     if (FAILED(hr)) return hr;
+    unit_text_t ut = { w, n, r->el->win->tree, r->el->ref.node, i.value };
     bool degenerate = r->start == r->end;
-    LONG p = degenerate ? r->start : unit_start(unit, w, n, r->start);
+    LONG p = degenerate ? r->start : unit_start(unit, &ut, r->start);
     int moved = 0;
     for (; count > 0; count--) {
-        LONG q = unit_next(unit, w, n, p);
+        LONG q = unit_next(unit, &ut, p);
         if (q == p || (!degenerate && q >= n)) break;
         p = q;
         moved++;
     }
     for (; count < 0; count++) {
-        LONG q = unit_prev(unit, w, n, p);
+        LONG q = unit_prev(unit, &ut, p);
         if (q == p) break;
         p = q;
         moved--;
     }
     r->start = p;
-    r->end = degenerate ? p : unit_next(unit, w, n, p);
+    r->end = degenerate ? p : unit_next(unit, &ut, p);
     SysFreeString(w);
     *out = moved;
     return S_OK;
@@ -1524,16 +1554,17 @@ static HRESULT STDMETHODCALLTYPE rt_move_end(ITextRangeProvider *This, enum Text
     LONG n = 0;
     HRESULT hr = range_text(r, &i, &w, &n);
     if (FAILED(hr)) return hr;
+    unit_text_t ut = { w, n, r->el->win->tree, r->el->ref.node, i.value };
     LONG p = ep == TextPatternRangeEndpoint_Start ? r->start : r->end;
     int moved = 0;
     for (; count > 0; count--) {
-        LONG q = unit_next(unit, w, n, p);
+        LONG q = unit_next(unit, &ut, p);
         if (q == p) break;
         p = q;
         moved++;
     }
     for (; count < 0; count++) {
-        LONG q = unit_prev(unit, w, n, p);
+        LONG q = unit_prev(unit, &ut, p);
         if (q == p) break;
         p = q;
         moved--;

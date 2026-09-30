@@ -11,12 +11,13 @@
  * Enter (the line's own line ending), Tab when tab_inserts (otherwise Tab
  * moves focus, so the keyboard is never trapped), Ctrl+A/C/X/V/Z/Y. Pointer:
  * a press places the caret (Shift extends), a drag selects, a double click
- * selects a word, the wheel scrolls (Shift: sideways), the scrollbars work
- * as everywhere.
+ * selects a word, a triple click the line with its break, the wheel scrolls
+ * (Shift: sideways), the scrollbars work as everywhere.
  *
  * Options: soft wrap (rows break after the last blank that fits, else at the
- * last code point; with wrap, Up/Down move by rows and the scrollbar counts
- * lines), a line number gutter, auto-indent (Enter repeats the line's
+ * last code point; with wrap, Up/Down move by rows, Home and End go to the
+ * row's start and end first, then the line's, and the scrollbar counts
+ * lines; a caret at a row's end stays shown there), a line number gutter, auto-indent (Enter repeats the line's
  * leading blanks). When tab_inserts, Tab and Shift+Tab indent and unindent
  * the selected lines (or type a tab), and Ctrl+Tab / Ctrl+Shift+Tab move
  * focus, so the keyboard is still never trapped.

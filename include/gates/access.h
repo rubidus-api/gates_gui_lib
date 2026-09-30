@@ -213,6 +213,12 @@ bool gates_access_text_rect(gates_tree_t *tree, gates_node_t node, gates_u32 sta
 gates_u32 gates_access_text_rects(gates_tree_t *tree, gates_node_t node, gates_u32 start, gates_u32 end,
                                   gates_rect_t *out, gates_u32 cap);
 gates_u32 gates_access_text_offset_at(gates_tree_t *tree, gates_node_t node, gates_point_t p);
+/* A text line as a person sees it (the UIA Line unit, 0.8.0): the shown row
+ * holding the offset, [begin, end), where end is the next row's start (after
+ * the line break on a line's last row). An editor with wrap answers by rows,
+ * one without by lines; false for other nodes (a text box is one line). */
+bool gates_access_text_line(gates_tree_t *tree, gates_node_t node, gates_u32 offset, gates_u32 *begin,
+                            gates_u32 *end);
 [[nodiscard]] gates_err_t gates_access_select_text(gates_tree_t *tree, gates_node_t node, gates_u32 anchor,
                                                    gates_u32 caret);
 

@@ -238,6 +238,30 @@ static void test_thumb_drag(void) {
     gates_tree_destroy(t);
 }
 
+/* 0.8.0: a press on the track above or below the thumb pages. */
+static void test_track_pages(void) {
+    gates_tree_t *t = make_scroll_tree(10, nullptr);
+    gates_node_t root = gates_tree_root(t);
+    gates_pointer_event_t down = { .action = GATES_POINTER_DOWN, .button = GATES_BUTTON_LEFT,
+                                   .pos = { VIEW_W - 5, VIEW_H - 3 } };
+    gates_pointer_event_t up = down;
+    up.action = GATES_POINTER_UP;
+    (void)gates_input_pointer(t, &down);
+    (void)gates_input_pointer(t, &up);
+    GT_ASSERT(gates_layout_scroll_offset(t, root) == VIEW_H);
+    (void)gates_input_pointer(t, &down);
+    (void)gates_input_pointer(t, &up);
+    (void)gates_input_pointer(t, &down);
+    (void)gates_input_pointer(t, &up);
+    GT_ASSERT(gates_layout_scroll_offset(t, root) == 110); /* clamped */
+    down.pos.y = 1;
+    up.pos.y = 1;
+    (void)gates_input_pointer(t, &down);
+    (void)gates_input_pointer(t, &up);
+    GT_ASSERT(gates_layout_scroll_offset(t, root) == 110 - VIEW_H);
+    gates_tree_destroy(t);
+}
+
 int main(void) {
     be = gates_text_backend_builtin();
     theme = gates_theme_light();
@@ -249,5 +273,6 @@ int main(void) {
     test_paint_clips_and_draws_scrollbar();
     test_no_scrollbar_when_content_fits();
     test_thumb_drag();
+    test_track_pages();
     return gt_report("test_scroll");
 }

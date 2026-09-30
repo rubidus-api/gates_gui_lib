@@ -73,6 +73,11 @@ struct gates_window {
     bool have_last_pos;
     gates_u32 buttons;
     gates_u32 pending_lead;  /* UTF-16 high surrogate awaiting its low half */
+    /* The last double click (message time, client pixels): a press soon after
+     * it, near it, is the third of a triple click (0.8.0). */
+    bool dbl_valid;
+    DWORD dbl_time;
+    POINT dbl_pos;
 
     /* IME composition in progress and the node it started in (plan-0007). */
     bool ime_active;

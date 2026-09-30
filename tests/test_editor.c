@@ -571,6 +571,21 @@ static void test_pointer(void) {
     press(&a, (gates_point_t){ o.x + 17, o.y + 16 * 2 + 4 }, 2);
     release(&a, (gates_point_t){ o.x + 17, o.y + 16 * 2 + 4 });
     GT_ASSERT(anchor(&a) == 26 && caret(&a) == 33);
+    /* Shift+press extends the selection from the anchor (0.8.0). */
+    gates_pointer_event_t sp = { .action = GATES_POINTER_DOWN, .button = GATES_BUTTON_LEFT,
+                                 .pos = { o.x + 300, o.y + 16 * 3 + 4 }, .clicks = 1, .shift = true };
+    (void)gates_input_pointer(a.t, &sp);
+    release(&a, sp.pos);
+    GT_ASSERT(anchor(&a) == 26 && caret(&a) == 39 + 12);
+    sp.clicks = 2; /* a shifted double press still extends, not selects a word */
+    sp.pos.x = o.x + 17;
+    (void)gates_input_pointer(a.t, &sp);
+    release(&a, sp.pos);
+    GT_ASSERT(anchor(&a) == 26 && caret(&a) == 39 + 2);
+    /* A triple click selects the line with its break. */
+    press(&a, (gates_point_t){ o.x + 17, o.y + 16 + 4 }, 3);
+    release(&a, (gates_point_t){ o.x + 17, o.y + 16 + 4 });
+    GT_ASSERT(anchor(&a) == 13 && caret(&a) == 26);
     /* Below the last row: the end of the text. */
     GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, GATES_STR("ab\ncd")));
     press(&a, (gates_point_t){ o.x + 2, o.y + 16 * 5 }, 1);
@@ -724,6 +739,15 @@ static bool cmd_is(const gates_draw_list_t *dl, const gates_draw_cmd_t *c, const
     return t.size == strlen(z) && memcmp(t.ptr, z, t.size) == 0;
 }
 
+/* The y of the caret bar (a 1 px wide, row high rect), or -1. */
+static gates_i32 caret_y(const gates_draw_list_t *dl) {
+    for (gates_u32 i = 0; i < dl->len; i++) {
+        const gates_draw_cmd_t *d = gates_draw_list_at(dl, i);
+        if (d->kind == GATES_DRAW_RECT && d->rect.w == 1 && d->rect.h == 16) return d->rect.y;
+    }
+    return -1;
+}
+
 static void test_wrap(void) {
     app_t a;
     make(&a, &(gates_editor_desc_t){ .wrap = true });
@@ -838,7 +862,75 @@ static void test_wrap(void) {
     shortrow[5 + cols] = 0;
     GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, (gates_str_t){ (const gates_u8 *)shortrow, strlen(shortrow) }));
     GT_ASSERT_OK(gates_editor_set_selection(a.t, a.ed, 5 + 20, 5 + 20));
-    GT_ASSERT(key(a.t, GATES_KEY_UP) && caret(&a) == 4);
+    GT_ASSERT(key(a.t, GATES_KEY_UP) && caret(&a) == 5); /* the short row's end (0.8.0: affinity) */
+    paint(&a, &dl);
+    GT_ASSERT(caret_y(&dl) == o.y); /* shown at the end of row 0, not the start of row 1 */
+    /* End with wrap goes to the row's end, then the line's; Home to the row's start, then the line's. */
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, (gates_str_t){ (const gates_u8 *)three, strlen(three) }));
+    /* The access Line unit is the shown row (0.8.0); the last row ends at the line's end. */
+    gates_u32 lb = 99, le = 99, R = (gates_u32)cols + 1;
+    GT_ASSERT(gates_access_text_line(a.t, a.ed, 2, &lb, &le) && lb == 0 && le == R);
+    GT_ASSERT(gates_access_text_line(a.t, a.ed, R, &lb, &le) && lb == R && le == 2 * R);
+    GT_ASSERT(gates_access_text_line(a.t, a.ed, 2 * R + 1, &lb, &le) && lb == 2 * R && le == 2 * R + 2);
+    GT_ASSERT(gates_access_text_line(a.t, a.ed, 9999, &lb, &le) && lb == 2 * R && le == 2 * R + 2);
+    char brk[400];
+    memcpy(brk, three, strlen(three));
+    memcpy(brk + strlen(three), "\nq", 3);
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, (gates_str_t){ (const gates_u8 *)brk, strlen(brk) }));
+    GT_ASSERT(gates_access_text_line(a.t, a.ed, 2 * R + 1, &lb, &le) && lb == 2 * R && le == 2 * R + 3); /* its break */
+    GT_ASSERT(gates_access_text_line(a.t, a.ed, 2 * R, &lb, &le) && lb == 2 * R && le == 2 * R + 3);
+    GT_ASSERT(gates_access_text_line(a.t, a.ed, R - 1, &lb, &le) && lb == 0 && le == R);
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, (gates_str_t){ (const gates_u8 *)three, strlen(three) }));
+    GT_ASSERT(!gates_access_text_line(a.t, gates_tree_root(a.t), 0, &lb, &le));
+    GT_ASSERT(!gates_access_text_line(a.t, a.ed, 0, nullptr, &le));
+    GT_ASSERT_OK(gates_editor_set_selection(a.t, a.ed, 2, 2));
+    GT_ASSERT(key(a.t, GATES_KEY_END) && caret(&a) == (gates_u32)cols + 1);
+    paint(&a, &dl);
+    GT_ASSERT(caret_y(&dl) == o.y);
+    GT_ASSERT(key(a.t, GATES_KEY_HOME) && caret(&a) == 0); /* the caret's row is row 0 */
+    GT_ASSERT(key(a.t, GATES_KEY_END) && key(a.t, GATES_KEY_END) && caret(&a) == (gates_u32)strlen(three));
+    GT_ASSERT(key(a.t, GATES_KEY_HOME) && caret(&a) == 2u * ((gates_u32)cols + 1)); /* row 2's start */
+    paint(&a, &dl);
+    GT_ASSERT(caret_y(&dl) == o.y + 32);
+    GT_ASSERT(key(a.t, GATES_KEY_HOME) && caret(&a) == 0);
+    GT_ASSERT(key_mods(a.t, GATES_KEY_END, false, true) && caret(&a) == (gates_u32)cols + 1 && anchor(&a) == 0);
+    /* Shift+press right of a row's end extends to that row's end, shown there. */
+    gates_pointer_event_t sp = { .action = GATES_POINTER_DOWN, .button = GATES_BUTTON_LEFT,
+                                 .pos = { o.x + textw - 1, o.y + 16 + 5 }, .clicks = 1, .shift = true };
+    (void)gates_input_pointer(a.t, &sp);
+    paint(&a, &dl); /* the press itself, before a release drags */
+    GT_ASSERT(anchor(&a) == 0 && caret(&a) == 2u * ((gates_u32)cols + 1) && caret_y(&dl) == o.y + 16);
+    release(&a, sp.pos);
+    /* A composition is drawn once, on the caret's row. */
+    GT_ASSERT_OK(gates_editor_set_selection(a.t, a.ed, (gates_u32)cols + 1, (gates_u32)cols + 1)); /* a row boundary */
+    GT_ASSERT(gates_input_preedit(a.t, GATES_STR("PQ"), 2) == GATES_INPUT_CONSUMED);
+    paint(&a, &dl);
+    int pq = 0;
+    for (int k = 0, m = texts(&dl, tc, 64); k < m; k++) {
+        if (cmd_is(&dl, tc[k], "PQ")) {
+            pq++;
+            GT_ASSERT(tc[k]->rect.y == o.y + 16);
+        }
+    }
+    GT_ASSERT(pq == 1);
+    GT_ASSERT(gates_input_preedit_cancel(a.t) == GATES_INPUT_CONSUMED);
+    /* A press right of a row's end keeps the caret on that row. */
+    press(&a, (gates_point_t){ o.x + textw - 1, o.y + 16 + 5 }, 1);
+    release(&a, (gates_point_t){ o.x + textw - 1, o.y + 16 + 5 });
+    GT_ASSERT(caret(&a) == 2u * ((gates_u32)cols + 1));
+    paint(&a, &dl);
+    GT_ASSERT(caret_y(&dl) == o.y + 16);
+    /* Typing there goes where the caret is shown and forgets the affinity. */
+    type(a.t, "Q");
+    paint(&a, &dl);
+    GT_ASSERT(caret(&a) == 2u * ((gates_u32)cols + 1) + 1 && caret_y(&dl) == o.y + 32);
+    /* Without wrap the Line unit is the text line, its break included. */
+    GT_ASSERT_OK(gates_editor_set_wrap(a.t, a.ed, false));
+    GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, GATES_STR("ab\ncd")));
+    GT_ASSERT(gates_access_text_line(a.t, a.ed, 1, &lb, &le) && lb == 0 && le == 3);
+    GT_ASSERT(gates_access_text_line(a.t, a.ed, 3, &lb, &le) && lb == 3 && le == 5);
+    GT_ASSERT_OK(gates_editor_set_wrap(a.t, a.ed, true));
+    GT_ASSERT(gates_access_text_line(a.t, a.ed, 3, &lb, &le) && lb == 3 && le == 5);
     /* Wrap can be turned off and on later: off, the long word is one row again. */
     GT_ASSERT_OK(gates_editor_set_text(a.t, a.ed, (gates_str_t){ (const gates_u8 *)word, 299 }));
     GT_ASSERT_OK(gates_editor_set_wrap(a.t, a.ed, false));
