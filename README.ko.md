@@ -1,4 +1,4 @@
-**한국어** | [English](README.md) — **Gates GUI Library v0.2.0** — [ZIP(examples Windows x64)](https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.2.0/gates-0.2.0-examples-win64.zip) · [ZIP(SDK)](https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.2.0/gates-0.2.0-sdk.zip) · [ZIP(source)](https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.2.0/gates-0.2.0-src.zip)
+**한국어** | [English](README.md) — **Gates GUI Library v0.8.0** — [ZIP(examples Windows x64)](https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.8.0/gates-0.8.0-examples-win64.zip) · [ZIP(SDK)](https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.8.0/gates-0.8.0-sdk.zip) · [ZIP(source)](https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.8.0/gates-0.8.0-src.zip)
 
 # Gates GUI Library
 
