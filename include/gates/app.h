@@ -1,7 +1,7 @@
-/* gates_gui_lib - application/platform boundary (RFC-0001 section 3 gates_platform).
+/* gates_gui_lib - application/platform boundary.
  * Opaque, platform-free header; the implementation lives in src/platform/.
  * Win32 backend: message pump; posting from workers and timers (gates/post.h,
- * gates/timer.h) since plan-0012. */
+ * gates/timer.h). */
 #ifndef GATES_APP_H
 #define GATES_APP_H
 

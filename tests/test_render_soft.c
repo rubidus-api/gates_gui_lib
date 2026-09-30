@@ -1,4 +1,4 @@
-/* T005: software renderer, pixel-exact (docs/tests/cases/T005-render-soft.md). */
+/* software renderer, pixel-exact. */
 #include <gates/render.h>
 #include <gates/text.h>
 #include "gates_test.h"

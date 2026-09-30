@@ -1,4 +1,4 @@
-/* gates_gui_lib - clipboard boundary (plan-0008, RFC-0003 section 6.1).
+/* gates_gui_lib - clipboard boundary.
  *
  * The core never talks to an operating system clipboard. A platform (the
  * Win32 window) or a test installs a provider on the tree; textboxes use it

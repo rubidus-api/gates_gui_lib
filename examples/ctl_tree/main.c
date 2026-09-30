@@ -13,7 +13,7 @@
  * opened), a "slow" folder whose children arrive when "finish loading" is
  * pressed, a "locked" folder that answers with an error row, and a status line.
  *
- * Field check (T032 stage 2): Down selects "folder 1", Right opens it, Right
+ * Field check: Down selects "folder 1", Right opens it, Right
  * again moves to its first child, Left goes back to the parent, Left closes
  * it; clicking a mark opens a folder without selecting it; opening "slow"
  * shows a dimmed "loading..." row until "finish loading"; opening "locked"

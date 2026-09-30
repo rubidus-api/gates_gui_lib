@@ -1050,7 +1050,7 @@ static gates_err_t build(app_t *a) {
     return GATES_OK;
 }
 
-/* Input the tree could not complete (usually out of memory): say so (RFC-0003 section 13). */
+/* Input the tree could not complete (usually out of memory): say so. */
 static void on_input_error(gates_window_t *win, gates_err_t err, void *user) {
     (void)win;
     app_t *a = user;

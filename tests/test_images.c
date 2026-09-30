@@ -1,4 +1,4 @@
-/* T051: images and icons (docs/tests/cases/T051-images.md, plan-0020). */
+/* images and icons (0.5.0). */
 #include <gates/ui.h>
 #include <gates/widget.h>
 #include <gates/image.h>

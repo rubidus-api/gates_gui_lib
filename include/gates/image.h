@@ -1,4 +1,4 @@
-/* gates_gui_lib - images and icons (plan-0020, RFC-0005).
+/* gates_gui_lib - images and icons (0.5.0).
  *
  * A tree owns images by id (0 = none): RGBA8 pixels copied in, or decoded from
  * a file or memory by the decoder the platform installs (the Win32 window

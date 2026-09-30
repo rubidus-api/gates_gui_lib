@@ -1,6 +1,5 @@
 /* gates_gui_lib - persisted UI state: split ratios, selected tabs, column
- * widths and scroll offsets of nodes with automation ids, as text (plan-0018,
- * RFC-0005 A5). Platform-free. */
+ * widths and scroll offsets of nodes with automation ids, as text. Platform-free. */
 #include <gates/state.h>
 #include <gates/layout.h>
 #include <gates/frame.h>
@@ -135,7 +134,7 @@ static bool apply(gates_tree_t *tree, const gates_u8 *line, gates_usize_t n) {
     gates_node_slot_t *s = gates_i_slot(tree, idx);
     gates_i32 v = 0;
     if (s->kind == GATES_NODE_VIEW && memchr(val, ':', vn) != nullptr) {
-        /* id:width[h], in display order (plan-0021). */
+        /* id:width[h], in display order (0.6.0). */
         gates_column_id_t ids[64];
         gates_i32 w[64];
         bool hid[64];

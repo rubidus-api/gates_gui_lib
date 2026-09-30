@@ -1,5 +1,5 @@
-/* gates_gui_lib - builtin reference text backend (RFC-0002 section 5).
- * Embedded 8x16 monospace cells (advances by the cell rule, RFC-0004): vendored public-domain font8x8 glyphs
+/* gates_gui_lib - builtin reference text backend.
+ * Embedded 8x16 monospace cells (advances by the cell rule, 0.2.0): vendored public-domain font8x8 glyphs
  * (ASCII), each 8x8 row doubled to 16 px. Deterministic everywhere.
  * Platform-free. */
 #include <gates/text.h>
@@ -23,7 +23,7 @@ static gates_text_metrics_t builtin_metrics(void *ctx, gates_font_t font) {
     };
 }
 
-/* RFC-0004: the reference backend keeps the cell rule for every font. */
+/* the reference backend keeps the cell rule for every font. */
 static gates_i32 builtin_advance(void *ctx, gates_font_t font, gates_u32 cp) {
     (void)ctx; (void)font;
     return (gates_i32)gates_text_cell_width(cp) * CELL_W;

@@ -39,7 +39,7 @@ Windows programs built by `make win` (mingw-w64) into `build/win/`. Every exampl
 | `app_settings` | reference application: a settings form with validation on Save, messages under the fields, a revealed row, Save/Cancel as commands, and an applying step that animates unless Windows is set to reduce motion |
 | `hello_window` | the smallest window: surface, present, input callbacks |
 | `widgets_demo` | several controls and layouts together |
-| `text_demo` | text rendering (RFC-0002) and the textbox with Korean IME composition |
+| `text_demo` | text rendering and the textbox with Korean IME composition |
 | `text_conformance` | console program running the text backend contract on Windows |
 
 Pattern shared by the control examples:

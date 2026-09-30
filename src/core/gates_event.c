@@ -1,4 +1,4 @@
-/* gates_gui_lib - typed change notifications (RFC-0003 section 4.1, plan-0007).
+/* gates_gui_lib - typed change notifications.
  * Queue on the tree, payload read from the widget at delivery, storage reserved
  * before an edit commits so a successful edit never loses its event. */
 #include <gates/event.h>
@@ -67,7 +67,7 @@ static bool coalesces(gates_event_kind_t kind) {
            kind == GATES_EVENT_SELECTION_CHANGED || kind == GATES_EVENT_FOLLOW_CHANGED;
 }
 
-/* -- bubbling (plan-0019) -------------------------------------------------------- */
+/* -- bubbling (0.4.0) -------------------------------------------------------- */
 
 static gates_i_bubble *bubble_of(const gates_tree_t *tree, gates_u32 idx) {
     gates_u32 gen = gates_i_slot(tree, idx)->generation;
@@ -86,7 +86,7 @@ bool gates_i_handler(const gates_tree_t *tree, gates_u32 idx, gates_event_fn *fn
         return true;
     }
     if (tree->bubble_count == 0) return false;
-    if (gates_i_view_of_editor(tree, idx) != GATES_NONE) return false; /* the view's own part (plan-0021) */
+    if (gates_i_view_of_editor(tree, idx) != GATES_NONE) return false; /* the view's own part (0.6.0) */
     for (gates_u32 a = gates_i_slot(tree, idx)->parent; a != GATES_NONE; a = gates_i_slot(tree, a)->parent) {
         const gates_i_bubble *b = bubble_of(tree, a);
         if (b != nullptr) {
@@ -138,7 +138,7 @@ void gates_i_bubble_free(gates_tree_t *tree) {
     tree->bubble_count = tree->bubble_cap = tree->defer_count = tree->defer_cap = 0;
 }
 
-/* -- deferred calls (plan-0019) ------------------------------------------------------- */
+/* -- deferred calls (0.4.0) ------------------------------------------------------- */
 
 gates_err_t gates_tree_defer(gates_tree_t *tree, gates_u32 key, gates_defer_fn fn, void *user) {
     if (tree == nullptr || fn == nullptr) return PROVEN_ERR_INVALID_ARG;
@@ -364,7 +364,7 @@ gates_u32 gates_tree_dispatch_events(gates_tree_t *tree, gates_u32 max_events) {
             continue; /* destroyed (or pending destroy) since it was queued */
         }
         if (e.kind == GATES_I_EVENT_COMMAND) {
-            /* Looked up again: it may be gone or disabled by now (RFC-0003 5.2). */
+            /* Looked up again: it may be gone or disabled by now. */
             gates_i_command_t *c = gates_i_command_find(tree, e.node_index, e.generation, e.aux);
             if (c != nullptr && c->enabled && c->invoke != nullptr) {
                 gates_command_fn fn = c->invoke;
@@ -457,7 +457,7 @@ gates_u32 gates_tree_dispatch_events(gates_tree_t *tree, gates_u32 max_events) {
     tree->event_len = rest;
     tree->event_head = 0;
     if (rest == 0) {
-        run_defers(tree); /* after the events: the safe point (plan-0019) */
+        run_defers(tree); /* after the events: the safe point (0.4.0) */
     }
     tree->dispatching = false;
     return rest + tree->defer_count;

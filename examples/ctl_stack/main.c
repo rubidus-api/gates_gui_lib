@@ -7,7 +7,7 @@
  * Shows: three pages with different content (text, an option, a field) and
  * page buttons whose events switch the active page.
  *
- * Field check (T021): only one page is visible; each button shows its page and
+ * Field check: only one page is visible; each button shows its page and
  * the "page N of 3" line follows; the checkbox on page 2 keeps its state after
  * switching away and back; nothing on a hidden page reacts to clicks; ESC exits. */
 #include <gates/app.h>

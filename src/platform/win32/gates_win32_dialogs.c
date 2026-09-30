@@ -1,5 +1,5 @@
 /* gates_gui_lib - native dialogs: the Windows file, folder, colour and message
- * dialogs (plan-0020). They are Windows' own modal dialogs; the calls return
+ * dialogs (0.5.0). They are Windows' own modal dialogs; the calls return
  * when the person answers. COM objects are made from GUIDs defined here and
  * ChooseColorW is looked up at run time, so the link line needs nothing more. */
 #define COBJMACROS

@@ -8,7 +8,7 @@
  * Shows: three options, a summary line kept current by the events, and "all
  * on" / "all off" buttons that set the options from code and announce it.
  *
- * Field check (T021): clicking an option toggles its box and updates the
+ * Field check: clicking an option toggles its box and updates the
  * summary ("by you"); "all on"/"all off" set every box and the summary says
  * "by the program"; the disabled option cannot be toggled; ESC exits. */
 #include <gates/app.h>

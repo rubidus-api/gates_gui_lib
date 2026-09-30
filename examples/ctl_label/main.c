@@ -1,15 +1,15 @@
 /* ctl_label - the label control.
  *
  * Interaction: a label tells the person something; it takes no input. The
- * application says what the text is; the backend decides how it looks
- * (RFC-0001 section 1.0). Text is UTF-8 and every character takes its own
- * advance from the font, Hangul and other wide characters included (RFC-0004).
+ * application says what the text is; the backend decides how it looks.
+ * Text is UTF-8 and every character takes its own
+ * advance from the font, Hangul and other wide characters included (0.2.0).
  *
  * Shows: plain, wide-character and disabled labels, and a label whose text
  * the program replaces when a button is activated (programmatic setters are
  * silent; the change is visible on the next frame).
  *
- * Field check (T021): all four labels render with real glyphs; "next message"
+ * Field check: all four labels render with real glyphs; "next message"
  * cycles the last label through three texts; ESC exits. */
 #include <gates/app.h>
 #include <gates/window.h>

@@ -1,4 +1,4 @@
-/* gates_gui_lib - UI Automation providers (plan-0014).
+/* gates_gui_lib - UI Automation providers.
  *
  * Every element a client sees is a small COM object holding only a key: the
  * window, the tree's serial number and an accessible reference (node handle,
@@ -441,7 +441,7 @@ static HRESULT STDMETHODCALLTYPE simple_property(IRawElementProviderSimple *This
     case UIA_HelpTextPropertyId:
         if (i.description.size > 0) v_str(out, i.description);
         break;
-    case UIA_AccessKeyPropertyId:        /* plan-0018: "Alt+F" */
+    case UIA_AccessKeyPropertyId:        /* "Alt+F" */
         if (i.access_key.size > 0) v_str(out, i.access_key);
         break;
     case UIA_AcceleratorKeyPropertyId:   /* the command's shortcut */
@@ -1247,7 +1247,7 @@ static bool word_start(const WCHAR *w, LONG n, LONG p) {
 
 /* Page, Format and Document span the whole text; Paragraph ends after each
  * line break (a single-line box is one), and Line after each shown row: an
- * editor with wrap answers by rows (0.8.0), others as Paragraph (plan-0022). */
+ * editor with wrap answers by rows (0.8.0), others as Paragraph (0.7.0). */
 static bool whole_unit(enum TextUnit u) {
     return u != TextUnit_Character && u != TextUnit_Word && u != TextUnit_Line && u != TextUnit_Paragraph;
 }

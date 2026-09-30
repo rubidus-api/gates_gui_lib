@@ -10,7 +10,7 @@
  * and clear the log; a status line with the count, the dropped lines and
  * whether the view is following.
  *
- * Field check (T032 stage 2): "add 1000" leaves 200 lines, 800+ dropped, the
+ * Field check: "add 1000" leaves 200 lines, 800+ dropped, the
  * last line visible; wheel up: "following: no" and new lines do not move the
  * view; End: "following: yes"; "clear" empties it; ESC exits. */
 #include <gates/app.h>

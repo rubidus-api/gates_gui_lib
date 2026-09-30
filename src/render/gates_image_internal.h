@@ -1,4 +1,4 @@
-/* gates_gui_lib - the image a draw command borrows (plan-0020): shared by the
+/* gates_gui_lib - the image a draw command borrows (0.5.0): shared by the
  * core's image store and the software renderer. Never installed. */
 #ifndef GATES_IMAGE_INTERNAL_H
 #define GATES_IMAGE_INTERNAL_H

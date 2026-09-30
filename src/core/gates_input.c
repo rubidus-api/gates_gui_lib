@@ -1,7 +1,7 @@
 /* gates_gui_lib - keyboard, character and IME routing to the focused textbox.
  * Every text change goes through gates_i_box_edit (gates_textbox.c), which
- * owns limits, undo and notifications (plan-0008). Enter/Tab/Escape are left
- * for RFC-0003 phase D (activation and focus traversal). Platform-free. */
+ * owns limits, undo and notifications. Enter/Tab/Escape are left
+ * for activation and focus traversal. Platform-free. */
 #include <gates/ui.h>
 #include <gates/widget.h>
 #include "gates_tree_internal.h"
@@ -222,7 +222,7 @@ static bool textbox_key(gates_tree_t *tree, gates_widget_state_t *st,
         break;
     }
     default:
-        consumed = false; /* Enter/Tab/Escape belong to RFC-0003 phase D */
+        consumed = false; /* Enter/Tab/Escape belong to activation and focus */
         break;
     }
     if (consumed) {
@@ -278,7 +278,7 @@ bool gates_input_key(gates_tree_t *tree, const gates_key_event_t *ev) {
     if (!ev->down) {
         return input_key(tree, ev);
     }
-    /* A key hides a tooltip; one that moves the focus shows the new node's (plan-0018). */
+    /* A key hides a tooltip; one that moves the focus shows the new node's (0.3.0). */
     gates_u32 before = tree->focus;
     gates_i_tip_dismiss(tree);
     bool consumed = input_key(tree, ev);
@@ -302,13 +302,13 @@ static bool input_key(gates_tree_t *tree, const gates_key_event_t *ev) {
         return false;
     }
     tree->eat_char = false;
-    /* An open menu takes every key (plan-0009 stage 2); the character a key
-     * makes is not typed into the control below (plan-0018). */
+    /* An open menu takes every key; the character a key
+     * makes is not typed into the control below (0.3.0). */
     if (gates_i_overlay_key(tree, ev)) {
         tree->eat_char = true;
         return true;
     }
-    /* Menu mode on the menu bar, and F10 as the menu key (plan-0018). */
+    /* Menu mode on the menu bar, and F10 as the menu key (0.3.0). */
     if (tree->mb_mode == GATES_I_MB_HIGHLIGHT) {
         if (gates_i_menubar_key(tree, ev)) {
             tree->eat_char = true;
@@ -321,16 +321,16 @@ static bool input_key(gates_tree_t *tree, const gates_key_event_t *ev) {
     if (ev->ctrl && ev->alt) {
         return false; /* AltGr on some layouts: never a Ctrl shortcut */
     }
-    /* Ctrl+Tab, Ctrl+PgUp/PgDn switch the tabs around the focus (plan-0018). */
+    /* Ctrl+Tab, Ctrl+PgUp/PgDn switch the tabs around the focus (0.3.0). */
     if (gates_i_tabs_ctrl_key(tree, ev)) {
         return true;
     }
-    /* A view's cell editor: Enter commits, Escape cancels (plan-0021). */
+    /* A view's cell editor: Enter commits, Escape cancels (0.6.0). */
     gates_u32 edit_view = gates_i_view_of_editor(tree, tree->focus);
     if (edit_view != GATES_NONE && gates_i_view_editor_key(tree, edit_view, ev)) {
         return true;
     }
-    /* A spin box's text box: steps and Enter belong to the spin box (plan-0019). */
+    /* A spin box's text box: steps and Enter belong to the spin box (0.4.0). */
     gates_u32 spin = gates_i_spin_of_box(tree, tree->focus);
     if (spin != GATES_NONE && focused_box(tree) != nullptr && gates_i_spin_key(tree, spin, ev)) {
         return true;
@@ -352,10 +352,10 @@ static bool input_key(gates_tree_t *tree, const gates_key_event_t *ev) {
         return true;
     }
     if (focus_ok && is_kind(tree, f, GATES_NODE_TOOLBAR) && gates_i_toolbar_key(tree, f, ev)) {
-        return true; /* buttons, Enter/Space invoke (plan-0018) */
+        return true; /* buttons, Enter/Space invoke (0.3.0) */
     }
     if (focus_ok && is_kind(tree, f, GATES_NODE_EDITOR) && gates_i_editor_key(tree, f, ev)) {
-        return true; /* the multi-line editor (plan-0022) */
+        return true; /* the multi-line editor (0.7.0) */
     }
     if (focus_ok && is_kind(tree, f, GATES_NODE_VIEW) && gates_i_view_key(tree, f, ev)) {
         return true; /* rows, paging, Enter activates the row */
@@ -409,7 +409,7 @@ static bool input_key(gates_tree_t *tree, const gates_key_event_t *ev) {
 gates_input_result_t gates_input_char(gates_tree_t *tree, gates_u32 codepoint) {
     if (tree != nullptr && tree->eat_char) {
         tree->eat_char = false;
-        return GATES_INPUT_CONSUMED; /* made by a key a menu took (plan-0018) */
+        return GATES_INPUT_CONSUMED; /* made by a key a menu took (0.3.0) */
     }
     if (codepoint < 0x20 || codepoint == 0x7F) {
         return GATES_INPUT_IGNORED; /* control characters are not text */
@@ -440,9 +440,9 @@ gates_input_result_t gates_input_char(gates_tree_t *tree, gates_u32 codepoint) {
     return gates_is_ok(err) ? GATES_INPUT_CONSUMED : GATES_INPUT_FAILED;
 }
 
-/* -- IME composition (plan-0006) ------------------------------------------- */
+/* -- IME composition ------------------------------------------- */
 
-/* The focused multi-line editor, or GATES_NONE (plan-0022). */
+/* The focused multi-line editor, or GATES_NONE (0.7.0). */
 static gates_u32 focused_editor(const gates_tree_t *tree) {
     if (tree == nullptr || tree->focus == GATES_NONE || !is_kind(tree, tree->focus, GATES_NODE_EDITOR) ||
         !gates_i_focus_eligible(tree, tree->focus)) {

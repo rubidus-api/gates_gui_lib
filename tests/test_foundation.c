@@ -1,4 +1,4 @@
-/* T003: foundation layer - proven wrappers, allocator injection (docs/tests/cases/T003-foundation.md). */
+/* foundation layer - proven wrappers, allocator injection. */
 #include <gates/types.h>
 #include <gates/tree.h>
 #include <proven/heap.h>

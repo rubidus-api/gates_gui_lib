@@ -1,5 +1,4 @@
-/* T012: scroll layout - offset, clamping, wheel, clipping, scrollbar
- * (docs/tests/cases/T012-scroll.md). */
+/* scroll layout - offset, clamping, wheel, clipping, scrollbar. */
 #include <gates/ui.h>
 #include <gates/widget.h>
 #include "gates_test.h"

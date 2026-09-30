@@ -11,7 +11,7 @@
  * Shows: 20 000 generated "files" with name, size and type; the sort order
  * and the selected file in a status line.
  *
- * Field check (T032): select a file, click "Size": rows sort by size and the
+ * Field check: select a file, click "Size": rows sort by size and the
  * same file is still selected and scrolled into view (the status line names
  * it); click "Size" again: descending; drag the right edge of "Name" wider and
  * narrower (it stops at its minimum); Left/Right scroll sideways once the

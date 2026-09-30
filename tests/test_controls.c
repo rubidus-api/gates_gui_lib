@@ -1,5 +1,5 @@
-/* T027: fields - hidden nodes, separator, progress, radio group, choice with
- * its option list, textbox error state (plan-0010 stage 1, RFC-0003 3). */
+/* fields - hidden nodes, separator, progress, radio group, choice with
+ * its option list, textbox error state. */
 #include <gates/ui.h>
 #include <gates/widget.h>
 #include <gates/event.h>

@@ -1,4 +1,4 @@
-/* gates_gui_lib - hit testing and pointer routing (Phase 2).
+/* gates_gui_lib - hit testing and pointer routing.
  * Hover and pressed live on the tree (slot indices); widgets are activated
  * on release-inside (button on_click, checkbox toggle + on_toggle). */
 #include <gates/ui.h>
@@ -91,7 +91,7 @@ void gates_i_activate(gates_tree_t *tree, gates_u32 idx) {
         return;
     }
     if (s->kind == GATES_NODE_GROUPHEAD) {
-        gates_i_group_head_activate(tree, idx); /* plan-0019 */
+        gates_i_group_head_activate(tree, idx);
         return;
     }
     if (s->kind != GATES_NODE_BUTTON && s->kind != GATES_NODE_CHECKBOX) {
@@ -102,7 +102,7 @@ void gates_i_activate(gates_tree_t *tree, gates_u32 idx) {
                                                st->cmd_scope_generation, st->cmd_id)
                         : nullptr;
     /* Reserve the notifications first: an activation or toggle that could not
-     * be announced does not happen at all (RFC-0003 4.1). */
+     * be announced does not happen at all. */
     gates_u32 slots = (gates_i_wants_events(tree, idx) ? 1u : 0u) + (cmd != nullptr ? 1u : 0u);
     if (slots > 0) {
         gates_err_t err = gates_i_event_reserve(tree, slots, 0);
@@ -152,7 +152,7 @@ static void textbox_caret_at(gates_tree_t *tree, gates_u32 idx, gates_point_t p,
         return;
     }
     gates_rect_t inner = gates_i_textbox_inner(tree, idx);
-    /* The nearest boundary by the font's advances (RFC-0004). */
+    /* The nearest boundary by the font's advances (0.2.0). */
     gates_u32 off = gates_i_box_offset_at_x(tree->text_backend, gates_i_font(tree, idx), st,
                                             p.x - inner.x + st->view_x);
     gates_text_edit_set_caret(st->edit, off, extend);
@@ -202,7 +202,7 @@ static bool drag_begin(gates_tree_t *tree, gates_u32 idx, const gates_pointer_ev
     gates_u32 clicks = ev->clicks != 0 ? ev->clicks : 1;
     gates_node_slot_t *s = gates_i_slot(tree, idx);
     if (s->kind == GATES_NODE_SLIDER) {
-        return gates_i_slider_press(tree, idx, p); /* plan-0019 */
+        return gates_i_slider_press(tree, idx, p);
     }
     if (s->kind == GATES_NODE_SPINARROWS) {
         return gates_i_spin_arrows_press(tree, idx, p); /* repeats while held (0.8.0) */
@@ -211,7 +211,7 @@ static bool drag_begin(gates_tree_t *tree, gates_u32 idx, const gates_pointer_ev
         return gates_i_view_pointer_down(tree, idx, p, clicks); /* rows, header, bars */
     }
     if (s->kind == GATES_NODE_EDITOR) {
-        return gates_i_editor_press(tree, idx, p, clicks, ev->shift); /* plan-0022 */
+        return gates_i_editor_press(tree, idx, p, clicks, ev->shift);
     }
     if (s->layout_kind == GATES_LAYOUT_SPLIT &&
         gates_rect_contains(gates_i_split_handle(tree, idx), p)) {
@@ -303,7 +303,7 @@ static void drag_update(gates_tree_t *tree, gates_point_t p) {
     }
     if (tree->drag_kind == GATES_DRAG_EDITOR_SELECT || tree->drag_kind == GATES_DRAG_EDITOR_VTHUMB ||
         tree->drag_kind == GATES_DRAG_EDITOR_HTHUMB) {
-        gates_i_editor_drag(tree, p); /* plan-0022 */
+        gates_i_editor_drag(tree, p);
         return;
     }
 
@@ -375,11 +375,11 @@ gates_node_t gates_input_pointer(gates_tree_t *tree, const gates_pointer_event_t
         return gates_i_handle(tree, tree->drag_node);
     }
 
-    /* A press hides a tooltip (plan-0018). */
+    /* A press hides a tooltip (0.3.0). */
     if (ev->action == GATES_POINTER_DOWN) {
         gates_i_tip_dismiss(tree);
     }
-    /* A press hides the keyboard cues (plan-0018). */
+    /* A press hides the keyboard cues (0.3.0). */
     if (ev->action == GATES_POINTER_DOWN && tree->cues_shown) {
         tree->cues_shown = false;
         if (!tree->cues_always) gates_i_mark_dirty(tree, GATES_NONE, GATES_DIRTY_PAINT);
@@ -392,7 +392,7 @@ gates_node_t gates_input_pointer(gates_tree_t *tree, const gates_pointer_event_t
     }
     gates_u32 hit = hit_idx(tree, base, ev->pos);
 
-    /* The menu bar (plan-0018): hover over titles, a press opens or closes. */
+    /* The menu bar (0.3.0): hover over titles, a press opens or closes. */
     gates_u32 hover_title = GATES_NONE;
     if (hit != GATES_NONE && gates_i_slot(tree, hit)->kind == GATES_NODE_MENUBAR && hit == tree->menubar) {
         gates_i32 t = gates_i_menubar_title_at(tree, hit, ev->pos);
@@ -411,7 +411,7 @@ gates_node_t gates_input_pointer(gates_tree_t *tree, const gates_pointer_event_t
         gates_i_menubar_press(tree, hit, ev->pos);
         return gates_i_handle(tree, hit);
     }
-    /* Toolbars (plan-0018): hover and press per button; the focus stays where it is. */
+    /* Toolbars (0.3.0): hover and press per button; the focus stays where it is. */
     gates_u32 tb = hit != GATES_NONE && gates_i_slot(tree, hit)->kind == GATES_NODE_TOOLBAR &&
                            !gates_i_widget_inert(tree, gates_i_state(tree, gates_i_slot(tree, hit)->state_index))
                        ? hit
@@ -454,7 +454,7 @@ gates_node_t gates_input_pointer(gates_tree_t *tree, const gates_pointer_event_t
 
     if (ev->action == GATES_POINTER_DOWN && ev->button == GATES_BUTTON_RIGHT && hit != GATES_NONE &&
         gates_i_slot(tree, hit)->kind == GATES_NODE_VIEW && gates_i_view_context(tree, hit, ev->pos)) {
-        return gates_i_handle(tree, hit); /* the header menu (plan-0021) */
+        return gates_i_handle(tree, hit); /* the header menu (0.6.0) */
     }
     if (ev->action == GATES_POINTER_WHEEL) {
         if (hit != GATES_NONE && gates_i_slot(tree, hit)->kind == GATES_NODE_VIEW &&
@@ -463,7 +463,7 @@ gates_node_t gates_input_pointer(gates_tree_t *tree, const gates_pointer_event_t
         }
         if (hit != GATES_NONE && gates_i_slot(tree, hit)->kind == GATES_NODE_EDITOR &&
             gates_i_editor_wheel(tree, hit, ev->wheel)) {
-            return gates_i_handle(tree, hit); /* so does an editor (plan-0022) */
+            return gates_i_handle(tree, hit); /* so does an editor (0.7.0) */
         }
         if (hit != GATES_NONE && gates_i_range_wheel(tree, hit, ev->wheel)) {
             return gates_i_handle(tree, hit); /* a focused spin box or slider steps (0.8.0) */
@@ -489,7 +489,7 @@ gates_node_t gates_input_pointer(gates_tree_t *tree, const gates_pointer_event_t
         set_hover(tree, target);
         if (ev->button == GATES_BUTTON_LEFT && target != GATES_NONE &&
             gates_i_focus_eligible(tree, target)) {
-            /* Clicking a button or checkbox gives it keyboard focus (plan-0009);
+            /* Clicking a button or checkbox gives it keyboard focus;
              * clicks elsewhere leave focus where it is. */
             gates_tree_set_focus(tree, gates_i_handle(tree, target));
         }

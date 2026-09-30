@@ -1,4 +1,4 @@
-/* gates_gui_lib - text buffer (RFC-0006): a gap buffer of bytes with a
+/* gates_gui_lib - text buffer (0.7.0): a gap buffer of bytes with a
  * parallel gap buffer of style bytes, a line-start index in a gap array with
  * a pending shift, and marks. Platform-free. */
 #include <gates/text_buffer.h>

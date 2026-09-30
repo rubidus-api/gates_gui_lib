@@ -15,7 +15,7 @@
  * following), Clear (F8); the detail field; lines kept, dropped, batches the
  * producer had to skip; closing the window while the worker floods.
  *
- * Field check (T035): lines arrive by themselves and the view follows; F5
+ * Field check: lines arrive by themselves and the view follows; F5
  * pauses and resumes; F6 floods: "skipped" grows, input (scrolling, clicking,
  * F-keys) still answers at once; wheel up stops following while lines keep
  * arriving; clicking a line shows it; End follows again; resizing the window
@@ -163,7 +163,7 @@ static void on_lines(gates_tree_t *tree, gates_node_t node, gates_u32 kind, void
     }
 }
 
-/* Input the tree could not complete (usually out of memory): say so (RFC-0003 section 13). */
+/* Input the tree could not complete (usually out of memory): say so. */
 static void on_input_error(gates_window_t *win, gates_err_t err, void *user) {
     (void)win;
     app_t *a = user;

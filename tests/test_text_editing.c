@@ -1,6 +1,6 @@
-/* T022: text editing contract - selection API, clipboard, read-only, maximum
+/* text editing contract - selection API, clipboard, read-only, maximum
  * length with a pending offer, password, bounded undo/redo
- * (docs/tests/cases/T022-text-editing.md, plan-0008, RFC-0003 4.2 and 6.1). */
+ */
 #include <gates/ui.h>
 #include <gates/widget.h>
 #include <gates/event.h>

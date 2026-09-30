@@ -1,4 +1,4 @@
-/* gates_gui_lib - Win32 clipboard provider (plan-0008): CF_UNICODETEXT with
+/* gates_gui_lib - Win32 clipboard provider: CF_UNICODETEXT with
  * checked UTF-16 <-> UTF-8 conversion. A lone surrogate from another
  * application becomes U+FFFD; the core never receives invalid UTF-8. When
  * another process holds the clipboard the call fails with BUSY (no retry). */

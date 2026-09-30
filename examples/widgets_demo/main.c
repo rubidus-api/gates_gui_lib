@@ -1,11 +1,11 @@
-/* widgets_demo - Phase 2 widgets, layout, and interaction (RFC-0001 section 28).
+/* widgets_demo - widgets, layout, and interaction.
  *
- * Semantic-first (RFC-0002): the app describes meaning - a column with a
+ * Semantic-first: the app describes meaning - a column with a
  * title, a toolbar row, a two-page stack, checkboxes and a status label -
  * and the library lays out and paints it with theme tokens and the
- * system UI font (proportional, RFC-0004).
+ * system UI font (proportional, 0.2.0).
  *
- * Manual checklist (T011):
+ * Manual checklist:
  *   - window opens; title, toolbar buttons, page content, status line render;
  *   - buttons show hover and pressed feedback; clicking "Page 1"/"Page 2"
  *     switches the stack page;
@@ -14,9 +14,9 @@
  *   - page 2 is a split view: drag the handle to resize the panes; the right
  *     pane scrolls with the wheel and its scrollbar thumb can be dragged;
  *   - resize relayouts without artifacts; ESC exits cleanly;
- *   - F2 cycles the theme: system, light, dark, high contrast (plan-0013); with
+ *   - F2 cycles the theme: system, light, dark, high contrast; with
  *     "system" the window follows Windows dark mode and high contrast live;
- *   - F3 / F4 zoom the whole window in and out (plan-0014), on top of the
+ *   - F3 / F4 zoom the whole window in and out, on top of the
  *     monitor scale and the Windows "Text size" setting.
  */
 #include <gates/app.h>

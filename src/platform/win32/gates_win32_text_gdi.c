@@ -1,4 +1,4 @@
-/* gates_gui_lib - Win32 GDI text backend (RFC-0002, RFC-0004).
+/* gates_gui_lib - Win32 GDI text backend (0.2.0).
  *
  * Two faces: GATES_FONT_UI is the system message font (Segoe UI, Malgun
  * Gothic on Korean Windows - proportional), GATES_FONT_MONO a fixed-pitch face
@@ -257,7 +257,7 @@ static gates_u32 *target_row(gates_pixels_t *px, gates_i32 y) {
     return (gates_u32 *)(void *)((gates_u8 *)px->ptr + (gates_usize_t)y * px->stride_bytes);
 }
 
-/* The face for drawing at `dpi` (plan-0013); advances stay the 96-dpi ones,
+/* The face for drawing at `dpi`; advances stay the 96-dpi ones,
  * so layout never changes with the scale. A scaled face can come out taller
  * than the scaled line (hinting rounds up): only then is it made smaller until
  * it fits; its baseline goes where the logical baseline scales to, kept inside

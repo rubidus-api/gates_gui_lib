@@ -1,8 +1,8 @@
-/* Backend conformance checks required by RFC-0002 section 8 and RFC-0004.
+/* Backend conformance checks required of every text backend.
  *
  * Header-only so the identical assertions can run against the builtin backend
- * on the host (T016) and against the Win32 GDI backend inside a Windows
- * console executable (T017). A backend that passes these may be swapped in
+ * on the host and against the Win32 GDI backend inside a Windows
+ * console executable. A backend that passes these may be swapped in
  * without changing any layout. */
 #ifndef GATES_TEXT_CONFORMANCE_H
 #define GATES_TEXT_CONFORMANCE_H
@@ -71,12 +71,12 @@ static gates_rect_t gtc_ink_bounds(void) {
     return (gates_rect_t){ x0, y0, x1 - x0 + 1, y1 - y0 + 1 };
 }
 
-/* Runs the whole RFC-0002 section 8 checklist against `be`. */
+/* Runs the whole checklist against `be`. */
 static gates_i32 gtc_width(const gates_text_backend_t *be, gates_font_t f, const char *s) {
     return gates_text_width(be, f, gtc_str(s));
 }
 
-/* Every check, for one font (RFC-0004: advances, not cells). */
+/* Every check, for one font (advances, not cells). */
 static inline void gates_text_conformance_font(const gates_text_backend_t *be, gates_font_t f) {
     /* 1. Metrics coherence. */
     gates_text_metrics_t m = be->metrics(be->ctx, f);

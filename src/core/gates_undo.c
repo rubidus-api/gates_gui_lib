@@ -1,4 +1,4 @@
-/* gates_gui_lib - undo stack (plan-0021, RFC-0005 A11): entries with undo
+/* gates_gui_lib - undo stack (0.6.0): entries with undo
  * and redo functions, merge runs, a bound, a clean mark and commands kept in
  * step. Not a node; platform-free. */
 #include <gates/undo.h>

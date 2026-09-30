@@ -52,7 +52,7 @@ typedef struct gates_i_overlay_t {
     bool pressed_inside;         /* menu: a press started inside it */
 } gates_i_overlay_t;
 
-/* A node's message handler (gates_post.c, plan-0012). */
+/* A node's message handler (gates_post.c). */
 typedef struct gates_i_msg_handler_t {
     gates_u32 index;
     gates_u32 generation;
@@ -60,7 +60,7 @@ typedef struct gates_i_msg_handler_t {
     void *user;
 } gates_i_msg_handler_t;
 
-/* One timer (gates_timer.c, plan-0012). */
+/* One timer (gates_timer.c). */
 typedef struct gates_i_timer_t {
     gates_timer_id_t id;
     gates_u32 index;
@@ -83,7 +83,7 @@ typedef struct gates_i_access_prop_t {
     gates_u32 id_len;
     gates_live_t live;
     gates_node_t labelled_by;
-    gates_u8 *tip;               /* tooltip (plan-0018) */
+    gates_u8 *tip;               /* tooltip (0.3.0) */
     gates_u32 tip_len;
 } gates_i_access_prop_t;
 
@@ -101,7 +101,7 @@ typedef struct gates_i_command_t {
     bool checked;
     gates_command_fn invoke;
     void *user;
-    gates_u32 icon;              /* plan-0020: 0 = none */
+    gates_u32 icon;              /* 0 = none */
 } gates_i_command_t;
 
 #define GATES_NONE UINT32_MAX
@@ -119,12 +119,12 @@ typedef struct gates_i_command_t {
 #define GATES_SEPARATOR_SPACE 4   /* space on each side of a separator's line */
 #define GATES_PROGRESS_H     10
 
-/* Dirty bits (RFC-0001 dirty layout / dirty paint; v1 resolves them as
- * full relayout / full repaint - see plan-0003 decision 6). */
+/* Dirty bits (dirty layout / dirty paint; they resolve as
+ * full relayout / full repaint). */
 #define GATES_DIRTY_LAYOUT 0x1u
 #define GATES_DIRTY_PAINT  0x2u
 
-/* Layout kinds (RFC-0001 section 11). Values mirror the public gates_layout_t. */
+/* Layout kinds. Values mirror the public gates_layout_t. */
 typedef enum gates_layout_kind_i {
     GATES_LAYOUT_NONE = 0,
     GATES_LAYOUT_ABSOLUTE,
@@ -144,11 +144,11 @@ typedef enum gates_drag_kind_i {
     GATES_DRAG_SPLIT,
     GATES_DRAG_SCROLL_THUMB,
     GATES_DRAG_TEXT_SELECT,
-    GATES_DRAG_VIEW_VTHUMB,      /* plan-0011: a view's scrollbar thumbs and a header edge */
+    GATES_DRAG_VIEW_VTHUMB,      /* a view's scrollbar thumbs and a header edge */
     GATES_DRAG_VIEW_HTHUMB,
     GATES_DRAG_VIEW_COLUMN,
-    GATES_DRAG_SLIDER,           /* plan-0019: a slider's thumb */
-    GATES_DRAG_EDITOR_SELECT,    /* plan-0022: selecting text in an editor, its scrollbar thumbs */
+    GATES_DRAG_SLIDER,           /* a slider's thumb */
+    GATES_DRAG_EDITOR_SELECT,    /* selecting text in an editor, its scrollbar thumbs */
     GATES_DRAG_EDITOR_VTHUMB,
     GATES_DRAG_EDITOR_HTHUMB,
     GATES_DRAG_SPIN,             /* 0.8.0: a spin arrow held down repeats */
@@ -161,7 +161,7 @@ typedef enum gates_align_i {
     GATES_ALIGN_END,
 } gates_align_i;
 
-/* One option of a radio group or choice (plan-0010); labels live in the same
+/* One option of a radio group or choice; labels live in the same
  * block as the array. */
 typedef struct gates_i_option_t {
     gates_u32 id;
@@ -170,7 +170,7 @@ typedef struct gates_i_option_t {
     bool disabled;
 } gates_i_option_t;
 
-/* Widget state (label/button/checkbox payload; RFC-0001 section 6.2 state_index). */
+/* Widget state (label/button/checkbox payload, by state_index). */
 typedef struct gates_widget_state_t {
     bool in_use;
     gates_u32 next_free;
@@ -184,10 +184,10 @@ typedef struct gates_widget_state_t {
     gates_text_edit_t *edit;
     gates_u32 cols;          /* intrinsic width in average character widths */
     gates_i32 view_x;        /* horizontal scroll, logical units (paint keeps it) */
-    gates_u32 ime_cursor;    /* IME cursor, bytes into the preedit (plan-0006) */
+    gates_u32 ime_cursor;    /* IME cursor, bytes into the preedit */
     gates_rect_t caret_rect; /* last painted caret, window coordinates */
     bool caret_valid;        /* caret_rect is from a paint of the focused box */
-    /* Editing policy (plan-0008). */
+    /* Editing policy. */
     bool read_only;
     bool password;
     gates_u32 max_bytes;     /* 0 = unlimited */
@@ -200,57 +200,57 @@ typedef struct gates_widget_state_t {
     gates_u32 offer_revision;
     gates_u32 offer_fit;
 
-    gates_u32 revision;      /* committed text / checked changes (plan-0007) */
-    bool not_focusable;      /* taken out of the Tab order (plan-0009) */
-    /* Button bound to a command (plan-0009); cmd_id 0 = none. */
+    gates_u32 revision;      /* committed text / checked changes */
+    bool not_focusable;      /* taken out of the Tab order */
+    /* Button bound to a command; cmd_id 0 = none. */
     gates_u32 cmd_scope_index;
     gates_u32 cmd_scope_generation;
     gates_command_id_t cmd_id;
-    /* Menu overlay (plan-0009 stage 2): its command ids, their scope, selection. */
+    /* Menu overlay: its command ids, their scope, selection. */
     gates_command_id_t *menu_ids;
     gates_u32 menu_count;
     gates_i32 menu_sel;          /* -1 = none */
     gates_u32 menu_scope_index;
     gates_u32 menu_scope_generation;
     bool menu_is_list;           /* a choice's option list: scope = the choice, ids = option ids */
-    bool menu_from_bar;          /* opened from the menu bar (plan-0018): title menu_bar_title */
+    bool menu_from_bar;          /* opened from the menu bar (0.3.0): title menu_bar_title */
     gates_u32 menu_bar_title;
     gates_i32 menu_min_w;        /* a choice's list: at least as wide as the choice */
-    /* Radio group / choice (plan-0010): one allocation holds array and labels. */
+    /* Radio group / choice: one allocation holds array and labels. */
     bool has_options;
     gates_i_option_t *opts;
     gates_u32 opt_count;
     gates_u32 opt_sel;           /* selected id, 0 = none */
     gates_i32 opt_press;         /* radio: row a press started on, -1 = none */
-    /* Virtual view (plan-0011): columns, model binding, scroll and selection. */
+    /* Virtual view: columns, model binding, scroll and selection. */
     struct gates_i_view *view;
-    /* Label with a mnemonic target (plan-0018). */
+    /* Label with a mnemonic target (0.3.0). */
     bool has_mn_target;
     gates_u32 mn_target_index;
     gates_u32 mn_target_generation;
-    /* Menu bar (plan-0018): its titles and their command ids. */
+    /* Menu bar (0.3.0): its titles and their command ids. */
     struct gates_i_menubar *mbar;
-    /* Toolbar (plan-0018): its entries (command ids, 0 = separator). */
+    /* Toolbar (0.3.0): its entries (command ids, 0 = separator). */
     struct gates_i_toolbar *tbar;
-    /* Property grid (plan-0021): its properties and categories. */
+    /* Property grid (0.6.0): its properties and categories. */
     struct gates_i_propgrid *pgrid;
-    /* Multi-line editor (plan-0022): its buffer, caret, view and history. */
+    /* Multi-line editor (0.7.0): its buffer, caret, view and history. */
     struct gates_i_editor *editor;
-    /* Tabs (plan-0018): the titles; the pages are the stack's children. */
+    /* Tabs (0.3.0): the titles; the pages are the stack's children. */
     struct gates_i_tabs *tabs;
-    /* Spin box and slider (plan-0019): the range. */
+    /* Spin box and slider (0.4.0): the range. */
     struct gates_i_range *rng;
-    /* Group box (plan-0019): collapsible (checked = expanded). */
+    /* Group box (0.4.0): collapsible (checked = expanded). */
     bool group_fold;
-    /* Images (plan-0020): an image node's image and set size; a button's icon. */
+    /* Images (0.5.0): an image node's image and set size; a button's icon. */
     gates_u32 image;
     gates_size_t image_size;
     gates_u32 icon;
-    /* Form (plan-0010 stage 2): its field table. */
+    /* Form: its field table. */
     struct gates_i_field *fields;
     gates_u32 field_count;
     gates_u32 field_cap;
-    /* Progress (per-mille), textbox error state, label shown as an error (plan-0010). */
+    /* Progress (per-mille), textbox error state, label shown as an error. */
     gates_i32 value;
     bool invalid;
     gates_event_fn on_event; /* typed notifications; null = none queued */
@@ -278,7 +278,7 @@ typedef struct gates_node_slot_t {
     gates_u32 child_count;
 
     /* Layout (container props + child props + results). */
-    gates_i8 font;           /* a gates_font_t, or GATES_FONT_INHERIT (RFC-0004) */
+    gates_i8 font;           /* a gates_font_t, or GATES_FONT_INHERIT (0.2.0) */
     gates_u8 layout_kind;    /* gates_layout_kind_i */
     gates_u8 grow;           /* child main-axis weight (0 = fixed) */
     gates_u8 align;          /* gates_align_i, child cross-axis */
@@ -298,14 +298,14 @@ typedef struct gates_node_slot_t {
     gates_size_t content_size;
     /* FORM: the label column width found by the last measure. */
     gates_i32 form_label_w;
-    /* GRID (plan-0019): columns (0 = 2); a child's span (0 = 1). WRAP and
+    /* GRID (0.4.0): columns (0 = 2); a child's span (0 = 1). WRAP and
      * FORM: the width of the last arrange (line breaks and stacking depend on it). */
     gates_u8 grid_cols;
     gates_u8 span;
     gates_i32 wrap_w;
 
     gates_u32 dirty;         /* GATES_DIRTY_* */
-    bool hidden;             /* plan-0010: no space, no paint, no hit, no focus */
+    bool hidden;             /* no space, no paint, no hit, no focus */
     void *user_data;
 } gates_node_slot_t;
 
@@ -346,12 +346,12 @@ struct gates_tree {
     gates_i32 line_height;
     gates_i32 advance;
     /* The backend of the last gates_layout_run (borrowed): hit testing and
-     * accessibility measure text with it between layouts (RFC-0004). */
+     * accessibility measure text with it between layouts (0.2.0). */
     const gates_text_backend_t *text_backend;
 
     gates_u32 dirty_bits;    /* aggregate of all marks since last clear */
 
-    /* Typed notification queue (plan-0007). Entries before event_head are being
+    /* Typed notification queue. Entries before event_head are being
      * delivered; coalescing only merges into undelivered entries. */
     gates_i_event_t *events;
     gates_u32 event_len;
@@ -366,24 +366,24 @@ struct gates_tree {
     gates_u8 *event_text_retired;
     gates_err_t input_error; /* last input-path failure, see gates_input_take_error */
 
-    /* Clipboard provider (plan-0008); has_clipboard false = none. */
+    /* Clipboard provider; has_clipboard false = none. */
     gates_clipboard_t clipboard;
     bool has_clipboard;
 
-    /* Keyboard (plan-0009): control held down by Space until key-up. */
+    /* Keyboard: control held down by Space until key-up. */
     gates_u32 key_press;     /* slot index or GATES_NONE */
     gates_u32 focus_scope;   /* slot index of the scope root; GATES_NONE = tree root */
     gates_i_command_t *commands;
     gates_u32 command_count;
     gates_u32 command_cap;
-    /* Open overlays, topmost last (plan-0009 stage 2). */
+    /* Open overlays, topmost last. */
     gates_i_overlay_t overlays[GATES_I_OVERLAY_MAX];
     gates_u32 overlay_count;
 
-    /* Posting and timers (plan-0012). */
+    /* Posting and timers. */
     gates_u64 serial;            /* unique for the process, never reused */
     gates_sender_t *sender;      /* attached sender (not a reference) or null */
-    /* Background tasks (plan-0021): the platform's threads and the running tasks. */
+    /* Background tasks (0.6.0): the platform's threads and the running tasks. */
     gates_threads_t threads;
     bool has_threads;
     struct gates_task *tasks;
@@ -400,7 +400,7 @@ struct gates_tree {
     void (*clock_changed)(void *ctx);
     void *clock_ctx;
 
-    /* Accessibility (plan-0014). */
+    /* Accessibility. */
     bool access_on;
     gates_access_change_t access_changes[GATES_ACCESS_CHANGES_MAX];
     gates_u32 access_change_count;
@@ -414,7 +414,7 @@ struct gates_tree {
     gates_u32 announce_len;
     bool announce_assertive;
 
-    /* Application frame (plan-0018): the menu bar and menu mode, keyboard cues. */
+    /* Application frame (0.3.0): the menu bar and menu mode, keyboard cues. */
     gates_u32 menubar;           /* slot of the live menu bar, or GATES_NONE */
     gates_u8 mb_mode;            /* GATES_I_MB_OFF / _HIGHLIGHT / _OPEN */
     gates_u32 mb_sel;            /* highlighted or open title */
@@ -423,26 +423,26 @@ struct gates_tree {
     bool cues_always;            /* the platform always underlines access keys */
     bool eat_char;               /* a menu took the last key: drop the character it makes */
     gates_u32 tb_hover;          /* toolbar under the pointer (its hover entry), GATES_NONE */
-    /* Images (plan-0020): the store and the platform's decoder. */
+    /* Images (0.5.0): the store and the platform's decoder. */
     struct gates_i_image_slot *images;
     gates_u32 image_count;
     gates_u32 image_cap;
     gates_u32 next_image_id;
     gates_image_decoder_t decoder;
     bool has_decoder;
-    /* GRID column grow weights (plan-0019), per grid node. */
+    /* GRID column grow weights (0.4.0), per grid node. */
     struct gates_i_grid_grow *grid_grows;
     gates_u32 grid_grow_count;
     gates_u32 grid_grow_cap;
     bool wrap_changed;           /* a wrap container was arranged at a new width */
-    /* Bubble handlers and deferred calls (plan-0019). */
+    /* Bubble handlers and deferred calls (0.4.0). */
     struct gates_i_bubble *bubbles;
     gates_u32 bubble_count;
     gates_u32 bubble_cap;
     struct gates_i_defer *defers;
     gates_u32 defer_count;
     gates_u32 defer_cap;
-    /* Tooltips (plan-0018). */
+    /* Tooltips (0.3.0). */
     gates_u32 tip_index;         /* target node, GATES_NONE when none */
     gates_u32 tip_generation;
     gates_u64 tip_item;          /* a toolbar button: entry + 1, else 0 */
@@ -463,7 +463,7 @@ struct gates_tree {
 #define GATES_I_MB_HIGHLIGHT 1u
 #define GATES_I_MB_OPEN 2u
 
-/* Images (gates_image.c, plan-0020). */
+/* Images (gates_image.c, 0.5.0). */
 typedef struct gates_i_image_slot {
     gates_u32 id;                /* 0 = free */
     struct gates_image *image;
@@ -473,7 +473,7 @@ void gates_i_images_free(gates_tree_t *tree);
 gates_err_t gates_i_draw_image_fit(const gates_tree_t *tree, gates_draw_list_t *dl, gates_u32 id, gates_rect_t r);
 gates_size_t gates_i_image_measure(const gates_tree_t *tree, const gates_node_slot_t *s);
 
-/* GRID grow weights (gates_layout.c, plan-0019). */
+/* GRID grow weights (gates_layout.c, 0.4.0). */
 typedef struct gates_i_grid_grow {
     gates_u32 index;
     gates_u32 generation;
@@ -482,7 +482,7 @@ typedef struct gates_i_grid_grow {
 } gates_i_grid_grow;
 void gates_i_grid_free(gates_tree_t *tree);
 
-/* Bubble handlers and deferred calls (gates_event.c, plan-0019). */
+/* Bubble handlers and deferred calls (gates_event.c, 0.4.0). */
 typedef struct gates_i_bubble {
     gates_u32 index;
     gates_u32 generation;
@@ -514,7 +514,7 @@ void gates_i_event_try_push(gates_tree_t *tree, gates_u32 idx, gates_event_kind_
 void gates_i_event_purge(gates_tree_t *tree, gates_u32 idx);
 void gates_i_event_free(gates_tree_t *tree);
 
-/* Textbox editing (gates_textbox.c, plan-0008). */
+/* Textbox editing (gates_textbox.c). */
 typedef enum gates_i_unit_t {
     GATES_I_UNIT_TYPE,       /* typed characters: consecutive ones merge */
     GATES_I_UNIT_DEL_BACK,   /* Backspace run */
@@ -539,12 +539,12 @@ void gates_i_box_forget(gates_tree_t *tree, gates_widget_state_t *st);
 /* Frees history and offer when the widget state is released. */
 void gates_i_box_free(gates_tree_t *tree, gates_widget_state_t *st);
 /* The node's effective font: its own, else its nearest ancestor's, else
- * GATES_FONT_UI (gates_tree.c, RFC-0004). */
+ * GATES_FONT_UI (gates_tree.c, 0.2.0). */
 gates_i32 gates_i_font(const gates_tree_t *tree, gates_u32 idx);
 static inline gates_i32 gates_i_slot_font(const gates_tree_t *tree, const gates_node_slot_t *s) {
     return gates_i_font(tree, (gates_u32)(s - tree->slots));
 }
-/* Text box geometry (RFC-0004): the x of a byte offset from the start of the
+/* Text box geometry (0.2.0): the x of a byte offset from the start of the
  * box's text, and the offset nearest to an x, in the box's font - a password
  * box by its stars. Everything that draws, hits or describes a text box uses
  * these two, so they agree. */
@@ -558,7 +558,7 @@ gates_u32 gates_i_box_offset_at_x(const gates_text_backend_t *be, gates_i32 font
 gates_err_t gates_i_paste_normalize(gates_allocator_t alloc, gates_str_t in, bool keep_lines, gates_u8 **out,
                                     gates_u32 *out_len);
 
-/* Focus (gates_focus.c, plan-0009). */
+/* Focus (gates_focus.c). */
 bool gates_i_focus_eligible(const gates_tree_t *tree, gates_u32 idx);
 /* When the focused node is no longer eligible (disabled, hidden, command
  * gone), focus moves to the next eligible control in tree order, or to none. */
@@ -617,7 +617,7 @@ gates_err_t gates_i_menu_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
                                const gates_theme_t *theme, const gates_text_backend_t *text);
 void gates_i_menu_free(gates_tree_t *tree, gates_widget_state_t *st);
 
-/* Options (gates_choice.c, plan-0010). */
+/* Options (gates_choice.c). */
 #define GATES_RADIO_ROW_GAP 4
 #define GATES_CHOICE_ARROW_CELLS 2
 /* Height of one radio row for a line height. */
@@ -651,11 +651,11 @@ void gates_i_choice_lists_check(gates_tree_t *tree, gates_u32 only_idx);
 void gates_i_event_push_ex(gates_tree_t *tree, gates_u32 idx, gates_event_kind_t kind,
                            gates_event_origin_t origin, gates_u32 aux, gates_u64 item);
 
-/* Virtual views (gates_view.c, plan-0011). */
+/* Virtual views (gates_view.c). */
 void gates_i_view_free(gates_tree_t *tree, gates_widget_state_t *st);
 gates_item_id_t gates_i_view_selected(const gates_widget_state_t *st);
 bool gates_i_view_following(const gates_widget_state_t *st);
-/* Accessibility (gates_view.c, plan-0014 stage 2): rows as items - the rows
+/* Accessibility (gates_view.c): rows as items - the rows
  * shown now plus the selection; cells only for shown rows. */
 #define GATES_I_VIEW_LIST 0u
 #define GATES_I_VIEW_TABLE 1u
@@ -691,7 +691,7 @@ bool gates_i_view_pointer_down(gates_tree_t *tree, gates_u32 idx, gates_point_t 
 void gates_i_view_pointer_up(gates_tree_t *tree, gates_u32 idx, gates_point_t p);
 void gates_i_view_drag(gates_tree_t *tree, gates_point_t p);
 bool gates_i_view_wheel(gates_tree_t *tree, gates_u32 idx, gates_vec2_t wheel);
-/* In-place editing (plan-0021): the editor child is placed by the view's arrange;
+/* In-place editing (0.6.0): the editor child is placed by the view's arrange;
  * the view owning editor text box `box` (or GATES_NONE); focus left the editor;
  * Enter/Escape in the editor; cancel any open edit (a view being disabled). */
 void gates_i_view_place_editor(gates_tree_t *tree, gates_u32 idx);
@@ -732,9 +732,9 @@ gates_err_t gates_i_menu_invoke(gates_tree_t *tree, gates_u32 menu_idx, gates_co
 /* Menu row geometry for accessibility bounds. */
 gates_rect_t gates_i_menu_row_rect(const gates_tree_t *tree, gates_u32 menu_idx, gates_u32 row);
 
-/* Mnemonics (gates_mnemonic.c, plan-0018). A text is markup when its node
+/* Mnemonics (gates_mnemonic.c, 0.3.0). A text is markup when its node
  * parses it: buttons, check boxes, labels with a target, command labels in
- * menus, menu bar titles. Widths add up exactly (RFC-0004), so markup text is
+ * menus, menu bar titles. Widths add up exactly (0.2.0), so markup text is
  * measured and drawn in pieces around each removed '&'. */
 bool gates_i_mn_markup(const gates_tree_t *tree, gates_u32 idx);
 /* The width of the shown text (markup removed). */
@@ -757,7 +757,7 @@ static inline gates_i32 gates_i_text_w(const gates_tree_t *tree, gates_u32 idx,
 /* Shortcut text for menus and accessibility (gates_command.c). */
 gates_usize_t gates_i_shortcut_text(const gates_shortcut_t *k, char *buf, gates_usize_t cap);
 
-/* Menu bar (gates_menubar.c, plan-0018). */
+/* Menu bar (gates_menubar.c, 0.3.0). */
 typedef struct gates_i_menubar_item {
     gates_u8 *title;
     gates_u32 title_len;
@@ -808,7 +808,7 @@ gates_err_t gates_i_menu_open_for_bar(gates_tree_t *tree, gates_point_t at, gate
 /* Closes menu overlay record i (reported with result 0). */
 void gates_i_menu_close_record(gates_tree_t *tree, gates_u32 i);
 
-/* Toolbar and status bar (gates_toolbar.c, plan-0018). */
+/* Toolbar and status bar (gates_toolbar.c, 0.3.0). */
 typedef struct gates_i_toolbar {
     gates_u32 scope_index;
     gates_u32 scope_generation;
@@ -818,7 +818,7 @@ typedef struct gates_i_toolbar {
     gates_i32 sel;               /* keyboard stop: entry index, count = ">>", -1 = none */
     gates_i32 press;             /* entry pressed by the pointer, count = ">>", -1 = none */
     gates_i32 hover;             /* entry under the pointer, -1 = none */
-    bool icons_only;             /* plan-0020: buttons with an icon show only it */
+    bool icons_only;             /* buttons with an icon show only it */
 } gates_i_toolbar;
 void gates_i_toolbar_free(gates_tree_t *tree, gates_widget_state_t *st);
 bool gates_i_toolbar_any_enabled(const gates_tree_t *tree, const gates_widget_state_t *st);
@@ -847,7 +847,7 @@ gates_u32 gates_i_toolbar_tip(const gates_tree_t *tree, gates_u32 idx, gates_u32
 gates_err_t gates_i_statusbar_paint(const gates_tree_t *tree, gates_u32 idx, gates_draw_list_t *dl,
                                     const gates_theme_t *theme);
 
-/* Tabs (gates_tabs.c, plan-0018): a TABS column holds the strip (TABSTRIP) and
+/* Tabs (gates_tabs.c, 0.3.0): a TABS column holds the strip (TABSTRIP) and
  * a stack panel whose children are the pages. */
 typedef struct gates_i_tab_title {
     gates_u8 *text;
@@ -882,7 +882,7 @@ gates_u32 gates_i_view_ncol(const gates_tree_t *tree, gates_u32 idx);
 gates_i32 gates_i_view_col_width(const gates_tree_t *tree, gates_u32 idx, gates_u32 k);
 void gates_i_view_set_col_width(gates_tree_t *tree, gates_u32 idx, gates_u32 k, gates_i32 width);
 
-/* Spin box and slider (gates_inputs.c, plan-0019). */
+/* Spin box and slider (gates_inputs.c, 0.4.0). */
 typedef struct gates_i_range {
     gates_i64 min, max, step, page, value;
     gates_u32 scale;
@@ -891,7 +891,7 @@ typedef struct gates_i_range {
 } gates_i_range;
 void gates_i_range_free(gates_tree_t *tree, gates_widget_state_t *st);
 void gates_i_propgrid_free(gates_tree_t *tree, gates_widget_state_t *st);
-/* Multi-line editor (plan-0022). */
+/* Multi-line editor (0.7.0). */
 void gates_i_editor_free(gates_tree_t *tree, gates_widget_state_t *st);
 gates_u32 gates_i_editor_caret(const gates_widget_state_t *st);
 gates_size_t gates_i_editor_measure(const gates_tree_t *tree, const gates_node_slot_t *s,
@@ -915,7 +915,7 @@ gates_u32 gates_i_editor_offset_at_point(gates_tree_t *tree, gates_u32 idx, gate
 bool gates_i_editor_row_of(gates_tree_t *tree, gates_u32 idx, gates_u32 offset, gates_u32 *begin, gates_u32 *end);
 gates_err_t gates_i_editor_user_set(gates_tree_t *tree, gates_u32 idx, gates_str_t text);
 void gates_i_node_undo(gates_tree_t *tree, gates_node_t node);
-/* Background tasks (plan-0021): message kinds from GATES_I_TASK_KIND_BASE are
+/* Background tasks (0.6.0): message kinds from GATES_I_TASK_KIND_BASE are
  * the tasks' own, handled by gates_i_task_message before node handlers; tree
  * destroy cancels and joins every task first. */
 #define GATES_I_TASK_KIND_BASE 0xFFFF0000u
@@ -944,7 +944,7 @@ bool gates_i_slider_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event
 bool gates_i_slider_press(gates_tree_t *tree, gates_u32 idx, gates_point_t p);
 void gates_i_slider_drag(gates_tree_t *tree, gates_point_t p, bool end);
 
-/* Group box (gates_group.c, plan-0019). */
+/* Group box (gates_group.c, 0.4.0). */
 bool gates_i_group_foldable(const gates_tree_t *tree, gates_u32 group);
 gates_err_t gates_i_group_toggle(gates_tree_t *tree, gates_u32 group, bool expanded);
 void gates_i_group_head_activate(gates_tree_t *tree, gates_u32 head);
@@ -956,7 +956,7 @@ gates_err_t gates_i_group_paint(const gates_tree_t *tree, gates_u32 group, gates
 gates_err_t gates_i_group_head_paint(const gates_tree_t *tree, gates_u32 head, gates_draw_list_t *dl,
                                      const gates_theme_t *theme, const gates_text_backend_t *text);
 
-/* Tooltips (gates_tooltip.c, plan-0018). */
+/* Tooltips (gates_tooltip.c, 0.3.0). */
 gates_str_t gates_i_tooltip_of(const gates_tree_t *tree, gates_u32 idx);
 /* The pointer rests over `idx`/`item` (GATES_NONE: over nothing with a tooltip). */
 void gates_i_tip_hover(gates_tree_t *tree, gates_point_t p, gates_u32 hit);

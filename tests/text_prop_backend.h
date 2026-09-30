@@ -1,4 +1,4 @@
-/* A deterministic proportional text backend for host tests (RFC-0004).
+/* A deterministic proportional text backend for host tests (0.2.0).
  * GATES_FONT_UI: synthetic proportional widths - narrow letters 3, 'm'/'w' 12,
  * space 4, other ASCII 7, wide (Hangul, CJK, fullwidth) 16, combining marks 0.
  * GATES_FONT_MONO: the cell rule, 8 per cell. Draws nothing. */

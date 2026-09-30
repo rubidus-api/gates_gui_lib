@@ -1,4 +1,4 @@
-/* T053: background tasks (plan-0021 stage 3) - work on a thread, progress
+/* background tasks (0.6.0) - work on a thread, progress
  * coalesced to the UI thread, the result and the end reported once,
  * cancellation, a full queue, start failures, and a tree destroyed while
  * tasks run (cancelled and joined). Built with -pthread; also run under

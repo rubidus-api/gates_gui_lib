@@ -1,11 +1,11 @@
 /* text_demo - real glyphs in both fonts plus a working textbox.
  *
- * Shows RFC-0002 and RFC-0004: layout measures every character's advance,
+ * Shows the text model and proportional text: layout measures every character's advance,
  * the platform's own fonts draw them where layout put them. The UI font is
  * proportional (the system's); a panel set to the mono font keeps a ruler and
  * mixed Hangul/Latin lines column-aligned.
  *
- * Manual checklist (T017, T044):
+ * Manual checklist:
  *   - Hangul, Latin and CJK render as real glyphs (not boxes) in both fonts;
  *   - in the mono panel the ruler and the sample lines stay column-aligned;
  *   - clicking the textbox focuses it (border turns to the focus colour) and
@@ -16,7 +16,7 @@
  *   - typing past the right edge scrolls the view and the caret stays visible;
  *   - ESC exits.
  *
- * Korean IME composition (plan-0006, T019): the syllable being composed is
+ * Korean IME composition: the syllable being composed is
  * drawn inline and underlined; the mirror shows committed text only and the
  * line under it shows the open preedit, so commit and composition can be
  * told apart on screen.
@@ -47,7 +47,7 @@ static void on_key(gates_window_t *win, const gates_key_event_t *ev, void *user)
 }
 
 /* The mirror and the composing line follow the box through its events, not by
- * polling it during paint (RFC-0003 section 4.1). */
+ * polling it during paint. */
 static void box_changed(gates_tree_t *tree, const gates_event_t *ev, void *user) {
     demo_t *d = user;
     if (ev->kind == GATES_EVENT_TEXT_CHANGED) {
@@ -72,7 +72,7 @@ static void build_ui(demo_t *d) {
     (void)gates_layout_set_gap(t, root, 6);
 
     gates_node_t title = GATES_NODE_NULL, n = GATES_NODE_NULL;
-    (void)gates_label_create(t, root, GATES_STR("gates text_demo - RFC-0002, RFC-0004"), &title);
+    (void)gates_label_create(t, root, GATES_STR("gates text_demo - text and fonts"), &title);
 
     /* The UI font (proportional, the default): the samples as the platform sets them. */
     (void)gates_label_create(t, root, GATES_STR("UI font (proportional):"), &n);

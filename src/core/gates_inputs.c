@@ -1,5 +1,5 @@
 /* gates_gui_lib - number input: spin box (a text box and arrows in a row) and
- * slider (one node: track, ticks, thumb) over one range model (plan-0019).
+ * slider (one node: track, ticks, thumb) over one range model (0.4.0).
  * Platform-free. */
 #include <gates/inputs.h>
 #include <gates/widget.h>

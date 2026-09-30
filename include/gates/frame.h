@@ -1,4 +1,4 @@
-/* gates_gui_lib - the application frame (plan-0018): mnemonics, menu bar,
+/* gates_gui_lib - the application frame (0.3.0): mnemonics, menu bar,
  * toolbar, status bar, tooltips, tabs.
  *
  * Mnemonics. In the text of a button, check box, command, menu bar title or

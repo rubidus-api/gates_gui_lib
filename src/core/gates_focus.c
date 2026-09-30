@@ -1,6 +1,6 @@
 /* gates_gui_lib - keyboard focus: eligibility, tree-order traversal inside the
  * focus scope, repair when the focused control goes away, and scrolling the
- * focused control into view (plan-0009, RFC-0003 5.1). Platform-free. */
+ * focused control into view. Platform-free. */
 #include <gates/ui.h>
 #include <gates/widget.h>
 #include <gates/layout.h>

@@ -1,7 +1,7 @@
-/* gates_gui_lib - software renderer, the reference renderer (RFC-0001 sections 21-22).
+/* gates_gui_lib - software renderer, the reference renderer.
  *
  * Consumes a balanced gates_draw_list_t and rasterizes into a caller-provided
- * 32-bit BGRA8 pixel buffer (byte order B,G,R,A - GDI-DIB native, one Phase 1
+ * 32-bit BGRA8 pixel buffer (byte order B,G,R,A - GDI-DIB native, the one
  * format). Deterministic, platform-free, testable on plain memory. */
 #ifndef GATES_RENDER_H
 #define GATES_RENDER_H
@@ -15,7 +15,7 @@ typedef struct gates_pixels_t {
     gates_u32 stride_bytes;   /* >= w * 4 */
 } gates_pixels_t;
 
-/* Text rendering is delegated to a text backend (RFC-0002); pass nullptr to
+/* Text rendering is delegated to a text backend; pass nullptr to
  * reject TEXT commands with PROVEN_ERR_UNSUPPORTED. */
 typedef struct gates_text_backend_t gates_text_backend_t;
 
@@ -26,7 +26,7 @@ typedef struct gates_text_backend_t gates_text_backend_t;
 [[nodiscard]] gates_err_t gates_render_soft(const gates_draw_list_t *dl,
                                             gates_pixels_t target,
                                             const gates_text_backend_t *text_backend);
-/* The same for a draw list in logical units rendered at `dpi` (plan-0013):
+/* The same for a draw list in logical units rendered at `dpi`:
  * rects and clips scale by their edges (gates_rect_px), thicknesses never drop
  * below one pixel, text goes to the backend's draw_scaled (or to draw, at the
  * scaled rect, when it has none). gates_render_soft is this at 96 dpi. */

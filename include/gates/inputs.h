@@ -1,4 +1,4 @@
-/* gates_gui_lib - number input: spin box and slider (plan-0019, RFC-0005).
+/* gates_gui_lib - number input: spin box and slider (0.4.0).
  *
  * Both hold an integer value in a range with a step and a page step. A
  * decimal quantity uses a scale: value 125 with scale 100 is shown as 1.25.

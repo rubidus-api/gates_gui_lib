@@ -1,5 +1,4 @@
-/* T010: tree -> draw list paint walk (+ soft-render smoke, allocator balance)
- * (docs/tests/cases/T010-paint.md). */
+/* tree -> draw list paint walk (+ soft-render smoke, allocator balance). */
 #include <gates/ui.h>
 #include <gates/widget.h>
 #include <proven/heap.h>

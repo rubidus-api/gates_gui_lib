@@ -1,4 +1,4 @@
-/* T036: themes and DPI (plan-0013). Stage 1: every profile defines every
+/* themes and DPI. Stage 1: every profile defines every
  * token, text and cue contrast (WCAG ratios), high contrast built from the
  * system's colours, cues that do not rely on colour alone (focus and error
  * widths in paint output). */
@@ -155,7 +155,7 @@ static void test_cues(void) {
     gates_tree_destroy(t);
 }
 
-/* -- stage 2: logical units scaled at the window boundary ------------------------------- */
+/* -- logical units scaled at the window boundary ------------------------------- */
 
 static const gates_u32 dpis[] = { 96, 120, 144, 168, 192 };   /* 100..200% */
 

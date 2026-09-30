@@ -1,5 +1,5 @@
-/* T047: the application frame (docs/tests/cases/T047-frame.md, plan-0018) -
- * mnemonics, keymap (A4), menu bar. */
+/* the application frame (0.3.0) -
+ * mnemonics, keymap, menu bar. */
 #include <gates/ui.h>
 #include <gates/widget.h>
 #include <gates/event.h>
@@ -257,7 +257,7 @@ static gates_text_metrics_t short_metrics(void *ctx, gates_i32 font) {
     return m;
 }
 
-/* 0.2.0 regression found in the T048 field run: with a 15-unit line, text boxes
+/* 0.2.0 regression found in a field run: with a 15-unit line, text boxes
  * and choices were 23 high, below the 24-unit target the audit enforces. */
 static void test_targets_with_short_lines(void) {
     gates_text_backend_t sb = *be;
@@ -350,7 +350,7 @@ static void test_mnemonic_in_dialog(void) {
     gates_tree_destroy(t);
 }
 
-/* -- keymap (A4) --------------------------------------------------------------------- */
+/* -- keymap ------------------------------------------------------------------------- */
 
 static void test_keymap(void) {
     gates_tree_t *t;
@@ -1419,7 +1419,7 @@ static void test_tabs(void) {
     gates_tree_destroy(t);
 }
 
-/* -- persisted state (A5) ---------------------------------------------------------------- */
+/* -- persisted state -------------------------------------------------------------------- */
 
 typedef struct state_app_t {
     gates_tree_t *t;
@@ -1478,7 +1478,7 @@ static void test_state(void) {
     GT_ASSERT(strncmp(text, "# gates state 1\n", 16) == 0);
     GT_ASSERT(strstr(text, "split 620 main split\n") != nullptr);
     GT_ASSERT(strstr(text, "tabs 2 settings.tabs\n") != nullptr);
-    GT_ASSERT(strstr(text, "columns 1:140,2:60 files=table\n") != nullptr); /* id:width (plan-0021) */
+    GT_ASSERT(strstr(text, "columns 1:140,2:60 files=table\n") != nullptr); /* id:width (0.6.0) */
     GT_ASSERT(strstr(text, "scroll 40 help.scroll\n") != nullptr);
     gates_tree_destroy(t);
 

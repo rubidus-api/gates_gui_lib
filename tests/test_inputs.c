@@ -1,4 +1,4 @@
-/* T049: input controls and plumbing (docs/tests/cases/T049-inputs.md, plan-0019) -
+/* input controls and plumbing (0.4.0) -
  * event bubbling, deferred calls. */
 #include <gates/ui.h>
 #include <gates/widget.h>

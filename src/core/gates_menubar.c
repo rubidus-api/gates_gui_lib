@@ -1,5 +1,5 @@
 /* gates_gui_lib - the menu bar: titles over command menus, menu mode
- * (plan-0018). The menus are ordinary menu overlays (gates_overlay.c) that know
+ * (0.3.0). The menus are ordinary menu overlays (gates_overlay.c) that know
  * which title opened them. Platform-free. */
 #include <gates/frame.h>
 #include <gates/widget.h>

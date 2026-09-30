@@ -1,5 +1,4 @@
-/* gates_gui_lib - one command model for buttons, shortcuts and menus
- * (plan-0009, RFC-0003 section 5.2).
+/* gates_gui_lib - one command model for buttons, shortcuts and menus.
  *
  * A command is an action the application offers, with a label, an optional
  * shortcut, and enabled/checked state that the application keeps current.
@@ -74,7 +73,7 @@ gates_str_t gates_command_label(const gates_tree_t *tree, gates_node_t scope,
 [[nodiscard]] gates_err_t gates_command_invoke(gates_tree_t *tree, gates_node_t scope,
                                                gates_command_id_t id);
 
-/* -- keymap (plan-0018, RFC-0005 A4) ---------------------------------------------
+/* -- keymap (0.3.0) ---------------------------------------------
  * The per-command shortcut is the keymap: a program can list a scope's commands,
  * rebind them (a user's keymap from a file) and print shortcuts the same way
  * menus and accessibility do. */

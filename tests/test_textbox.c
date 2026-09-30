@@ -1,5 +1,4 @@
-/* T015: textbox widget - focus, caret placement, typing, painting
- * (docs/tests/cases/T015-textbox.md). */
+/* textbox widget - focus, caret placement, typing, painting. */
 #include <gates/ui.h>
 #include <gates/widget.h>
 #include "gates_test.h"
@@ -112,7 +111,7 @@ static void test_click_focuses_and_places_caret(void) {
     release(t, r.x + r.w - 2, mid_y);
     GT_ASSERT(gates_text_edit_caret(gates_textbox_edit(t, tb)) == 3);
 
-    /* Clicking a button moves focus to it (plan-0009; DECISIONS 2026-09-25). */
+    /* Clicking a button moves focus to it. */
     gates_rect_t br = gates_node_layout_rect(t, btn);
     press(t, br.x + 2, br.y + 2);
     release(t, br.x + 2, br.y + 2);

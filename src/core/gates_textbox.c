@@ -1,4 +1,4 @@
-/* gates_gui_lib - textbox editing contract (plan-0008, RFC-0003 4.2 and 6.1):
+/* gates_gui_lib - textbox editing contract:
  * one edit path, bounded undo/redo, maximum length with a pending offer,
  * read-only and password policies, and the safe public textbox API. */
 #include <gates/widget.h>
@@ -178,7 +178,7 @@ static bool can_merge(const gates_i_undo_t *u, gates_i_unit_t unit, gates_u32 b,
     }
 }
 
-/* Reserves everything the record needs. Owner rule (DECISIONS 2026-09-25):
+/* Reserves everything the record needs. Owner rule:
  * when memory is short the oldest history is dropped first; if even an empty
  * history cannot hold the entry, the edit goes ahead unrecorded. */
 static undo_plan_t undo_prepare(gates_tree_t *tree, gates_widget_state_t *st, gates_i_unit_t unit,
@@ -379,7 +379,7 @@ gates_err_t gates_i_box_edit(gates_tree_t *tree, gates_u32 idx, gates_u32 b, gat
     if (user) {
         gates_i_event_push(tree, idx, GATES_EVENT_TEXT_CHANGED, GATES_ORIGIN_USER);
         gates_u32 spin = gates_i_spin_of_box(tree, idx);
-        if (spin != GATES_NONE) gates_i_spin_typed(tree, spin); /* plan-0019: invalid until a number */
+        if (spin != GATES_NONE) gates_i_spin_typed(tree, spin); /* invalid until a number */
     }
     return GATES_OK;
 }
@@ -478,7 +478,7 @@ gates_err_t gates_i_box_redo(gates_tree_t *tree, gates_u32 idx) {
     return GATES_OK;
 }
 
-/* -- geometry (RFC-0004) ------------------------------------------------------ */
+/* -- geometry (0.2.0) ------------------------------------------------------ */
 
 static gates_i32 star_width(const gates_text_backend_t *be, gates_i32 font) {
     return be != nullptr && be->glyph_advance != nullptr ? be->glyph_advance(be->ctx, font, '*') : 0;

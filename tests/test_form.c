@@ -1,6 +1,5 @@
-/* T028: forms - the FORM layout (label column, stacked rows, hidden rows) and
- * the form helper (fields, help, errors, ids, rollback) (plan-0010 stage 2,
- * RFC-0003 7). */
+/* forms - the FORM layout (label column, stacked rows, hidden rows) and
+ * the form helper (fields, help, errors, ids, rollback). */
 #include <gates/ui.h>
 #include <gates/widget.h>
 #include <gates/form.h>

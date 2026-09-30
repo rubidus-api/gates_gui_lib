@@ -1,5 +1,5 @@
 /* gates_gui_lib - images: the tree's store, the decoder seam, the image node,
- * icons on buttons, commands and toolbars (plan-0020). Platform-free. */
+ * icons on buttons, commands and toolbars (0.5.0). Platform-free. */
 #include <gates/image.h>
 #include <gates/widget.h>
 #include <gates/render.h>

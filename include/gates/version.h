@@ -1,4 +1,4 @@
-/* gates_gui_lib - version (plan-0015).
+/* gates_gui_lib - version.
  *
  * Compatibility: source compatible within a minor version (0.2.x); rebuild the
  * program on every update. No binary ABI is promised yet - public structs may

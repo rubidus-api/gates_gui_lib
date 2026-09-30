@@ -1,5 +1,4 @@
-/* gates_gui_lib - forms: labelled fields with help and error text (plan-0010
- * stage 2, RFC-0003 section 7).
+/* gates_gui_lib - forms: labelled fields with help and error text.
  *
  * A form is a node with the FORM layout: every row is a label beside an
  * editor (the label column is as wide as the widest label); when the form is

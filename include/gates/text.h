@@ -1,4 +1,4 @@
-/* gates_gui_lib - text metrics contract and backend seam (RFC-0002, RFC-0004).
+/* gates_gui_lib - text metrics contract and backend seam (0.2.0).
  *
  * The core depends only on this contract. Per font a backend reports ascent,
  * descent, line height, an average character width (a sizing hint), and the
@@ -13,7 +13,7 @@
 
 #include <gates/render.h>
 
-/* A font: which face a text uses (RFC-0004). Sizes are a theme matter, not
+/* A font: which face a text uses (0.2.0). Sizes are a theme matter, not
  * chosen here. GATES_FONT_UI is the platform's UI face (proportional, the
  * default); GATES_FONT_MONO a fixed-pitch face for code, logs, aligned columns. */
 typedef gates_i32 gates_font_t;
@@ -35,21 +35,21 @@ struct gates_text_backend_t {
     gates_size_t (*measure)(void *ctx, gates_font_t font, gates_str_t text);
     /* Rasterize text with its top-left at rect origin, clipped to rect, clip
      * and target; code point k starts at the sum of the advances before it.
-     * Rendering style is backend-local (RFC-0002 section 1). */
+     * Rendering style is backend-local. */
     void (*draw)(void *ctx, gates_pixels_t target, gates_rect_t rect, gates_rect_t clip,
                  gates_font_t font, gates_str_t text, gates_color_t color);
-    /* Optional (plan-0013): draw at `dpi`. Metrics stay logical (96 dpi); rect
+    /* Optional: draw at `dpi`. Metrics stay logical (96 dpi); rect
      * and clip are device pixels; code point k starts at rect.x + gates_px(its
      * logical offset), so text scales with the layout and stays in its rect. */
     void (*draw_scaled)(void *ctx, gates_pixels_t target, gates_rect_t rect, gates_rect_t clip,
                         gates_font_t font, gates_str_t text, gates_color_t color,
                         gates_u32 dpi);
-    /* Required (RFC-0004): the advance of one code point in logical units, >= 0.
+    /* Required (0.2.0): the advance of one code point in logical units, >= 0.
      * Stable for the process lifetime. U+FFFD stands for malformed bytes. */
     gates_i32 (*glyph_advance)(void *ctx, gates_font_t font, gates_u32 codepoint);
 };
 
-/* -- widths (src/text/gates_text_width.c, RFC-0004) ---------------------------- */
+/* -- widths (src/text/gates_text_width.c, 0.2.0) ---------------------------- */
 
 /* The width of a single-line string: the sum of its code points' advances
  * (0 for a null backend). */
@@ -77,11 +77,11 @@ gates_u32 gates_text_cells(gates_str_t text);
 gates_u32 gates_text_prev_offset(gates_str_t text, gates_u32 at);
 gates_u32 gates_text_next_offset(gates_str_t text, gates_u32 at);
 
-/* The builtin reference backend (RFC-0002 section 5): embedded 8x16 monospace
+/* The builtin reference backend: embedded 8x16 monospace
  * bitmap font (vendored public-domain font8x8, rows doubled). Deterministic
  * on every platform; ASCII glyphs, replacement box otherwise; the same face
  * for every font (advances by the cell rule: 8 per narrow, 16 per wide code
- * point). The explicit opt-in for pixel-exact output (RFC-0002 section 6). */
+ * point). The explicit opt-in for pixel-exact output. */
 const gates_text_backend_t *gates_text_backend_builtin(void);
 
 /* The Win32 GDI backend: real system glyphs including Hangul. GATES_FONT_UI is

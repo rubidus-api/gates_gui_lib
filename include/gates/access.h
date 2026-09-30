@@ -1,4 +1,4 @@
-/* gates_gui_lib - accessibility model (plan-0014, RFC-0003 section 10).
+/* gates_gui_lib - accessibility model.
  *
  * gates describes every node to assistive technology and automation tools in
  * platform-free terms: a role, a name, a description, states, a value, the
@@ -62,14 +62,14 @@ typedef enum gates_role_t {
     GATES_ROLE_TREE_ITEM,        /* item of a tree */
     GATES_ROLE_FORM,
     GATES_ROLE_SCROLL_AREA,      /* scroll layout */
-    GATES_ROLE_MENU_BAR,         /* menu bar (plan-0018); its titles are MENU_ITEM items */
+    GATES_ROLE_MENU_BAR,         /* menu bar (0.3.0); its titles are MENU_ITEM items */
     GATES_ROLE_TOOL_BAR,         /* toolbar; its buttons are BUTTON items */
     GATES_ROLE_STATUS_BAR,       /* status bar; its segments are TEXT nodes */
     GATES_ROLE_TAB,              /* a tab strip; its titles are TAB_ITEM items */
     GATES_ROLE_TAB_ITEM,
     GATES_ROLE_SPINNER,          /* spin box (RangeValue); its text box is an EDIT inside it */
     GATES_ROLE_SLIDER,           /* slider (RangeValue) */
-    GATES_ROLE_IMAGE,            /* a named image (plan-0020); unnamed ones are not exposed */
+    GATES_ROLE_IMAGE,            /* a named image (0.5.0); unnamed ones are not exposed */
 } gates_role_t;
 
 /* State bits. */
@@ -135,7 +135,7 @@ typedef struct gates_access_info_t {
      * the model, of set_size rows), 0 for nodes. */
     gates_u64 set_position, set_size;
     gates_u32 level;             /* a tree row's depth + 1, else 0 */
-    /* Keys (plan-0018): the mnemonic as "Alt+F" (an entry of an open menu: its
+    /* Keys (0.3.0): the mnemonic as "Alt+F" (an entry of an open menu: its
      * letter alone), and the shortcut of the node's command ("Ctrl+N"). */
     gates_str_t access_key;
     gates_str_t accelerator;
@@ -197,7 +197,7 @@ gates_access_ref_t gates_access_focus_ref(gates_tree_t *tree);
                                               bool expand);
 [[nodiscard]] gates_err_t gates_access_set_value(gates_tree_t *tree, gates_node_t node,
                                                  gates_str_t text);
-/* A spin box's or slider's value (plan-0019), as a person's change: clamped into
+/* A spin box's or slider's value (0.4.0), as a person's change: clamped into
  * the range, any value in it (not only whole steps), reported with VALUE_CHANGED. */
 [[nodiscard]] gates_err_t gates_access_set_range_value(gates_tree_t *tree, gates_node_t node,
                                                        gates_i64 value);
@@ -213,7 +213,7 @@ gates_access_ref_t gates_access_focus_ref(gates_tree_t *tree);
 bool gates_access_text_rect(gates_tree_t *tree, gates_node_t node, gates_u32 start, gates_u32 end,
                             gates_rect_t *out);
 /* A multi-line editor's range covers rows: one rectangle per shown row
- * (plan-0022), at most cap; a text box gives at most one. Returns how many. */
+ * (0.7.0), at most cap; a text box gives at most one. Returns how many. */
 gates_u32 gates_access_text_rects(gates_tree_t *tree, gates_node_t node, gates_u32 start, gates_u32 end,
                                   gates_rect_t *out, gates_u32 cap);
 gates_u32 gates_access_text_offset_at(gates_tree_t *tree, gates_node_t node, gates_point_t p);

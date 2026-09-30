@@ -1,4 +1,4 @@
-/* gates_gui_lib - undo stack (plan-0021, RFC-0005 A11): undo and redo for
+/* gates_gui_lib - undo stack (0.6.0): undo and redo for
  * the program's own data, with labels for menus and a "saved" mark.
  *
  * The program makes a change, then pushes an entry that can take it back

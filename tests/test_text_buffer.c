@@ -1,4 +1,4 @@
-/* T055: the text buffer (plan-0022 stage 1) - a gap buffer with a lazily
+/* the text buffer (0.7.0) - a gap buffer with a lazily
  * shifted line index, style bytes, marks and find, checked against a plain
  * model after every edit of long random runs, plus the edges: edits at 0 and
  * at the end, ranges over several lines, "\r\n" handling, gravity, finding

@@ -1,4 +1,4 @@
-/* T043: proportional text (RFC-0004): the per-code-point contract, width and
+/* proportional text (0.2.0): the per-code-point contract, width and
  * offset helpers, the text box (caret, selection, pointer, scrolling,
  * composition, passwords, accessibility rects) on a proportional backend,
  * and fonts chosen per node with inheritance. */

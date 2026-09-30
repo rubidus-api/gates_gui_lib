@@ -12,7 +12,7 @@
  * hidden row with a textbox that is marked invalid while it is empty; a
  * summary kept current by the events.
  *
- * Field check (T027 examples): Tab to the choice, Space/Enter/Alt+Down or a
+ * Field check: Tab to the choice, Space/Enter/Alt+Down or a
  * click opens the list under it; Up/Down + Enter picks; "Latin" cannot be
  * picked; Escape and an outside click close the list without a change;
  * picking "Other" shows the name field with a red border until something is

@@ -1,4 +1,4 @@
-/* gates_gui_lib - Win32 window: surface, DIB present, paint path (RFC-0001 section 21).
+/* gates_gui_lib - Win32 window: surface, DIB present, paint path.
  * Present path: draw list -> gates_render_soft -> BGRA DIB section -> BitBlt. */
 #include "gates_win32_internal.h"
 #include <dwmapi.h>
@@ -75,7 +75,7 @@ static gates_size_t client_size_of(gates_window_t *win) {
                            px.h > 0 ? gates_logical(px.h - 1, win->dpi) + 1 : 0 };
 }
 
-/* GATES_ACCESS_STRICT=1 (plan-0014): after every layout, check the tree and
+/* GATES_ACCESS_STRICT=1: after every layout, check the tree and
  * theme against the enforced accessibility rules; the count goes into the
  * title and each issue to the debugger output, so a violation is seen at once. */
 static void strict_audit(gates_window_t *win) {
@@ -124,7 +124,7 @@ static void paint_window(gates_window_t *win, HDC dc) {
     bool has_widgets =
         gates_node_child_count(win->tree, gates_tree_root(win->tree)) > 0;
     if (has_widgets) {
-        /* The tree lives in logical units (plan-0013); only drawing scales. */
+        /* The tree lives in logical units; only drawing scales. */
         bool size_changed = win->last_layout_size.w != logical.w ||
                             win->last_layout_size.h != logical.h;
         if (size_changed || (gates_tree_dirty(win->tree) & GATES_TREE_DIRTY_LAYOUT) != 0) {
@@ -173,7 +173,7 @@ static void paint_window(gates_window_t *win, HDC dc) {
 static void resolve_theme(gates_window_t *win);
 static gates_u32 forced_dpi(void);
 
-/* "Underline access keys" in the system settings (plan-0018). */
+/* "Underline access keys" in the system settings (0.3.0). */
 static void cues_setting(gates_window_t *win) {
     BOOL always = FALSE;
     if (SystemParametersInfoW(SPI_GETKEYBOARDCUES, 0, &always, 0)) {
@@ -269,7 +269,7 @@ LRESULT CALLBACK gates_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM 
     }
     case WM_SYSCOMMAND:
         /* Alt released alone or F10 (lparam 0): menu mode on the menu bar
-         * (plan-0018). Without a reachable bar Windows keeps its own. */
+         * (0.3.0). Without a reachable bar Windows keeps its own. */
         if ((wparam & 0xFFF0) == SC_KEYMENU && lparam == 0 && gates_input_menu_key(win->tree)) {
             gates_win32_after_input(win);
             return 0;
@@ -309,7 +309,7 @@ LRESULT CALLBACK gates_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM 
         }
         return 0;
     default: {
-        /* plan-0017: the first input since the last frame that invalidates the window starts
+        /* the first input since the last frame that invalidates the window starts
          * the input-to-present clock; input that changes nothing (a key release, a mouse move
          * over nothing) does not, so idle time between keys is not counted. */
         bool stamped = false;
@@ -333,7 +333,7 @@ LRESULT CALLBACK gates_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM 
     }
 }
 
-/* -- DPI (plan-0013) ----------------------------------------------------------- */
+/* -- DPI ----------------------------------------------------------- */
 
 /* Diagnostics: GATES_FORCE_DPI=144 makes every window draw at that DPI whatever
  * the monitor says (for checking scaled output where the display scale cannot
@@ -357,7 +357,7 @@ static gates_u32 text_scale(void) {
 
 /* The drawing DPI: the monitor's (or GATES_FORCE_DPI) times the application's
  * zoom times the Windows text size - logical units make both a zoom of the
- * whole interface, as for a magnified page (plan-0014). */
+ * whole interface, as for a magnified page. */
 void gates_win32_rescale(gates_window_t *win) {
     gates_u32 f = forced_dpi();
     gates_u64 base = f != 0 ? f : (win->monitor_dpi != 0 ? win->monitor_dpi : GATES_DPI_BASE);
@@ -372,7 +372,7 @@ void gates_win32_rescale(gates_window_t *win) {
     }
 }
 
-/* -- theme (plan-0013) --------------------------------------------------------- */
+/* -- theme --------------------------------------------------------- */
 
 static bool system_high_contrast(void) {
     HIGHCONTRASTW hc = { .cbSize = sizeof hc };
@@ -447,7 +447,7 @@ const gates_theme_t *gates_window_theme(const gates_window_t *win) {
     return win != nullptr ? win->theme : nullptr;
 }
 
-/* -- timers (plan-0012) ------------------------------------------------------- */
+/* -- timers ------------------------------------------------------- */
 
 static gates_u64 clock_ms(void *ctx) {
     (void)ctx;
@@ -503,7 +503,7 @@ gates_err_t gates_window_create(gates_app_t *app, const gates_window_desc_t *des
     }
     win->theme_mode = GATES_THEME_SYSTEM;
     resolve_theme(win); /* again once the window exists, for the title bar */
-    win->text = gates_text_backend_win32_gdi(); /* real glyphs (RFC-0002 section 5) */
+    win->text = gates_text_backend_win32_gdi(); /* real glyphs */
     if (callbacks != nullptr) {
         win->cb = *callbacks;
     }
@@ -515,8 +515,8 @@ gates_err_t gates_window_create(gates_app_t *app, const gates_window_desc_t *des
         return err;
     }
     gates_win32_install_clipboard(win); /* copy/cut/paste for textboxes */
-    gates_win32_install_image_decoder(win); /* PNG, JPEG, ... through WIC (plan-0020) */
-    gates_win32_install_threads(win); /* background tasks (plan-0021) */
+    gates_win32_install_image_decoder(win); /* PNG, JPEG, ... through WIC (0.5.0) */
+    gates_win32_install_threads(win); /* background tasks (0.6.0) */
     cues_setting(win);
     gates_tree_set_clock(win->tree, clock_ms, timers_changed, win);
     if (app->sender != nullptr) {
@@ -545,7 +545,7 @@ gates_err_t gates_window_create(gates_app_t *app, const gates_window_desc_t *des
     gates_size_t want = (desc != nullptr && desc->size.w > 0 && desc->size.h > 0)
                             ? desc->size
                             : (gates_size_t){ GATES_WINDOW_DEFAULT_W, GATES_WINDOW_DEFAULT_H };
-    /* The size is logical (plan-0013): scale it for the monitor the window
+    /* The size is logical: scale it for the monitor the window
      * starts on; WM_DPICHANGED corrects it if Windows places it elsewhere. */
     win->monitor_dpi = gates_win32_system_dpi();
     gates_win32_rescale(win);
@@ -616,7 +616,7 @@ gates_size_t gates_window_client_size(const gates_window_t *win) {
     return client_size_of((gates_window_t *)win);
 }
 
-/* -- accessibility (plan-0014) ------------------------------------------------------ */
+/* -- accessibility ------------------------------------------------------ */
 
 void gates_window_set_zoom(gates_window_t *win, gates_u32 percent) {
     if (win == nullptr) return;
@@ -647,7 +647,7 @@ void gates_window_request_repaint(gates_window_t *win) {
     }
 }
 
-/* -- placement (plan-0018, RFC-0005 A5) ------------------------------------------------ */
+/* -- placement (0.3.0) ------------------------------------------------ */
 
 gates_err_t gates_window_placement(const gates_window_t *win, gates_u8 *buf, gates_usize_t cap,
                                    gates_usize_t *needed) {

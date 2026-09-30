@@ -1,4 +1,4 @@
-/* gates_gui_lib - software renderer (RFC-0001 section 22). Platform-free.
+/* gates_gui_lib - software renderer. Platform-free.
  * Reference implementation: correctness and determinism over speed. */
 #include <gates/render.h>
 #include <gates/text.h>

@@ -1,4 +1,4 @@
-# gates_gui_lib - host build (Phase 0: core only, no platform backends).
+# gates_gui_lib - host build (core only, no platform backends).
 # Usage: make test          (gcc default)
 #        make test CC=clang
 # Test binaries land in build/tests/ (never in tests/).
@@ -92,7 +92,7 @@ $(TESTBIN)/%: $(OBJ)/tests/%.o $(CORE_OBJ) $(PROVEN_OBJ)
 	@mkdir -p $(TESTBIN)
 	$(CC) $(CFLAGS) $^ -lm -o $@
 
-# The threaded tests (T034 posting stress, T053 tasks) alone link pthreads; the
+# The threaded tests (posting stress, tasks) alone link pthreads; the
 # shared flags stay thread-free. ThreadSanitizer lane:
 #   make CC=gcc BUILD=build-tsan CFLAGS="-std=c23 -g -O1 -fsanitize=thread" build-tsan/tests/test_post_stress build-tsan/tests/test_task
 #   (clang works where its TSan runtime is installed)
@@ -158,8 +158,8 @@ win: $(WIN_BUILD)/hello_window.exe $(WIN_BUILD)/widgets_demo.exe \
      $(addprefix $(WIN_BUILD)/,$(addsuffix .exe,$(SAMPLE_APPS))) \
      $(addprefix $(WIN_BUILD)/,$(addsuffix .exe,$(CONTROL_EXAMPLES)))
 
-# Console app (no -mwindows): prints the RFC-0002 8 checklist result.
-# -- Libraries and the package (plan-0015) -------------------------------------
+# Console app (no -mwindows): prints the text backend checklist result.
+# -- Libraries and the package -------------------------------------
 # gates and proven are separate static libraries (owner decision 2026-09-27):
 #   host:    libgates_core.a (platform-free core) + libproven.a
 #   Windows: libgates.a (core + Win32 backend)    + libproven.a
@@ -249,14 +249,14 @@ install: dist
 	cp $(PKG)/lib/host/*.a $(PREFIX)/lib/
 	$(if $(HAVE_WIN),mkdir -p $(PREFIX)/lib/win64 && cp $(PKG)/lib/win64/*.a $(PREFIX)/lib/win64/)
 
-# plan-0017: performance evidence (not a test). Built against the -O2 libraries.
+# Performance evidence (not a test). Built against the -O2 libraries.
 bench: lib-host
 	@mkdir -p $(BUILD)/bench
 	$(CC) $(CPPFLAGS) $(LIBFLAGS) -pthread tests/bench_core.c -L$(LIB_HOST) -lgates_core -lproven -lm \
 		-o $(BUILD)/bench/bench_core
 	$(BUILD)/bench/bench_core $(BENCH_ITERS)
 
-# T041: the manual. manual-sync copies every example file into the blocks that print it;
+# the manual. manual-sync copies every example file into the blocks that print it;
 # manual-check fails when a block, the Korean edition or an example build disagrees.
 manual-sync:
 	sh tests/manual_check.sh sync
@@ -264,7 +264,7 @@ manual-sync:
 manual-check: dist
 	CC=$(CC) CC_WIN=$(CC_WIN) sh tests/manual_check.sh check
 
-# T040: headers, version, symbols, package layout, a consumer built from the package alone.
+# headers, version, symbols, package layout, a consumer built from the package alone.
 package-check:
 	CC=$(CC) CC_WIN=$(CC_WIN) sh tests/test_package.sh
 

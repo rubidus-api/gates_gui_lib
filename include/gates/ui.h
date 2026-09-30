@@ -1,4 +1,4 @@
-/* gates_gui_lib - tree paint walk and pointer routing (Phase 2).
+/* gates_gui_lib - tree paint walk and pointer routing.
  * The window drives these each frame: layout (gates/layout.h) -> paint walk
  * emits theme-token draw commands -> renderer; pointer events route to the
  * deepest hit widget (hover/press/click/toggle). Platform-free. */
@@ -18,7 +18,7 @@
                                            const gates_theme_t *theme,
                                            const gates_text_backend_t *text);
 
-/* Deepest visible node whose layout rect contains p (section 9 non-overlap makes
+/* Deepest visible node whose layout rect contains p (normal-flow non-overlap makes
  * this unambiguous in normal flow; stack considers the active page only). */
 gates_node_t gates_hit_test(const gates_tree_t *tree, gates_point_t p);
 
@@ -39,7 +39,7 @@ bool gates_tree_focus_next(gates_tree_t *tree, bool backward);
  * events matter only for Space (activation happens on release). */
 bool gates_input_key(gates_tree_t *tree, const gates_key_event_t *ev);
 
-/* Outcome of routing text input (RFC-0003 section 6.1). FAILED means a target
+/* Outcome of routing text input. FAILED means a target
  * existed but the edit could not be applied (allocation): the text, selection
  * and preedit are unchanged, and the caller must not re-deliver the input to
  * a fallback path. IGNORED is 0, so the result still reads as "consumed" in a
@@ -54,7 +54,7 @@ typedef enum gates_input_result_t {
  * Control codepoints below U+0020 (and U+007F) are ignored. */
 gates_input_result_t gates_input_char(gates_tree_t *tree, gates_u32 codepoint);
 
-/* IME composition (plan-0006), called by the platform IME adapter.
+/* IME composition, called by the platform IME adapter.
  *
  * preedit: sets or replaces the in-progress text shown at the caret (after
  *   the selection); cursor is the IME cursor in bytes into the text, snapped
@@ -71,7 +71,7 @@ gates_input_result_t gates_input_preedit_cancel(gates_tree_t *tree);
 /* The last input-path failure since the previous call (OK when none), then
  * cleared. Input functions that cannot return an error (keys, pointer) record
  * failures here: for example an edit, toggle or activation that was skipped
- * because its notification could not be reserved (plan-0007). */
+ * because its notification could not be reserved. */
 gates_err_t gates_input_take_error(gates_tree_t *tree);
 
 /* Pointer capture was lost (another window took it, or the platform cancelled

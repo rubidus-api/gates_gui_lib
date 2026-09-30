@@ -1,5 +1,5 @@
-/* gates_gui_lib - virtual views: the shared rows engine behind list and table
- * (plan-0011, RFC-0003 8). One node per view; the model is asked only for
+/* gates_gui_lib - virtual views: the shared rows engine behind list and table.
+ * One node per view; the model is asked only for
  * painted rows; selection is an item id; offsets are 64-bit rows.
  * Platform-free. */
 #include <gates/view.h>
@@ -28,14 +28,14 @@ typedef struct gates_i_column {
     gates_u32 label_len;
     gates_i32 width;
     gates_i32 min_width;
-    gates_cell_kind_t kind;      /* plan-0021 */
+    gates_cell_kind_t kind;
     bool editable;
     gates_cell_paint_fn paint;
     void *paint_user;
     bool hidden;                 /* takes no space, not painted, not in accessibility */
 } gates_i_column_t;
 
-/* Log view ring (stage 2): lines in arrival order, ids consecutive. */
+/* Log view ring: lines in arrival order, ids consecutive. */
 typedef struct gates_i_line {
     gates_item_id_t id;
     gates_u8 *text;
@@ -69,7 +69,7 @@ struct gates_i_view {
     gates_u64 drag_first;
     gates_i32 drag_value;
     gates_i32 drag_col;
-    /* In-place editing (plan-0021): the editor text box child, GATES_NONE when
+    /* In-place editing (0.6.0): the editor text box child, GATES_NONE when
      * no column is an editable text column. */
     gates_u32 editor;
     bool editing;
@@ -881,7 +881,7 @@ static void scroll_rows(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *
     note_scrolled(tree, idx, v, g);
 }
 
-/* -- editing cells (plan-0021) ------------------------------------------------------------- */
+/* -- editing cells (0.6.0) ------------------------------------------------------------- */
 
 static bool text_kind(gates_cell_kind_t k) {
     return k == GATES_CELL_TEXT || k == GATES_CELL_ICON_TEXT;
@@ -1536,7 +1536,7 @@ bool gates_i_view_wheel(gates_tree_t *tree, gates_u32 idx, gates_vec2_t wheel) {
     return true;
 }
 
-/* -- log view (stage 2) ---------------------------------------------------------------- */
+/* -- log view ---------------------------------------------------------------- */
 
 static gates_u64 log_count(void *u) { return ((struct gates_i_log *)u)->n; }
 
@@ -1734,7 +1734,7 @@ gates_err_t gates_log_set_following(gates_tree_t *tree, gates_node_t log, bool f
     return GATES_OK;
 }
 
-/* -- accessibility (plan-0014 stage 2) ------------------------------------------------------
+/* -- accessibility ------------------------------------------------------
  * Rows are items: the rows shown now, plus the selection wherever it is. Cells
  * are read for shown rows only - gates never walks rows it does not show. */
 
@@ -1881,7 +1881,7 @@ gates_err_t gates_i_view_scroll_step(gates_tree_t *tree, gates_u32 idx, gates_i3
     return GATES_OK;
 }
 
-/* -- columns by position (plan-0018, persisted state) ------------------------------- */
+/* -- columns by position (persisted state, 0.3.0) ------------------------------- */
 
 gates_u32 gates_i_view_ncol(const gates_tree_t *tree, gates_u32 idx) {
     const gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
@@ -1901,7 +1901,7 @@ void gates_i_view_set_col_width(gates_tree_t *tree, gates_u32 idx, gates_u32 k, 
     gates_i_mark_dirty(tree, idx, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
 }
 
-/* The saved state (plan-0021): each column's id, width and hidden mark, in order. */
+/* The saved state (0.6.0): each column's id, width and hidden mark, in order. */
 bool gates_i_view_col_info(const gates_tree_t *tree, gates_u32 idx, gates_u32 k, gates_column_id_t *id,
                            gates_i32 *width, bool *hidden) {
     const gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);

@@ -9,7 +9,7 @@
  * Shows: a row of three grouped panels, and a list panel that the "add item" /
  * "remove last" buttons grow and shrink at run time.
  *
- * Field check (T021): three panels sit side by side with their contents; "add
+ * Field check: three panels sit side by side with their contents; "add
  * item" appends a row to the list, "remove last" removes one until the list is
  * empty (then does nothing); the count line follows; ESC exits. */
 #include <gates/app.h>

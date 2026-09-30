@@ -1,4 +1,4 @@
-/* T038: accessibility model (plan-0014 stage 1): roles, the name order,
+/* accessibility model: roles, the name order,
  * descriptions, automation ids, states, values, virtual items, actions through
  * the input paths, the change log, and the enforced rules. */
 #include <gates/ui.h>
@@ -534,7 +534,7 @@ static void test_scrolled_out(void) {
     gates_tree_destroy(t);
 }
 
-/* -- views (stage 2): rows as items ----------------------------------------------------------- */
+/* -- views: rows as items ----------------------------------------------------------- */
 
 typedef struct vmodel_t {
     gates_u64 n;
@@ -753,7 +753,7 @@ static void test_area_scroll(void) {
     gates_tree_destroy(t);
 }
 
-/* -- text of an edit (stage 2): rectangles, points, selection ------------------------------------ */
+/* -- text of an edit: rectangles, points, selection ------------------------------------ */
 
 static void test_text(void) {
     gates_tree_t *t = nullptr;

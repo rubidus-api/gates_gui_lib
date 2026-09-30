@@ -10,7 +10,7 @@
  * reset it, a "run" button that fills it with a repeating timer (gates/timer.h)
  * and turns into "stop" while running, and separators in both directions.
  *
- * Field check (T027 examples): "+10%" and "-10%" move the fill and the label
+ * Field check: "+10%" and "-10%" move the fill and the label
  * in steps and stop at 0% and 100%; "fill" and "reset" jump to the ends; Tab
  * visits only the buttons, never the bar; the separators show as a
  * horizontal line under the bar and a vertical line between the button

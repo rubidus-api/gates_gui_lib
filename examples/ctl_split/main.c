@@ -7,7 +7,7 @@
  * Shows: a left navigation pane and a right pane that is itself split
  * top/bottom, plus a button that resets both ratios from code.
  *
- * Field check (T021): dragging the vertical handle resizes left/right and the
+ * Field check: dragging the vertical handle resizes left/right and the
  * panes land where the pointer is; dragging the horizontal handle resizes
  * top/bottom; neither pane collapses; "reset" restores both ratios; resizing
  * the window keeps the proportions; ESC exits. */

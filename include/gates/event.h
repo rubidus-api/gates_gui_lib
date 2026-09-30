@@ -1,4 +1,4 @@
-/* gates_gui_lib - typed change notifications (RFC-0003 section 4.1, plan-0007).
+/* gates_gui_lib - typed change notifications.
  *
  * The application learns what a person did through events, not by polling
  * widgets during paint. User edits queue an event after the edit succeeded;
@@ -25,21 +25,21 @@ typedef enum gates_event_kind_t {
     GATES_EVENT_PREEDIT_CHANGED, /* textbox IME composition changed (not committed text) */
     GATES_EVENT_VALUE_CHANGED,   /* checkbox checked state, or radio/choice selection, changed */
     GATES_EVENT_ACTIVATED,       /* button activated, or a view's row (ev->item) */
-    /* textbox: an edit was refused because it would pass the maximum length
-     * (plan-0008). The box keeps the input as an offer: ask the person, then
+    /* textbox: an edit was refused because it would pass the maximum length.
+     * The box keeps the input as an offer: ask the person, then
      * gates_textbox_accept_fit or gates_textbox_discard_rejected. */
     GATES_EVENT_LIMIT_EXCEEDED,
-    /* dialog closed once, with ev->result = gates_dialog_result_t (plan-0009) */
+    /* dialog closed once, with ev->result = gates_dialog_result_t */
     GATES_EVENT_DIALOG_CLOSED,
     /* menu closed once; ev->result = the command id it invoked, or 0 */
     GATES_EVENT_MENU_CLOSED,
-    /* view (plan-0011): the selected item changed; ev->item = its id (0 = none) */
+    /* view: the selected item changed; ev->item = its id (0 = none) */
     GATES_EVENT_SELECTION_CHANGED,
     /* view: a header cell was clicked; ev->result = the column id (the model sorts) */
     GATES_EVENT_SORT_REQUESTED,
     /* tree view: open (ev->result = 1) or close (0) the row ev->item (the model decides) */
     GATES_EVENT_EXPAND_REQUESTED,
-    /* view (plan-0021): a person changed a cell; ev->item = the row, ev->result = the column id */
+    /* view (0.6.0): a person changed a cell; ev->item = the row, ev->result = the column id */
     GATES_EVENT_CELL_EDITED,
     /* log view (0.8.0): a person's scrolling started or stopped following new
      * lines; ev->result = 1 following, 0 not (read at delivery) */
@@ -71,7 +71,7 @@ typedef struct gates_event_t {
     /* SELECTION_CHANGED: the selected item id; ACTIVATED from a view,
      * EXPAND_REQUESTED and CELL_EDITED: the row's id. */
     gates_u64 item;
-    /* VALUE_CHANGED of a spin box or slider: the value (plan-0019). */
+    /* VALUE_CHANGED of a spin box or slider: the value (0.4.0). */
     gates_i64 value;
 } gates_event_t;
 
@@ -100,7 +100,7 @@ gates_u32 gates_widget_revision(const gates_tree_t *tree, gates_node_t node);
 gates_u32 gates_tree_dispatch_events(gates_tree_t *tree, gates_u32 max_events);
 gates_u32 gates_tree_pending_events(const gates_tree_t *tree);
 
-/* -- bubbling (plan-0019, RFC-0005 A10) ---------------------------------------
+/* -- bubbling (0.4.0) ---------------------------------------
  * A bubble handler on any node (a panel, a form, the root) receives the events
  * of its descendants that have no handler of their own - the nearest such
  * ancestor only; ev->source is the descendant. An overlay (a dialog or menu) is
@@ -109,7 +109,7 @@ gates_u32 gates_tree_pending_events(const gates_tree_t *tree);
 [[nodiscard]] gates_err_t gates_node_set_bubble_handler(gates_tree_t *tree, gates_node_t node,
                                                         gates_event_fn fn, void *user);
 
-/* -- deferred calls (plan-0019, RFC-0005 A8) ----------------------------------
+/* -- deferred calls (0.4.0) ----------------------------------
  * gates_tree_defer asks for fn(tree, key, user) to run once at the next safe
  * point, however often it is asked before then: one call per key, with the
  * fn and user of the latest request ("recompute the total after any field

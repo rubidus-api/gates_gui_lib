@@ -1,6 +1,6 @@
-/* consumer - a Windows program built from the gates package alone (plan-0015).
+/* consumer - a Windows program built from the gates package alone.
  * A text box and a button: the button greets the name typed. Escape exits.
- * Check (T042): the window opens; typing a name and pressing Greet (or Enter
+ * Check: the window opens; typing a name and pressing Greet (or Enter
  * on the button) shows "Hello, <name>!"; Narrator reads the field as "Your name". */
 #include <gates/gates.h>
 

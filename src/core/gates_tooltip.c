@@ -1,5 +1,5 @@
 /* gates_gui_lib - tooltips: one at a time, shown after the pointer rests or
- * keyboard focus arrives, hidden by presses, keys, leaving and time (plan-0018).
+ * keyboard focus arrives, hidden by presses, keys, leaving and time (0.3.0).
  * One timer on the tree root, armed only while there is a target, so an idle
  * window stays without timers. Platform-free. */
 #include <gates/frame.h>

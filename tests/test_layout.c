@@ -1,4 +1,4 @@
-/* T008: intrinsic layout - measure/arrange (docs/tests/cases/T008-layout.md). */
+/* intrinsic layout - measure/arrange. */
 #include <gates/layout.h>
 #include <gates/widget.h>
 #include "gates_test.h"
@@ -43,7 +43,7 @@ static void test_widget_intrinsic_measure(void) {
     /* Checkbox: 12px box + 6 gap + text; height >= box. */
     gates_size_t cp = gates_node_preferred_size(t, chk);
     GT_ASSERT(cp.w == 12 + 6 + 2 * M.advance);
-    GT_ASSERT(cp.h == (M.line_height > 24 ? M.line_height : 24) /* WCAG 2.5.8 minimum target (plan-0014) */);
+    GT_ASSERT(cp.h == (M.line_height > 24 ? M.line_height : 24) /* WCAG 2.5.8 minimum target */);
 
     /* Wide text (Hangul) measures 2 cells per syllable in widget sizes too. */
     GT_ASSERT_OK(gates_widget_set_text(t, lbl, GATES_STR("한글")));
@@ -152,7 +152,7 @@ static void test_stack_and_absolute(void) {
     gates_node_t p2 = mk_panel(t, root);
     GT_ASSERT_OK(gates_layout_run(t, (gates_size_t){ 100, 80 }, be));
 
-    /* Stack children share the content rect (overlap allowed by section 10). */
+    /* Stack children share the content rect (the one overlap allowed). */
     GT_ASSERT(rect_eq(gates_node_layout_rect(t, p1), 4, 4, 92, 72));
     GT_ASSERT(rect_eq(gates_node_layout_rect(t, p2), 4, 4, 92, 72));
     GT_ASSERT(gates_layout_stack_active(t, root) == 0);

@@ -1,5 +1,5 @@
 /* gates_gui_lib - form helper: labelled field rows with help and error lines
- * on the FORM layout (plan-0010 stage 2, RFC-0003 7). The form keeps a table
+ * on the FORM layout. The form keeps a table
  * of field id -> row, editor and error line; it holds no values. Platform-free. */
 #include <gates/form.h>
 #include <gates/layout.h>

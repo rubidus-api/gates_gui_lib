@@ -20,7 +20,7 @@
  * that handles BUSY, a disabled field, a 10-byte code field with its question,
  * a password field whose echo shows only its length, and a read-only field.
  *
- * Field check (T021, T023): typing updates the echo under each field; Korean
+ * Field check: typing updates the echo under each field; Korean
  * shows an underlined syllable in the box and on the composing line, and
  * reaches the echo only when committed; "clear" empties the name field, or
  * reports that a composition is open; the disabled field cannot be focused;

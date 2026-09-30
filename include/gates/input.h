@@ -1,6 +1,6 @@
-/* gates_gui_lib - unified input events (RFC-0001 section 15, Phase 1 subset).
- * Platform-free. Phase 1 fills mouse fields only; pen/touch arrive with
- * later backends, gestures in Phase 5. */
+/* gates_gui_lib - unified input events.
+ * Platform-free. The Win32 backend fills the mouse fields; pen, touch and
+ * gestures are for later backends. */
 #ifndef GATES_INPUT_H
 #define GATES_INPUT_H
 
@@ -29,7 +29,7 @@ typedef struct gates_pointer_event_t {
     gates_pointer_action_t action;
     gates_u32 pointer_id;            /* mouse = 0 */
     gates_pointer_type_t type;
-    gates_point_t pos;               /* client coordinates, logical units (plan-0013) */
+    gates_point_t pos;               /* client coordinates, logical units */
     gates_point_t screen_pos;        /* device pixels, as the platform reports them */
     gates_vec2_t delta;              /* movement since the previous event */
     gates_vec2_t wheel;              /* WHEEL: lines/notches (y = vertical) */
@@ -67,15 +67,15 @@ typedef enum gates_key_t {
     GATES_KEY_TAB,
     GATES_KEY_ESCAPE,
     GATES_KEY_A,                     /* for Ctrl+A select-all */
-    GATES_KEY_C,                     /* Ctrl+C copy (plan-0008) */
+    GATES_KEY_C,                     /* Ctrl+C copy */
     GATES_KEY_X,                     /* Ctrl+X cut */
     GATES_KEY_V,                     /* Ctrl+V paste */
     GATES_KEY_Z,                     /* Ctrl+Z undo, Ctrl+Shift+Z redo */
     GATES_KEY_Y,                     /* Ctrl+Y redo */
-    GATES_KEY_SPACE,                 /* activates a focused button/checkbox (plan-0009) */
+    GATES_KEY_SPACE,                 /* activates a focused button/checkbox */
     GATES_KEY_F1, GATES_KEY_F2, GATES_KEY_F3, GATES_KEY_F4, GATES_KEY_F5, GATES_KEY_F6,
     GATES_KEY_F7, GATES_KEY_F8, GATES_KEY_F9, GATES_KEY_F10, GATES_KEY_F11, GATES_KEY_F12,
-    GATES_KEY_PAGE_UP,               /* views page through rows (plan-0011) */
+    GATES_KEY_PAGE_UP,               /* views page through rows */
     GATES_KEY_PAGE_DOWN,
 } gates_key_t;
 
@@ -90,7 +90,7 @@ typedef struct gates_key_event_t {
      * a Ctrl shortcut. */
     bool alt;
     /* 'A'-'Z' or '0'-'9' for letter and digit keys (unshifted, layout's key
-     * label), else 0. Command shortcuts match on it (plan-0009). */
+     * label), else 0. Command shortcuts match on it. */
     gates_u8 letter;
 } gates_key_event_t;
 

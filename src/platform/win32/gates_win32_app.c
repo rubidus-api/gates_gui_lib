@@ -1,4 +1,4 @@
-/* gates_gui_lib - Win32 app lifecycle + message pump (RFC-0001 section 3, section 17). */
+/* gates_gui_lib - Win32 app lifecycle + message pump. */
 #include "gates_win32_internal.h"
 #include <proven/heap.h>
 
@@ -7,7 +7,7 @@
 static const wchar_t *GATES_WNDCLASS_NAME = L"gates_gui_lib_window";
 static const wchar_t *GATES_POSTCLASS_NAME = L"gates_gui_lib_post";
 
-/* -- posting: the platform half (plan-0012) ------------------------------------------ */
+/* -- posting: the platform half ------------------------------------------ */
 
 /* SRWLOCK behind the core's sync interface; it lives inside the sender, so it
  * outlives the app when workers still hold references. */
@@ -58,7 +58,7 @@ static LRESULT CALLBACK post_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM 
         /* The rest waits for a timer, not a posted message: GetMessage returns
          * posted messages before input and never builds WM_PAINT while any are
          * queued, so re-posting under a flooding producer starved input and
-         * painting (found in the T035 field run). WM_TIMER comes after both. */
+         * painting (found in a field run). WM_TIMER comes after both. */
         if (left > 0 && !app->post_pending) {
             app->post_pending =
                 SetTimer(hwnd, GATES_WIN32_POST_TIMER_ID, USER_TIMER_MINIMUM, nullptr) != 0;
@@ -68,7 +68,7 @@ static LRESULT CALLBACK post_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM 
     return DefWindowProcW(hwnd, msg, wparam, lparam);
 }
 
-/* -- DPI (plan-0013) --------------------------------------------------------------- */
+/* -- DPI --------------------------------------------------------------- */
 
 gates_u32 gates_win32_dpi_for_window(HWND hwnd) {
     typedef UINT (WINAPI *dpi_fn)(HWND);
@@ -118,7 +118,7 @@ gates_err_t gates_app_create(const gates_app_desc_t *desc, gates_app_t **out_app
     app->alloc = alloc;
     app->hinstance = GetModuleHandleW(nullptr);
 
-    /* Per-monitor DPI v2 (plan-0013): process-wide and one-shot, so before any
+    /* Per-monitor DPI v2: process-wide and one-shot, so before any
      * window exists. Older Windows: system-aware as before. */
     typedef BOOL (WINAPI *set_ctx_fn)(HANDLE);
     set_ctx_fn set_ctx = (set_ctx_fn)(void *)GetProcAddress(GetModuleHandleW(L"user32.dll"),
@@ -172,7 +172,7 @@ gates_err_t gates_app_create(const gates_app_desc_t *desc, gates_app_t **out_app
         return err;
     }
 
-    /* UI Automation calls providers through COM on this thread (plan-0014):
+    /* UI Automation calls providers through COM on this thread:
      * an apartment of its own. An application that already chose the
      * multithreaded apartment keeps it; the providers then refuse calls that
      * arrive on other threads. */

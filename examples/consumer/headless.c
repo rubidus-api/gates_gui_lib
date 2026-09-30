@@ -1,4 +1,4 @@
-/* headless - gates without a window (plan-0015 consumer example).
+/* headless - gates without a window (a consumer example).
  * Builds a small tree, lays it out with the builtin text backend, and reads the
  * accessible name of the button, as a screen reader would. */
 #include <gates/gates.h>

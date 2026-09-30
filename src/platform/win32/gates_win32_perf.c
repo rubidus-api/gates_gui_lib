@@ -1,4 +1,4 @@
-/* gates_gui_lib - performance log for field measurements (plan-0017).
+/* gates_gui_lib - performance log for field measurements (0.3.0).
  *
  * GATES_PERF=<file> in the environment appends one CSV line per event:
  *   frame,<t_us>,<input_to_present_us|-1>,<layout_us>,<paint_us>,<render_us>,<present_us>,<w>,<h>,<dpi>,<cmds>

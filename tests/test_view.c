@@ -1,5 +1,4 @@
-/* T030: virtual views - rows engine, list and table (plan-0011 stage 1,
- * RFC-0003 8): bounded model reads, 64-bit offsets, selection by id across
+/* virtual views - rows engine, list and table: bounded model reads, 64-bit offsets, selection by id across
  * model changes, keyboard, pointer, header sort and resize, detach. */
 #include <gates/ui.h>
 #include <gates/widget.h>

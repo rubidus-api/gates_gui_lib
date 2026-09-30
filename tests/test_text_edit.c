@@ -1,4 +1,4 @@
-/* T014: UTF-8 text edit core (docs/tests/cases/T014-text-edit.md). */
+/* UTF-8 text edit core. */
 #include <gates/text_edit.h>
 #include <proven/heap.h>
 #include "gates_test.h"

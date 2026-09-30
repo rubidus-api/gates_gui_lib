@@ -1,4 +1,4 @@
-/* gates_gui_lib - UTF-8 text edit core (RFC-0001 section 16 "text edit core").
+/* gates_gui_lib - UTF-8 text edit core.
  *
  * Owns a UTF-8 buffer, a caret, a selection and an uncommitted preedit range
  * (filled by an IME adapter). Platform-free and allocator-injected; the
@@ -57,14 +57,14 @@ void gates_text_edit_select_all(gates_text_edit_t *ed);
 /* Clamped to a codepoint boundary. */
 void gates_text_edit_set_caret(gates_text_edit_t *ed, gates_u32 byte_offset, bool extend);
 
-/* Preedit (IME composition, plan-0006). The committed buffer is untouched;
+/* Preedit (IME composition). The committed buffer is untouched;
  * the preedit is displayed at the selection end (the caret when nothing is
  * selected). A failed set keeps the previous preedit. */
 [[nodiscard]] gates_err_t gates_text_edit_set_preedit(gates_text_edit_t *ed, gates_str_t text);
 void gates_text_edit_clear_preedit(gates_text_edit_t *ed);
 gates_str_t gates_text_edit_preedit(const gates_text_edit_t *ed);
 
-/* Cell geometry for rendering and hit testing (RFC-0002 cell rules). */
+/* Cell geometry for rendering and hit testing (the cell rules). */
 gates_u32 gates_text_edit_cells_before(const gates_text_edit_t *ed, gates_u32 byte_offset);
 /* Byte offset of the codepoint boundary at or before `cell`. */
 gates_u32 gates_text_edit_offset_at_cell(const gates_text_edit_t *ed, gates_u32 cell);

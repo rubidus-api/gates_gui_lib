@@ -1,4 +1,4 @@
-/* gates_gui_lib - the whole public API in one include (plan-0015).
+/* gates_gui_lib - the whole public API in one include.
  *
  * Programs may include this or only the headers they use; each public header
  * compiles on its own. Everything named gates_i_* or kept in src/ is internal

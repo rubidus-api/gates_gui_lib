@@ -35,7 +35,7 @@ struct gates_app {
     HINSTANCE hinstance;
     gates_u32 window_count;
     bool running;
-    /* Posting (plan-0012): the app's sender and the message-only window that
+    /* Posting: the app's sender and the message-only window that
      * wakes the UI thread for it; every window, for the after-delivery pass. */
     gates_sender_t *sender;
     ATOM post_class;
@@ -59,7 +59,7 @@ struct gates_window {
     void *dib_pixels;
     gates_size_t dib_size;
 
-    /* UI pipeline (Phase 2): tree drives layout/paint when it has widgets. */
+    /* UI pipeline: tree drives layout/paint when it has widgets. */
     const gates_theme_t *theme;      /* points at theme_store */
     gates_theme_t theme_store;
     gates_theme_mode_t theme_mode;
@@ -79,12 +79,12 @@ struct gates_window {
     DWORD dbl_time;
     POINT dbl_pos;
 
-    /* IME composition in progress and the node it started in (plan-0007). */
+    /* IME composition in progress and the node it started in. */
     bool ime_active;
     gates_node_t ime_node;
     /* The dispatch timer is armed for leftover events (0.8.0; was a posted message). */
     bool dispatch_posted;
-    /* IME detached while a read-only or password box has focus (plan-0008). */
+    /* IME detached while a read-only or password box has focus. */
     bool ime_off;
     HIMC ime_saved;
     /* Next window of the app (posting pass), and whether the tree timer is armed. */
@@ -94,7 +94,7 @@ struct gates_window {
     bool timer_armed;
     gates_u64 timer_due_at;      /* absolute due time the armed timer stands for */
 
-    /* Accessibility (plan-0014): UI Automation providers handed out, the focus
+    /* Accessibility: UI Automation providers handed out, the focus
      * and overlay count clients last heard of, the hidden system caret, and
      * the scale: monitor DPI x application zoom x Windows text size. */
     struct uia_el_t *uia_els;
@@ -107,15 +107,15 @@ struct gates_window {
     gates_u32 monitor_dpi;
     gates_u32 zoom;              /* percent, 100 = none */
     bool strict;                 /* GATES_ACCESS_STRICT: audit after every layout */
-    gates_u64 perf_input_us;     /* plan-0017: first input since the last frame, 0 = none */
-    bool leave_tracked;          /* plan-0018: WM_MOUSELEAVE requested for this hover */
+    gates_u64 perf_input_us;     /* first input since the last frame, 0 = none */
+    bool leave_tracked;          /* WM_MOUSELEAVE requested for this hover */
     bool perf_first_done;
     gates_u32 strict_issues;     /* the count last reported */
 };
 
 /* Posted to itself when more events are queued than one turn delivers. */
 #define GATES_WIN32_EVENTS_PER_TURN 64u
-/* Sent to the app's message-only window when posted messages wait (plan-0012). */
+/* Sent to the app's message-only window when posted messages wait. */
 #define GATES_WM_POST (WM_APP + 0x48)
 /* The app's message-only window: the timer for a delivery turn that had to wait. */
 #define GATES_WIN32_POST_TIMER_ID 0x6A7Fu
@@ -138,7 +138,7 @@ LRESULT CALLBACK gates_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM 
 
 /* gates_win32_input.c - returns true when the message was consumed. */
 bool gates_win32_handle_input(gates_window_t *win, UINT msg, WPARAM wparam, LPARAM lparam);
-/* IMM32 composition (plan-0006): true when handled, with the LRESULT in *result. */
+/* IMM32 composition: true when handled, with the LRESULT in *result. */
 bool gates_win32_handle_ime(gates_window_t *win, UINT msg, WPARAM wparam, LPARAM lparam,
                             LRESULT *result);
 /* Moves the IME composition/candidate windows to the focused caret. */
@@ -159,16 +159,16 @@ void gates_win32_caret_follow(gates_window_t *win);
 void gates_win32_caret_drop(gates_window_t *win);
 /* gates_win32_window.c: the window's drawing DPI from its monitor, zoom and text size. */
 void gates_win32_rescale(gates_window_t *win);
-/* gates_win32_perf.c (plan-0017): GATES_PERF=<file> field measurements. */
+/* gates_win32_perf.c (0.3.0): GATES_PERF=<file> field measurements. */
 bool gates_win32_perf_on(void);
 gates_u64 gates_win32_perf_now_us(void);
 void gates_win32_perf_log(const char *fmt, ...);
 gates_u64 gates_win32_perf_process_ms(void);
 /* gates_win32_clipboard.c: CF_UNICODETEXT provider for the window's tree. */
 void gates_win32_install_clipboard(gates_window_t *win);
-/* gates_win32_image.c: the WIC image decoder for the window's tree (plan-0020). */
+/* gates_win32_image.c: the WIC image decoder for the window's tree (0.5.0). */
 void gates_win32_install_image_decoder(gates_window_t *win);
-void gates_win32_install_threads(gates_window_t *win); /* background tasks (plan-0021) */
+void gates_win32_install_threads(gates_window_t *win); /* background tasks (0.6.0) */
 /* Capture lost or mode cancelled: forget held buttons, press and drags. */
 void gates_win32_cancel_pointer(gates_window_t *win);
 

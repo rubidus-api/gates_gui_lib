@@ -1,7 +1,7 @@
-/* T033: posting to the UI and timers (plan-0012 stage 1, RFC-0003 9):
+/* posting to the UI and timers:
  * sender lifetime, OK/FULL/CLOSED ownership, limits, replaceable snapshots,
  * bounded delivery, stale targets, exactly-once release, close, timers on a
- * fake clock. Single-threaded; the threaded stress test is T034. */
+ * fake clock. Single-threaded; the threaded stress test is test_post_stress. */
 #include <gates/ui.h>
 #include <gates/widget.h>
 #include <gates/post.h>

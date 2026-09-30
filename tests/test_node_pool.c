@@ -1,4 +1,4 @@
-/* T001: node pool and generation handles (docs/tests/cases/T001-node-pool.md). */
+/* node pool and generation handles. */
 #include <gates/tree.h>
 #include "gates_test.h"
 
@@ -46,7 +46,7 @@ static void test_free_invalidates_immediately(void) {
     GT_ASSERT(gates_node_is_valid(tree, n));
 
     GT_ASSERT_OK(gates_node_destroy(tree, n));
-    /* destroy_pending: invalid immediately, before the flush (section 30). */
+    /* destroy_pending: invalid immediately, before the flush. */
     GT_ASSERT(!gates_node_is_valid(tree, n));
     GT_ASSERT(gates_tree_pending_count(tree) == 1);
 

@@ -1,4 +1,4 @@
-/* T053: data controls (plan-0021 stage 1) - cell kinds (check, progress, icon
+/* data controls (0.6.0) - cell kinds (check, progress, icon
  * and text), custom cell painting, in-place editing through the model's
  * set_cell (F2, double click, Enter, Escape, focus leaving), check toggles,
  * CELL_EDITED, refusals, and edits across scrolling and model changes. */
@@ -905,7 +905,7 @@ static void test_create_failures(void) {
     GT_ASSERT(succeeded);
 }
 
-/* -- choosing and ordering columns (stage 2) ------------------------------------------------ */
+/* -- choosing and ordering columns ------------------------------------------------ */
 
 static void test_hide_and_move(void) {
     app_t a;
@@ -1216,7 +1216,7 @@ static void test_column_state(void) {
     free_app(&a);
 }
 
-/* -- property grid (stage 2b) --------------------------------------------------------------- */
+/* -- property grid --------------------------------------------------------------- */
 
 typedef struct prec_t {
     int n;

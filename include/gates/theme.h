@@ -1,8 +1,7 @@
-/* gates_gui_lib - semantic color tokens (RFC-0001 section 14, Phase 2 subset).
- * Ordinary controls never use hard-coded RGB (section 30); they resolve tokens
- * through the active theme. Full theme system (dark/high-contrast/system
- * notifications) arrives in Phase 5; this subset plus one built-in light
- * palette unblocks widgets. Platform-free. */
+/* gates_gui_lib - semantic color tokens.
+ * Ordinary controls never use hard-coded RGB; they resolve tokens through the
+ * active theme (light, dark and high contrast; the window follows the system).
+ * Platform-free. */
 #ifndef GATES_THEME_H
 #define GATES_THEME_H
 
@@ -23,19 +22,19 @@ typedef enum gates_color_token_t {
     GATES_COLOR_SELECTION_FG,
     GATES_COLOR_FOCUS_RING,
     GATES_COLOR_OVERLAY_DIM,       /* translucent layer behind a modal dialog */
-    GATES_COLOR_ERROR,             /* a field whose value was refused (plan-0010) */
+    GATES_COLOR_ERROR,             /* a field whose value was refused */
     GATES_COLOR_TOKEN_COUNT,
 } gates_color_token_t;
 
 typedef struct gates_theme_t {
     gates_color_t colors[GATES_COLOR_TOKEN_COUNT];
-    /* Cues that do not rely on colour alone (plan-0013): the focus ring's and an
+    /* Cues that do not rely on colour alone: the focus ring's and an
      * invalid field's border thickness. 0 -> 2. */
     gates_i32 focus_width;
     gates_i32 error_width;
 } gates_theme_t;
 
-/* Built-in profiles (plan-0013). Every token is defined in each; text tokens
+/* Built-in profiles. Every token is defined in each; text tokens
  * reach 4.5:1 contrast on their backgrounds, borders and cues 3:1. Windows
  * follow the system (dark mode, high contrast) unless the application picks
  * a theme (gates/window.h). */

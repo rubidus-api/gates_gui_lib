@@ -1,5 +1,5 @@
 /* gates_gui_lib - option controls: radio group and choice, one node each with
- * stable option ids (plan-0010, RFC-0003 3). The choice's list is a menu
+ * stable option ids. The choice's list is a menu
  * overlay (gates_overlay.c). Platform-free. */
 #include <gates/widget.h>
 #include <gates/event.h>
@@ -246,7 +246,7 @@ gates_err_t gates_i_option_pick(gates_tree_t *tree, gates_u32 idx, gates_u32 id)
     if (gates_i_wants_events(tree, idx)) {
         gates_err_t err = gates_i_event_reserve(tree, 1, 0);
         if (!gates_is_ok(err)) {
-            return err; /* not announced: not done (RFC-0003 4.1) */
+            return err; /* not announced: not done */
         }
     }
     st->opt_sel = id;

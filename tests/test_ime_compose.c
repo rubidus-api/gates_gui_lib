@@ -1,5 +1,5 @@
-/* T018: IME composition routing - preedit, commit, cancel, failure contract
- * (docs/tests/cases/T018-ime-compose.md, plan-0006). Platform-free: these are
+/* IME composition routing - preedit, commit, cancel, failure contract.
+ * Platform-free: these are
  * the core entry points the Win32 IMM32 adapter calls. */
 #include <gates/ui.h>
 #include <gates/widget.h>
@@ -209,7 +209,7 @@ static void test_focus_change_drops_preedit(void) {
     GT_ASSERT(tb_is(t, tb2, "xyz" HAN) || tb_is(t, tb2, HAN "xyz"));
 
     /* Destroying the composing textbox leaves no composition behind; focus
-     * moves on to the next control (plan-0009), which holds no preedit. */
+     * moves on to the next control, which holds no preedit. */
     GT_ASSERT(gates_input_preedit(t, lit(G_J), 3) == GATES_INPUT_CONSUMED);
     GT_ASSERT_OK(gates_node_destroy(t, tb2));
     GT_ASSERT_OK(gates_tree_flush_destroys(t));

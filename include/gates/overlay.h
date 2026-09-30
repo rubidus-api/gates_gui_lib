@@ -1,5 +1,5 @@
 /* gates_gui_lib - transient surfaces: modal dialogs and context menus as
- * overlays inside the window (plan-0009 stage 2, RFC-0003 section 7).
+ * overlays inside the window.
  *
  * Overlays sit above the window's content: they are laid out after it (a
  * dialog centred, a menu at its anchor, both kept inside the window), painted

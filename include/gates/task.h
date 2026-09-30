@@ -1,4 +1,4 @@
-/* gates_gui_lib - background tasks (plan-0021, RFC-0005 A9): work on a
+/* gates_gui_lib - background tasks (0.6.0): work on a
  * thread of its own, with progress, a result and cancellation reported on
  * the UI thread.
  *

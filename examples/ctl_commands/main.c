@@ -17,7 +17,7 @@
  * out Save while it is disabled, and runs the chosen command through the same
  * path. Up/Down/Enter choose, Escape or a click outside closes it.
  *
- * Field check (T026): Save is grey until the note is edited, then Ctrl+S or the
+ * Field check: Save is grey until the note is edited, then Ctrl+S or the
  * button saves and greys it again; Ctrl+N clears; Ctrl+W flips "Wrap: on/off";
  * F5 counts; typing "s" in the note types an s; right-click or Shift+F10 opens
  * the menu with the same state; choosing Refresh counts; Escape quits. */

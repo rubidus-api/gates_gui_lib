@@ -1,5 +1,5 @@
-/* T025: overlays - modal dialog and context menu with one set of dismissal
- * rules (docs/tests/cases/T025-overlay.md, plan-0009 stage 2, RFC-0003 7). */
+/* overlays - modal dialog and context menu with one set of dismissal
+ * rules. */
 #include <gates/ui.h>
 #include <gates/widget.h>
 #include <gates/event.h>

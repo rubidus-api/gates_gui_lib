@@ -1,4 +1,4 @@
-/* gates_gui_lib - text buffer (RFC-0006): UTF-8 text with lines, styles and
+/* gates_gui_lib - text buffer (0.7.0): UTF-8 text with lines, styles and
  * marks, for the multi-line editor and for programs handling large texts.
  *
  * Bytes live in a gap buffer: an edit near the last one costs little, and a

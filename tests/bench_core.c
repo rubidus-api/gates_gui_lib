@@ -1,5 +1,4 @@
-/* bench_core - performance evidence for the platform-free core (plan-0017,
- * RFC-0003 section 13). Not a test: `make bench` builds it against the -O2
+/* bench_core - performance evidence for the platform-free core. Not a test: `make bench` builds it against the -O2
  * libraries and prints a report.
  *
  * Scenarios resemble the reference applications: a settings form, an

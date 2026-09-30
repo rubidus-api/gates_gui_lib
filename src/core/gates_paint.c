@@ -1,6 +1,6 @@
-/* gates_gui_lib - tree -> draw list paint walk (RFC-0001 section 20, Phase 2).
- * Widgets emit commands only; rendering happens in the renderer (section 21).
- * All colors come from theme tokens (section 30: no hard-coded RGB here). */
+/* gates_gui_lib - tree -> draw list paint walk.
+ * Widgets emit commands only; rendering happens in the renderer.
+ * All colors come from theme tokens (no hard-coded RGB here). */
 #include <gates/ui.h>
 #include <gates/widget.h>
 #include "gates_tree_internal.h"
@@ -37,7 +37,7 @@ static gates_rect_t centered_text_rect(const paint_ctx_t *ctx, gates_rect_t box,
     };
 }
 
-/* A node's text at its rect's top-left: markup (mnemonics, plan-0018) or plain. */
+/* A node's text at its rect's top-left: markup (mnemonics, 0.3.0) or plain. */
 static void node_text_draw(paint_ctx_t *ctx, gates_u32 idx, gates_rect_t r, gates_str_t text,
                            gates_i32 font, gates_color_t color) {
     if (gates_i_mn_markup(ctx->tree, idx)) {
@@ -52,7 +52,7 @@ static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
     gates_node_slot_t *s = gates_i_slot(tree, idx);
     if (s->hidden) {
         s->dirty &= ~GATES_DIRTY_PAINT;
-        return; /* plan-0010: nothing of a hidden subtree is drawn */
+        return; /* nothing of a hidden subtree is drawn */
     }
     gates_rect_t r = s->layout_rect;
     gates_widget_state_t *st = gates_i_state(tree, s->state_index);
@@ -60,7 +60,7 @@ static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
     bool pressed = tree->pressed == idx;
     bool disabled = st != nullptr && gates_i_widget_inert(tree, st);
     bool has_focus = tree->focus == idx;
-    gates_i32 fsz = gates_i_font(tree, idx); /* RFC-0004: the node's effective font */
+    gates_i32 fsz = gates_i_font(tree, idx); /* the node's effective font */
 
     switch (s->kind) {
     case GATES_NODE_PANEL:
@@ -90,7 +90,7 @@ static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
                                                       has_focus ? GATES_COLOR_FOCUS_RING
                                                                 : GATES_COLOR_CONTROL_BORDER)));
         gates_str_t text = node_text(tree, s);
-        bool icon = st != nullptr && gates_tree_image(tree, st->icon) != nullptr; /* plan-0020 */
+        bool icon = st != nullptr && gates_tree_image(tree, st->icon) != nullptr;
         gates_i32 w = text.size > 0 ? gates_i_text_w(tree, idx, ctx->text, fsz, text) : 0;
         gates_i32 whole = w + (icon ? GATES_ICON_SIZE + (text.size > 0 ? 4 : 0) : 0);
         gates_i32 x = r.x + (r.w - whole) / 2;
@@ -235,11 +235,11 @@ static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
         gates_rect_t inner = gates_i_textbox_inner(tree, idx);
         gates_text_metrics_t m = ctx->text->metrics(ctx->text->ctx, fsz);
         gates_str_t txt = gates_text_edit_text(st->edit);
-        /* RFC-0004: every x is a sum of the font's advances (gates_i_box_x). */
+        /* every x is a sum of the font's advances (gates_i_box_x). */
         gates_i32 caret_x = gates_i_box_x(ctx->text, fsz, st, gates_text_edit_caret(st->edit));
         gates_i32 text_w = gates_i_box_x(ctx->text, fsz, st, (gates_u32)txt.size);
 
-        /* IME preedit (plan-0006): displayed at preedit_at, pushing the rest of
+        /* IME preedit: displayed at preedit_at, pushing the rest of
          * the committed text right; while composing the caret is the IME's
          * cursor inside it. */
         gates_str_t pre = gates_text_edit_preedit(st->edit);
@@ -331,7 +331,7 @@ static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
         break; /* app-drawn via the window overlay callback */
     }
 
-    /* Children: stack paints only the active page (section 10); scroll clips its
+    /* Children: stack paints only the active page; scroll clips its
      * content to the viewport and draws a scrollbar; split draws its handle. */
     if (s->layout_kind == GATES_LAYOUT_STACK) {
         gates_u32 i = 0;
@@ -399,7 +399,7 @@ gates_err_t gates_paint_tree(gates_tree_t *tree, gates_draw_list_t *dl,
         }
         paint_node(&ctx, tree->overlays[i].index);
     }
-    emit(&ctx, gates_i_tip_paint(tree, dl, theme, text)); /* above everything (plan-0018) */
+    emit(&ctx, gates_i_tip_paint(tree, dl, theme, text)); /* above everything (0.3.0) */
     if (gates_is_ok(ctx.err)) {
         tree->dirty_bits &= ~(gates_u32)GATES_TREE_DIRTY_PAINT;
     }

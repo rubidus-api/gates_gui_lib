@@ -1,4 +1,4 @@
-/* T034: posting under real threads (plan-0012 stage 2, RFC-0003 9): many
+/* posting under real threads: many
  * producers into small queues with FULL retries, per-producer order, shutdown
  * while producers post, replaceable floods, trees destroyed under traffic.
  * Every accepted payload is released exactly once, every refused one stays

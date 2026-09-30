@@ -1,5 +1,4 @@
-/* T024: keyboard focus, activation keys and the command model
- * (docs/tests/cases/T024-focus-commands.md, plan-0009 stage 1, RFC-0003 5). */
+/* keyboard focus, activation keys and the command model. */
 #include <gates/ui.h>
 #include <gates/widget.h>
 #include <gates/event.h>

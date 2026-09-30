@@ -1,6 +1,6 @@
-/* T031: view adapters - tree (flattened rows, open/close requests, Left/Right,
+/* view adapters - tree (flattened rows, open/close requests, Left/Right,
  * loading/error rows, no hidden walks) and log (bounded ring, drops, ids,
- * follow) (plan-0011 stage 2, RFC-0003 8.2). */
+ * follow). */
 #include <gates/ui.h>
 #include <gates/widget.h>
 #include <gates/event.h>

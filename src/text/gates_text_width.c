@@ -1,4 +1,4 @@
-/* gates_gui_lib - text widths from per-code-point advances (RFC-0004).
+/* gates_gui_lib - text widths from per-code-point advances (0.2.0).
  * Platform-free. */
 #include <gates/text.h>
 

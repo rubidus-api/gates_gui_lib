@@ -1,6 +1,5 @@
 /* gates_gui_lib - UI timers: a per-tree registry of due times; the platform
- * supplies the clock and re-arms one timer for the next due time (plan-0012,
- * RFC-0003 9). Platform-free. */
+ * supplies the clock and re-arms one timer for the next due time. Platform-free. */
 #include <gates/timer.h>
 #include "gates_tree_internal.h"
 

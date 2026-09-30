@@ -1,4 +1,4 @@
-/* T007: builtin text backend + metrics contract (docs/tests/cases/T007-text-builtin.md). */
+/* builtin text backend + metrics contract. */
 #include <gates/text.h>
 #include "gates_test.h"
 
@@ -53,7 +53,7 @@ static void test_cells_and_measure(void) {
     GT_ASSERT(gates_text_cells(GATES_STR("a한b")) == 4);
     GT_ASSERT(gates_text_cells(GATES_STR("漢字")) == 4);       /* CJK: wide */
 
-    /* section 3 guarantee: measure == cells * advance, height == line_height. */
+    /* The guarantee: measure == cells * advance, height == line_height. */
     const char *samples[] = { "x", "hello", "a한b", "한글 label", "" };
     for (unsigned i = 0; i < sizeof samples / sizeof *samples; i++) {
         gates_str_t s = { .ptr = (const proven_byte_t *)samples[i],

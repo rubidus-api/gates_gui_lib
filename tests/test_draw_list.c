@@ -1,4 +1,4 @@
-/* T004: draw list (docs/tests/cases/T004-draw-list.md). */
+/* draw list. */
 #include <gates/draw.h>
 #include <proven/heap.h>
 #include "gates_test.h"

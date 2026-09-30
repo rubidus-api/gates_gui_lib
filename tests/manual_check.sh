@@ -1,5 +1,5 @@
 #!/bin/sh
-# T041: the manual (plan-0015). Run from the repository root.
+# the manual. Run from the repository root.
 #   sh tests/manual_check.sh sync    copy every example file into the blocks that print it
 #   sh tests/manual_check.sh check   (make manual-check) fail when the manual and its code disagree
 # A chapter prints an example like this (the block is the file, verbatim):

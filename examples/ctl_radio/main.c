@@ -10,7 +10,7 @@
  * button that selects from code and announces it, and a summary kept current
  * by the events.
  *
- * Field check (T027 examples): Tab reaches each group once; Up/Down change
+ * Field check: Tab reaches each group once; Up/Down change
  * the theme and skip "high contrast" while it is disabled; clicking a row
  * selects it; ticking "allow high contrast" makes it selectable; ticking
  * "more options" shows the size group (unticking hides it and Tab skips it);

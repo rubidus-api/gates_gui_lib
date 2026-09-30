@@ -12,7 +12,7 @@
  * the person types DELETE; "Rename..." asks for a new name. The status line
  * reports each answer. Escape in the window quits.
  *
- * Field check (T026): each button opens its dialog centred over a dimmed
+ * Field check: each button opens its dialog centred over a dimmed
  * window; clicks on the window behind do nothing; OK in the delete dialog is
  * grey until DELETE is typed; Enter accepts, Escape cancels; the status line
  * shows the result; focus returns to the button that opened the dialog. */

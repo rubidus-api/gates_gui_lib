@@ -1,4 +1,4 @@
-/* gates_gui_lib - UI timers (plan-0012, RFC-0003 section 9).
+/* gates_gui_lib - UI timers.
  *
  * A timer belongs to a node of a tree and runs its callback on the UI thread
  * after `interval_ms`, once or repeatedly. Cancelling is immediate: a

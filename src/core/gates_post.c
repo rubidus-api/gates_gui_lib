@@ -1,5 +1,5 @@
 /* gates_gui_lib - sender endpoint: a bounded queue from any thread to the UI
- * thread (plan-0012, RFC-0003 9). The lock comes from the platform and lives in
+ * thread. The lock comes from the platform and lives in
  * the sender; payload release functions always run outside it; wake runs under
  * it and never after close. Platform-free. */
 #include <gates/post.h>
@@ -232,7 +232,7 @@ gates_u32 gates_sender_dispatch(gates_sender_t *s, gates_u32 max) {
         const gates_message_t *m = &batch[i];
         gates_tree_t *tree = find_tree(s, m->target.tree); /* looked up again each time */
         if (tree != nullptr && m->kind >= GATES_I_TASK_KIND_BASE) {
-            gates_i_task_message(tree, m->kind, m->payload); /* a task's progress or end (plan-0021) */
+            gates_i_task_message(tree, m->kind, m->payload); /* a task's progress or end (0.6.0) */
         } else if (tree != nullptr && gates_i_valid(tree, m->target.node)) {
             const gates_i_msg_handler_t *h = find_handler(tree, m->target.node);
             if (h != nullptr && h->fn != nullptr) {

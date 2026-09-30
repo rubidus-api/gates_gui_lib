@@ -1,4 +1,4 @@
-/* gates_gui_lib - multi-line text editor (RFC-0006, plan-0022): one node over
+/* gates_gui_lib - multi-line text editor (0.7.0): one node over
  * a text buffer; lays out and paints only the lines it shows; its own history
  * of edits. Platform-free. */
 #include <gates/editor.h>
@@ -1582,7 +1582,7 @@ bool gates_i_editor_wheel(gates_tree_t *tree, gates_u32 idx, gates_vec2_t wheel)
     return true;
 }
 
-/* -- highlighting, marks, find (stage 3) -------------------------------------------------------- */
+/* -- highlighting, marks, find -------------------------------------------------------- */
 
 gates_err_t gates_editor_set_styles(gates_tree_t *tree, gates_node_t editor, const gates_editor_style_t *styles,
                                     gates_u32 count) {
@@ -1643,7 +1643,7 @@ bool gates_editor_find(gates_tree_t *tree, gates_node_t editor, gates_str_t need
     return true;
 }
 
-/* -- input method and accessibility (stage 4) ------------------------------------------------------ */
+/* -- input method and accessibility ------------------------------------------------------ */
 
 bool gates_i_editor_composing(const gates_widget_state_t *st) {
     return st != nullptr && st->editor != nullptr && st->editor->pre_len > 0;

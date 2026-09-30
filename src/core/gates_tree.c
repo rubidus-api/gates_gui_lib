@@ -1,6 +1,6 @@
-/* gates_gui_lib - node pool + retained tree core (RFC-0001 sections 6-8).
+/* gates_gui_lib - node pool + retained tree core.
  *
- * Invariants maintained here (RFC-0001 section 30):
+ * Invariants maintained here:
  *   - live node links are mutually consistent; no cycles; root has no parent;
  *   - a dead slot is never linked in the tree;
  *   - a stale handle cannot access a new live node (generation check);
@@ -256,7 +256,7 @@ static void pool_free_slot(gates_tree_t *tree, gates_u32 idx) {
 }
 
 /* Frees a detached subtree that was never handed out, without allocating:
- * the rollback path of constructors that fail half-way (plan-0009). */
+ * the rollback path of constructors that fail half-way. */
 static void discard_subtree(gates_tree_t *tree, gates_u32 idx) {
     gates_u32 c = gates_i_slot(tree, idx)->first_child;
     while (c != GATES_NONE) {
@@ -288,7 +288,7 @@ void gates_i_discard_detached(gates_tree_t *tree, gates_node_t node) {
     discard_subtree(tree, node.index);
 }
 
-/* -- link helpers (O(1), RFC-0001 section 6.3) ------------------------------------- */
+/* -- link helpers (O(1)) ------------------------------------- */
 
 static void link_append(gates_tree_t *tree, gates_u32 parent, gates_u32 child) {
     gates_i_access_log(tree, GATES_ACCESS_STRUCTURE, parent, 0);
@@ -427,7 +427,7 @@ static gates_err_t pending_reserve(gates_tree_t *tree, gates_u32 extra) {
 
 /* -- lifecycle -------------------------------------------------------------- */
 
-/* Tree serial numbers (plan-0012): unique for the process, so a posted target
+/* Tree serial numbers: unique for the process, so a posted target
  * never matches a later tree that reuses the memory. */
 static _Atomic gates_u64 g_tree_serial;
 
@@ -497,7 +497,7 @@ void gates_tree_destroy(gates_tree_t *tree) {
         return;
     }
     gates_allocator_t alloc = tree->alloc;
-    gates_i_tasks_shutdown(tree); /* cancels and joins every task (plan-0021) */
+    gates_i_tasks_shutdown(tree); /* cancels and joins every task (0.6.0) */
     /* Before any slot goes: messages still queued for this tree become stale. */
     if (tree->sender != nullptr) {
         gates_sender_detach(tree->sender, tree);
@@ -771,12 +771,12 @@ void gates_tree_set_focus(gates_tree_t *tree, gates_node_t node) {
     }
     /* A composition belongs to the box that had focus: leaving drops it
      * uncommitted (the platform adapter completes it first if it wants the
-     * text kept, plan-0006). */
+     * text kept). */
     if (tree->focus != GATES_NONE) {
         gates_u32 spin = gates_i_spin_of_box(tree, tree->focus);
         if (spin != GATES_NONE) {
             gates_u32 leaving = tree->focus;
-            gates_i_spin_commit(tree, spin); /* plan-0019: leaving commits or reverts */
+            gates_i_spin_commit(tree, spin); /* leaving commits or reverts */
             if (tree->focus != leaving) return;
         }
         gates_widget_state_t *st =
@@ -810,14 +810,14 @@ void gates_tree_set_focus(gates_tree_t *tree, gates_node_t node) {
         gates_i_access_log(tree, GATES_ACCESS_FOCUS_GAINED, idx, 0);
     }
     if (left != GATES_NONE) {
-        gates_i_view_editor_left(tree, left); /* plan-0021: leaving a cell editor commits */
+        gates_i_view_editor_left(tree, left); /* leaving a cell editor commits */
         if (gates_i_valid(tree, gates_i_handle(tree, left)) && gates_i_slot(tree, left)->kind == GATES_NODE_EDITOR) {
-            gates_i_editor_blur(tree, left); /* plan-0022: a composition does not follow focus */
+            gates_i_editor_blur(tree, left); /* a composition does not follow focus */
         }
     }
 }
 
-/* -- hidden (plan-0010) ---------------------------------------------------------- */
+/* -- hidden ---------------------------------------------------------- */
 
 static bool inside(const gates_tree_t *tree, gates_u32 idx, gates_u32 top) {
     for (gates_u32 a = idx; a != GATES_NONE; a = gates_i_slot(tree, a)->parent) {

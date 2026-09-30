@@ -11,7 +11,7 @@
  * terms are accepted, so its button looks inert and Tab skips it. "Quit" is the
  * cancel command (Escape).
  *
- * Field check (T026): Tab from the start reaches name, email, newsletter,
+ * Field check: Tab from the start reaches name, email, newsletter,
  * terms, the options in the scroll area (which scrolls to follow), then the
  * buttons; Shift+Tab goes back; Space toggles; Enter in a field submits once
  * the terms are ticked; the status line shows what was submitted; Escape quits. */

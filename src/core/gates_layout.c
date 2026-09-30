@@ -1,6 +1,6 @@
-/* gates_gui_lib - measure/arrange layout (RFC-0001 section 11, Phase 2 set).
+/* gates_gui_lib - measure/arrange layout.
  * Two passes: bottom-up measure (intrinsic sizes from the text metrics
- * contract, RFC-0002 section 3) then top-down arrange. Platform-free. */
+ * contract) then top-down arrange. Platform-free. */
 #include <gates/layout.h>
 #include <gates/widget.h>
 #include "gates_tree_internal.h"
@@ -129,7 +129,7 @@ gates_err_t gates_layout_set_abs_rect(gates_tree_t *tree, gates_node_t node, gat
     return GATES_OK;
 }
 
-/* -- GRID and WRAP settings (plan-0019) ------------------------------------------ */
+/* -- GRID and WRAP settings (0.4.0) ------------------------------------------ */
 
 static gates_i_grid_grow *grow_of(const gates_tree_t *tree, gates_u32 idx) {
     gates_u32 gen = gates_i_slot(tree, idx)->generation;
@@ -313,7 +313,7 @@ static gates_size_t wrap_lines(gates_tree_t *tree, gates_node_slot_t *s, gates_i
     return (gates_size_t){ max_w, y + line_h };
 }
 
-/* A form at this content width puts labels above editors (plan-0010). */
+/* A form at this content width puts labels above editors. */
 static bool form_stacked(const gates_tree_t *tree, const gates_node_slot_t *s, gates_i32 content_w) {
     gates_i32 cells = GATES_FORM_MIN_EDITOR_CELLS * (tree->advance > 0 ? tree->advance : 8);
     return content_w < s->form_label_w + GATES_FORM_COLUMN_GAP + cells;
@@ -331,7 +331,7 @@ static gates_size_t widget_intrinsic(const gates_tree_t *tree, const gates_node_
     if (txt.size == 0) {
         ts = (gates_size_t){ 0, m.line_height };
     } else if (gates_i_mn_markup(tree, (gates_u32)(s - tree->slots))) {
-        ts.w = gates_i_mn_width(text, fsz, txt); /* markup takes no room (plan-0018) */
+        ts.w = gates_i_mn_width(text, fsz, txt); /* markup takes no room (0.3.0) */
     }
 
     switch (s->kind) {
@@ -358,7 +358,7 @@ static gates_size_t widget_intrinsic(const gates_tree_t *tree, const gates_node_
     case GATES_NODE_BUTTON: {
         gates_i32 h = ts.h + 2 * (GATES_BUTTON_PAD_Y + GATES_BUTTON_BORDER);
         gates_i32 w = ts.w + 2 * (GATES_BUTTON_PAD_X + GATES_BUTTON_BORDER);
-        if (st != nullptr && gates_tree_image(tree, st->icon) != nullptr) { /* plan-0020 */
+        if (st != nullptr && gates_tree_image(tree, st->icon) != nullptr) {
             w += GATES_ICON_SIZE + (txt.size > 0 ? 4 : 0);
             gates_i32 ih = GATES_ICON_SIZE + 2 * (GATES_BUTTON_PAD_Y + GATES_BUTTON_BORDER);
             if (ih > h) h = ih;
@@ -398,7 +398,7 @@ static gates_size_t widget_intrinsic(const gates_tree_t *tree, const gates_node_
     }
 }
 
-/* Children that take part in layout (plan-0010: hidden ones do not). */
+/* Children that take part in layout (hidden ones do not). */
 static gates_u32 shown_count(const gates_tree_t *tree, const gates_node_slot_t *s) {
     gates_u32 n = 0;
     for (gates_u32 c = s->first_child; c != GATES_NONE; c = gates_i_slot(tree, c)->next_sibling) {
@@ -497,7 +497,7 @@ static void measure_node(gates_tree_t *tree, gates_u32 idx, const gates_text_bac
         }
         case GATES_LAYOUT_SCROLL: {
             /* Content is measured for clamping and the thumb, but a viewport
-             * does not grow with it (plan-0004 decision 3): pref stays at the
+             * does not grow with it: pref stays at the
              * container's own padding, so the parent sizes the viewport. */
             gates_i32 total_h = 0, max_w = 0;
             for (gates_u32 c = s->first_child; c != GATES_NONE;
@@ -511,7 +511,7 @@ static void measure_node(gates_tree_t *tree, gates_u32 idx, const gates_text_bac
             break;
         }
         case GATES_LAYOUT_FORM: {
-            /* One label column for all shown rows (plan-0010). */
+            /* One label column for all shown rows. */
             gates_i32 label_w = 0, editor_w = 0, total_h = 0, stacked_h = 0;
             for (gates_u32 c = s->first_child; c != GATES_NONE;
                  c = gates_i_slot(tree, c)->next_sibling) {
@@ -669,7 +669,7 @@ static void arrange_split(gates_tree_t *tree, gates_node_slot_t *s, gates_rect_t
 
 /* SCROLL: children stack in a column at preferred heights, then the whole
  * content is translated by -offset. layout_rect therefore holds final window
- * coordinates, so hit testing needs no scroll-specific case (plan-0004 section 1). */
+ * coordinates, so hit testing needs no scroll-specific case. */
 static void arrange_scroll(gates_tree_t *tree, gates_node_slot_t *s, gates_rect_t content) {
     gates_i32 viewport_h = content.h;
     bool bar = s->content_size.h > viewport_h;
@@ -876,7 +876,7 @@ static void arrange_node(gates_tree_t *tree, gates_u32 idx) {
     case GATES_LAYOUT_STACK:
         for (gates_u32 c = s->first_child; c != GATES_NONE;
              c = gates_i_slot(tree, c)->next_sibling) {
-            gates_i_slot(tree, c)->layout_rect = content; /* children share (section 10) */
+            gates_i_slot(tree, c)->layout_rect = content; /* children share */
         }
         break;
     case GATES_LAYOUT_SPLIT:
@@ -918,7 +918,7 @@ static void arrange_node(gates_tree_t *tree, gates_u32 idx) {
         break;
     }
     if (s->kind == GATES_NODE_VIEW) {
-        gates_i_view_place_editor(tree, idx); /* over the edited cell (plan-0021) */
+        gates_i_view_place_editor(tree, idx); /* over the edited cell (0.6.0) */
     }
 
     for (gates_u32 c = s->first_child; c != GATES_NONE; c = gates_i_slot(tree, c)->next_sibling) {
@@ -948,7 +948,7 @@ gates_err_t gates_layout_run(gates_tree_t *tree, gates_size_t viewport,
         measure_node(tree, tree->root, text);
         arrange_node(tree, tree->root);
     }
-    /* Overlays (plan-0009 stage 2): measured on their own, placed in the viewport. */
+    /* Overlays: measured on their own, placed in the viewport. */
     for (gates_u32 i = 0; i < tree->overlay_count; i++) {
         gates_u32 idx = tree->overlays[i].index;
         measure_node(tree, idx, text);

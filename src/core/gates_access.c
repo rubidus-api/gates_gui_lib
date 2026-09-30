@@ -1,6 +1,6 @@
 /* gates_gui_lib - accessibility model: roles, names, states, values, items,
  * actions through the input paths, a change log for platform adapters, and the
- * enforced rules (plan-0014, RFC-0003 10). Platform-free. */
+ * enforced rules. Platform-free. */
 #include <gates/access.h>
 #include <gates/widget.h>
 #include <gates/layout.h>
@@ -128,7 +128,7 @@ gates_err_t gates_node_set_live(gates_tree_t *tree, gates_node_t node, gates_liv
     return err;
 }
 
-/* -- tooltips (plan-0018): kept with the other per-node properties ---------------- */
+/* -- tooltips (0.3.0): kept with the other per-node properties ---------------- */
 
 gates_err_t gates_node_set_tooltip(gates_tree_t *tree, gates_node_t node, gates_str_t text) {
     if (tree == nullptr || !gates_i_valid(tree, node) || (text.size > 0 && text.ptr == nullptr)) {
@@ -411,7 +411,7 @@ static gates_role_t role_of(const gates_tree_t *tree, gates_u32 idx) {
     case GATES_NODE_BUTTON: return GATES_ROLE_BUTTON;
     case GATES_NODE_CHECKBOX: return GATES_ROLE_CHECK_BOX;
     case GATES_NODE_TEXTBOX: return GATES_ROLE_EDIT;
-    case GATES_NODE_EDITOR: return GATES_ROLE_EDIT; /* multi-line (plan-0022) */
+    case GATES_NODE_EDITOR: return GATES_ROLE_EDIT; /* multi-line (0.7.0) */
     case GATES_NODE_RADIO: return GATES_ROLE_RADIO_GROUP;
     case GATES_NODE_CHOICE: return GATES_ROLE_COMBO_BOX;
     case GATES_NODE_SEPARATOR: return GATES_ROLE_SEPARATOR;
@@ -425,7 +425,7 @@ static gates_role_t role_of(const gates_tree_t *tree, gates_u32 idx) {
     case GATES_NODE_TABSTRIP: return GATES_ROLE_TAB;
     case GATES_NODE_SPIN: return GATES_ROLE_SPINNER;
     case GATES_NODE_GROUP: return GATES_ROLE_GROUP;
-    case GATES_NODE_IMAGE: /* named: an Image; unnamed: decoration (plan-0020) */
+    case GATES_NODE_IMAGE: /* named: an Image; unnamed: decoration (0.5.0) */
         return find_prop(tree, idx) != nullptr && find_prop(tree, idx)->name_len > 0 ? GATES_ROLE_IMAGE
                                                                                    : GATES_ROLE_NONE;
     case GATES_NODE_SLIDER: return GATES_ROLE_SLIDER;
@@ -702,7 +702,7 @@ gates_access_ref_t gates_access_focus_ref(gates_tree_t *tree) {
         return ref_of(tree, tree->focus, st->opt_sel);
     }
     if (gates_i_slot(tree, tree->focus)->kind == GATES_NODE_GROUPHEAD) {
-        return ref_of(tree, gates_i_slot(tree, tree->focus)->parent, 0); /* the group (plan-0019) */
+        return ref_of(tree, gates_i_slot(tree, tree->focus)->parent, 0); /* the group (0.4.0) */
     }
     if (gates_i_slot(tree, tree->focus)->kind == GATES_NODE_TABSTRIP) {
         gates_u32 tabs = gates_i_slot(tree, tree->focus)->parent;
@@ -908,7 +908,7 @@ gates_err_t gates_access_info(gates_tree_t *tree, gates_node_t node, gates_u64 i
     out->item_count = gates_access_item_count(tree, node);
 
     /* Name: explicit > form label > own text > dialog title. */
-    /* A spin box's text box takes the spin box's name (plan-0019). */
+    /* A spin box's text box takes the spin box's name (0.4.0). */
     gates_u32 nidx = idx;
     gates_u32 box_spin = gates_i_spin_of_box(tree, idx);
     if (box_spin != GATES_NONE && (p == nullptr || (p->name_len == 0 && !gates_i_valid(tree, p->labelled_by)))) {
@@ -919,7 +919,7 @@ gates_err_t gates_access_info(gates_tree_t *tree, gates_node_t node, gates_u64 i
     bool is_field = gates_i_form_field_info(tree, nidx, &field);
     bool required = false;
     gates_str_t name = {0};
-    bool markup = false;          /* the name is mnemonic markup (plan-0018) */
+    bool markup = false;          /* the name is mnemonic markup (0.3.0) */
     gates_node_t key_label = GATES_NODE_NULL;
     if (np != nullptr && np->name_len > 0) {
         name = (gates_str_t){ .ptr = np->name, .size = np->name_len };
@@ -936,7 +936,7 @@ gates_err_t gates_access_info(gates_tree_t *tree, gates_node_t node, gates_u64 i
     } else if (s->kind == GATES_NODE_DIALOG && s->first_child != GATES_NONE) {
         name = label_text(tree, gates_i_handle(tree, s->first_child));
     } else if (s->kind == GATES_NODE_GROUP && s->first_child != GATES_NONE) {
-        name = own_text(tree, s->first_child); /* its title (plan-0019) */
+        name = own_text(tree, s->first_child); /* its title (0.4.0) */
         markup = true;
     } else if (s->kind == GATES_NODE_TABSTRIP && s->parent != GATES_NONE) {
         name = gates_i_tabs_title(tree, s->parent, gates_i_tabs_selected(tree, s->parent));
@@ -1030,7 +1030,7 @@ gates_err_t gates_access_info(gates_tree_t *tree, gates_node_t node, gates_u64 i
         break;
     case GATES_NODE_EDITOR:
         if (st != nullptr && st->editor != nullptr) {
-            /* The text (both spans of the buffer), caret and selection (plan-0022). */
+            /* The text (both spans of the buffer), caret and selection (0.7.0). */
             gates_node_t h = gates_i_handle(tree, idx);
             const gates_text_buffer_t *tb = gates_editor_buffer(tree, h);
             gates_str_t s1, s2;
@@ -1076,7 +1076,7 @@ gates_err_t gates_access_info(gates_tree_t *tree, gates_node_t node, gates_u64 i
         break;
     case GATES_NODE_SPIN:
     case GATES_NODE_SLIDER: {
-        gates_i64 lo, hi, v; /* plan-0019; the info's range is 32-bit: clamped into it */
+        gates_i64 lo, hi, v; /* the info's range is 32-bit: clamped into it */
         if (gates_i_range_info(tree, idx, &lo, &hi, &v)) {
             out->has_range = true;
             out->range_min = lo < INT32_MIN ? INT32_MIN : lo > INT32_MAX ? INT32_MAX : (gates_i32)lo;
@@ -1234,7 +1234,7 @@ gates_err_t gates_access_set_value(gates_tree_t *tree, gates_node_t node, gates_
     gates_err_t err = usable(tree, node, &st);
     if (!gates_is_ok(err)) return err;
     if (gates_i_slot(tree, node.index)->kind == GATES_NODE_EDITOR) {
-        return gates_i_editor_user_set(tree, node.index, text); /* plan-0022 */
+        return gates_i_editor_user_set(tree, node.index, text);
     }
     if (gates_i_slot(tree, node.index)->kind != GATES_NODE_TEXTBOX || st->edit == nullptr ||
         (text.size > 0 && text.ptr == nullptr)) {
@@ -1558,7 +1558,7 @@ gates_err_t gates_access_select_text(gates_tree_t *tree, gates_node_t node, gate
         if (!gates_is_ok(err)) return err;
         gates_u32 len = gates_editor_length(tree, node);
         if (anchor > len || caret > len) return PROVEN_ERR_OUT_OF_BOUNDS;
-        return gates_editor_set_selection(tree, node, anchor, caret); /* plan-0022 */
+        return gates_editor_set_selection(tree, node, anchor, caret);
     }
     gates_widget_state_t *st = nullptr;
     gates_err_t err = usable(tree, node, &st);

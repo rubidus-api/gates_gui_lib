@@ -7,7 +7,7 @@
  * Shows: forty options in a scroll area, a line counting the checked ones
  * (kept by events), and a "top" button that scrolls back from code.
  *
- * Field check (T021): the wheel scrolls by three lines per notch; dragging the
+ * Field check: the wheel scrolls by three lines per notch; dragging the
  * thumb scrolls proportionally; options toggle and the count follows; rows
  * scrolled out of view do not react; "top" returns to the first row; ESC exits. */
 #include <gates/app.h>

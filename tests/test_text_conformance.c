@@ -1,5 +1,4 @@
-/* T016: the builtin text backend satisfies the RFC-0002 section 8 contract
- * (docs/tests/cases/T016-text-conformance.md). */
+/* the builtin text backend satisfies the text backend contract. */
 #include "text_conformance.h"
 
 int main(void) {

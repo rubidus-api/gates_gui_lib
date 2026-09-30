@@ -1,4 +1,4 @@
-/* gates_gui_lib - L1 primitive widgets (RFC-0001 section 12 level 1, Phase 2 set):
+/* gates_gui_lib - primitive widgets:
  * panel, label, button, checkbox. Widgets are tree nodes with semantic
  * state; they emit theme-token draw commands during the paint walk and
  * receive interaction through the pointer routing (gates/hit via window).
@@ -96,7 +96,7 @@ bool gates_textbox_can_redo(const gates_tree_t *tree, gates_node_t node);
 [[nodiscard]] gates_err_t gates_textbox_accept_fit(gates_tree_t *tree, gates_node_t node);
 void gates_textbox_discard_rejected(gates_tree_t *tree, gates_node_t node);
 
-/* DEPRECATED (RFC-0003 4.2): the mutable edit core, for the IME adapter's
+/* DEPRECATED: the mutable edit core, for the IME adapter's
  * history and advanced use. Changes made through it bypass events, limits and
  * undo; call gates_textbox_edit_commit afterwards. New code uses the safe
  * operations above. Null for non-textboxes. */
@@ -106,14 +106,14 @@ gates_text_edit_t *gates_textbox_edit(gates_tree_t *tree, gates_node_t node);
  * was made invalid UTF-8. */
 void gates_textbox_edit_commit(gates_tree_t *tree, gates_node_t node);
 
-/* Error state (plan-0010, RFC-0003 4.2 validation display): the border is
+/* Error state (validation display): the border is
  * drawn with GATES_COLOR_ERROR (a focused box also shows its focus ring inside
  * it). The text is untouched; validating is the application's job. */
 [[nodiscard]] gates_err_t gates_textbox_set_invalid(gates_tree_t *tree, gates_node_t node,
                                                     bool invalid);
 bool gates_textbox_invalid(const gates_tree_t *tree, gates_node_t node);
 
-/* -- options: radio group and choice (plan-0010) -------------------------------
+/* -- options: radio group and choice -------------------------------
  *
  * Both are one node holding a list of options with stable ids; the
  * application reads the selected id, never a row number. Ids are nonzero and
@@ -162,7 +162,7 @@ gates_u32 gates_options_count(const gates_tree_t *tree, gates_node_t node);
 gates_node_t gates_choice_list(const gates_tree_t *tree, gates_node_t choice);
 bool gates_choice_list_open(const gates_tree_t *tree, gates_node_t choice);
 
-/* -- separator and progress (plan-0010) ----------------------------------------- */
+/* -- separator and progress ----------------------------------------- */
 
 /* A one-pixel line (CONTROL_BORDER) with space around it: horizontal in a
  * column, vertical in a row. Not focusable. */
@@ -176,7 +176,7 @@ bool gates_choice_list_open(const gates_tree_t *tree, gates_node_t choice);
                                                    gates_i32 permille);
 gates_i32 gates_progress_value(const gates_tree_t *tree, gates_node_t node);
 
-/* -- group box (plan-0019) -------------------------------------------------------
+/* -- group box (0.4.0) -------------------------------------------------------
  * A titled frame around a column panel (*out_content) for related controls.
  * The title takes mnemonic markup: Alt+x focuses the first control inside, or
  * for a collapsible group toggles it. A collapsible group's title is a Tab stop
@@ -202,7 +202,7 @@ bool gates_widget_disabled(const gates_tree_t *tree, gates_node_t node);
                                                      bool checked);
 bool gates_checkbox_checked(const gates_tree_t *tree, gates_node_t node);
 
-/* Keyboard focus (plan-0009): buttons, checkboxes and textboxes are focusable
+/* Keyboard focus: buttons, checkboxes and textboxes are focusable
  * while enabled and reachable (not on an inactive stack page, inside the
  * current focus scope). false takes a control out of the Tab order. Clicking a
  * button or checkbox focuses it. */

@@ -1,4 +1,4 @@
-/* gates_gui_lib - property grid (plan-0021, RFC-0005 A12): a record's typed
+/* gates_gui_lib - property grid (0.6.0): a record's typed
  * fields as rows of a name and an editor, grouped by category.
  *
  * A property grid is a panel built from the ordinary controls: each category

@@ -1,5 +1,5 @@
 /* gates_gui_lib - virtual views: a list or a table over a model the
- * application owns, of any size (plan-0011, RFC-0003 section 8).
+ * application owns, of any size.
  *
  * A view is one retained node. It never creates a node per row: it asks the
  * model only for the rows it paints (at most GATES_VIEW_MAX_ROWS at a time)
@@ -32,7 +32,7 @@
  * id), GATES_EVENT_SORT_REQUESTED (ev->result = the column id),
  * GATES_EVENT_CELL_EDITED (ev->item = the row, ev->result = the column).
  *
- * Cells (plan-0021): a column shows text, a check box, a progress bar or an
+ * Cells (0.6.0): a column shows text, a check box, a progress bar or an
  * icon and text, or paints itself. An editable column lets a person change
  * the selected row's cell. A table has a current column (Ctrl+Left/Right, or
  * the cell pressed; outlined in the selected row): F2 edits it when it is an
@@ -93,7 +93,7 @@ typedef struct gates_cell_paint_t {
 } gates_cell_paint_t;
 typedef gates_err_t (*gates_cell_paint_fn)(void *user, const gates_cell_paint_t *p);
 
-/* Trees (stage 2): the model is the flattened sequence of visible rows; each
+/* Trees: the model is the flattened sequence of visible rows; each
  * row says how deep it is and whether it can open. */
 typedef enum gates_row_state_t {
     GATES_ROW_NORMAL = 0,
@@ -119,7 +119,7 @@ typedef struct gates_rows_model_t {
                         gates_cell_t *out);
     /* Required for a tree view, ignored otherwise. */
     gates_err_t (*row_info)(void *user, gates_item_id_t id, gates_row_info_t *out);
-    /* Optional (plan-0021): a person changed a cell of an editable column -
+    /* Optional (0.6.0): a person changed a cell of an editable column -
      * value->text for a text or icon column (borrowed for the call), or
      * value->checked for a check column. The model may change here (it is the
      * one callback that may); any error refuses the change. Null = read-only. */
@@ -151,7 +151,7 @@ typedef struct gates_view_desc_t {
      * changes its rows and calls gates_view_model_changed. Gates never walks
      * rows it does not show. Left/Right do not scroll sideways in a tree. */
     bool tree;
-    /* A header menu (plan-0021): a right press on the header, or Shift+F10 on
+    /* A header menu (0.6.0): a right press on the header, or Shift+F10 on
      * the view, opens a menu with a checked entry per column to show or hide
      * it (the last shown column cannot be hidden). Its entries are commands in
      * the view's own scope, one per column, with the column ids; every column
@@ -188,7 +188,7 @@ gates_i32 gates_view_column_width(const gates_tree_t *tree, gates_node_t view,
 [[nodiscard]] gates_err_t gates_view_set_column_width(gates_tree_t *tree, gates_node_t view,
                                                       gates_column_id_t column, gates_i32 width);
 
-/* -- choosing and ordering columns (plan-0021) ---------------------------------------
+/* -- choosing and ordering columns (0.6.0) ---------------------------------------
  *
  * A hidden column takes no space, is not painted or asked for, and is left
  * out of assistive technology's columns; hiding the column being edited
@@ -208,7 +208,7 @@ gates_column_id_t gates_view_column_at(const gates_tree_t *tree, gates_node_t vi
 [[nodiscard]] gates_err_t gates_view_open_column_menu(gates_tree_t *tree, gates_node_t view,
                                                       gates_point_t at, gates_node_t *out_menu);
 
-/* -- editing cells (plan-0021) -------------------------------------------------------
+/* -- editing cells (0.6.0) -------------------------------------------------------
  *
  * gates_view_edit opens the editor on a cell as F2 would (selecting the row,
  * scrolling it into view, focusing the editor): INVALID_ARG when the column is
@@ -242,7 +242,7 @@ typedef enum gates_view_part_t {
 gates_rect_t gates_view_part_rect(const gates_tree_t *tree, gates_node_t view,
                                   gates_view_part_t part, gates_u64 index);
 
-/* -- log view (stage 2) ------------------------------------------------------------
+/* -- log view ------------------------------------------------------------
  *
  * A view whose model is a bounded ring owned by gates: lines are appended on
  * the UI thread and copied; when a limit is passed the oldest lines are
@@ -253,7 +253,7 @@ gates_rect_t gates_view_part_rect(const gates_tree_t *tree, gates_node_t view,
  * following; reaching the end again (End, wheel, thumb) resumes it, and
  * both report GATES_EVENT_FOLLOW_CHANGED (the program's set_following is
  * silent). The
- * worker-thread producer arrives with RFC-0003 phase G through the same
+ * worker-thread producer uses gates/post.h through the same
  * append path. gates_view_set_model is refused on a log view. */
 typedef struct gates_log_desc_t {
     gates_u32 max_lines;         /* 0 -> 1000 */

@@ -1,4 +1,4 @@
-/* gates_gui_lib - multi-line text editor (RFC-0006, plan-0022).
+/* gates_gui_lib - multi-line text editor (0.7.0).
  *
  * One node over a text buffer (gates/text_buffer.h): it lays out and paints
  * only the lines it shows, so a long text costs what the view costs. Tabs

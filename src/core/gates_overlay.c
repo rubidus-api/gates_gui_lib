@@ -1,5 +1,5 @@
 /* gates_gui_lib - overlays: modal dialog and context menu with one set of
- * dismissal rules (plan-0009 stage 2, RFC-0003 7, RFC-0001 10). Platform-free. */
+ * dismissal rules. Platform-free. */
 #include <gates/overlay.h>
 #include <gates/frame.h>
 #include <gates/widget.h>
@@ -218,7 +218,7 @@ void gates_i_overlay_node_destroyed(gates_tree_t *tree, gates_u32 idx) {
 typedef struct menu_row_t {
     bool present;                /* false: separator, or command/option gone */
     bool markup;                 /* command labels carry mnemonic markup; options do not */
-    gates_u32 icon;              /* the command's icon (plan-0020), 0 = none */
+    gates_u32 icon;              /* the command's icon (0.5.0), 0 = none */
     bool enabled;
     bool checked;
     gates_str_t label;
@@ -285,7 +285,7 @@ static void menu_remove(gates_tree_t *tree, gates_u32 i, gates_u32 result) {
     }
     closed_event(tree, idx, GATES_EVENT_MENU_CLOSED, result);
     if (from_bar) {
-        gates_i_menubar_menu_closed(tree); /* plan-0018: menu mode ends unless switching */
+        gates_i_menubar_menu_closed(tree); /* menu mode ends unless switching */
     }
 }
 
@@ -418,7 +418,7 @@ gates_err_t gates_i_menu_open_for_bar(gates_tree_t *tree, gates_point_t at, gate
     return GATES_OK;
 }
 
-/* -- choice option list (plan-0010) --------------------------------------------- */
+/* -- choice option list --------------------------------------------- */
 
 gates_i32 gates_i_choice_list_find(const gates_tree_t *tree, gates_u32 idx) {
     if (idx == GATES_NONE) {
@@ -522,7 +522,7 @@ void gates_tree_dismiss_menus(gates_tree_t *tree) {
         }
     }
     if (tree->mb_mode != GATES_I_MB_OFF) {
-        gates_i_menubar_leave(tree); /* a highlighted title too (plan-0018) */
+        gates_i_menubar_leave(tree); /* a highlighted title too (0.3.0) */
     }
 }
 
@@ -735,7 +735,7 @@ gates_u32 gates_i_overlay_pointer(gates_tree_t *tree, const gates_pointer_event_
     gates_u32 idx = o->index;
     gates_widget_state_t *st = state_at(tree, idx);
     gates_i32 row = menu_row_at(tree, idx, ev->pos);
-    /* plan-0018: over the menu bar while one of its menus is open. */
+    /* over the menu bar while one of its menus is open. */
     if (st != nullptr && st->menu_from_bar && row == -2 && tree->menubar != GATES_NONE &&
         gates_rect_contains(gates_i_slot(tree, tree->menubar)->layout_rect, ev->pos)) {
         gates_i32 t = gates_i_menubar_title_at(tree, tree->menubar, ev->pos);
@@ -847,7 +847,7 @@ bool gates_i_overlay_key(gates_tree_t *tree, const gates_key_event_t *ev) {
         }
         break;
     default:
-        /* A letter chooses the entry whose mnemonic it is (plan-0018). */
+        /* A letter chooses the entry whose mnemonic it is (0.3.0). */
         if (ev->letter != 0 && !ev->ctrl && !st->menu_is_list) {
             gates_u8 l = ev->letter >= 'a' && ev->letter <= 'z' ? (gates_u8)(ev->letter - 32) : ev->letter;
             for (gates_i32 r = 0; r < n; r++) {
@@ -864,7 +864,7 @@ bool gates_i_overlay_key(gates_tree_t *tree, const gates_key_event_t *ev) {
     return true;
 }
 
-/* -- accessibility (plan-0014) ------------------------------------------------ */
+/* -- accessibility ------------------------------------------------ */
 
 gates_err_t gates_i_menu_invoke(gates_tree_t *tree, gates_u32 menu_idx, gates_command_id_t id) {
     gates_i32 found = -1;

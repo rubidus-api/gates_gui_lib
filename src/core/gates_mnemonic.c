@@ -1,5 +1,5 @@
 /* gates_gui_lib - mnemonics: "&x" markup, underlines while keyboard cues are
- * visible, Alt+letter activation (plan-0018). Platform-free. */
+ * visible, Alt+letter activation (0.3.0). Platform-free. */
 #include <gates/frame.h>
 #include <gates/widget.h>
 #include <gates/ui.h>
@@ -231,7 +231,7 @@ static gates_u32 candidate(const gates_tree_t *tree, gates_u32 idx, gates_u8 let
         return GATES_NONE;
     }
     if (s->kind == GATES_NODE_GROUPHEAD && s->parent != GATES_NONE && !gates_i_group_foldable(tree, s->parent)) {
-        /* A plain group's title: its first control (plan-0019). */
+        /* A plain group's title: its first control (0.4.0). */
         return gates_i_reachable(tree, idx) ? gates_i_group_first(tree, s->parent) : GATES_NONE;
     }
     if (s->kind == GATES_NODE_LABEL) {
@@ -284,7 +284,7 @@ bool gates_input_mnemonic(gates_tree_t *tree, gates_u32 codepoint) {
             }
         }
     }
-    /* Tab titles (plan-0018). */
+    /* Tab titles (0.3.0). */
     if (gates_i_tabs_mnemonic(tree, letter)) {
         return true;
     }

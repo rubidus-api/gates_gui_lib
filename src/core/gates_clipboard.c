@@ -1,5 +1,5 @@
-/* gates_gui_lib - clipboard boundary and the single-line paste policy
- * (plan-0008, RFC-0003 6.1). Platform-free: providers do the OS work. */
+/* gates_gui_lib - clipboard boundary and the single-line paste policy.
+ * Platform-free: providers do the OS work. */
 #include <gates/clipboard.h>
 #include <gates/text.h>
 #include "gates_tree_internal.h"
@@ -65,7 +65,7 @@ gates_err_t gates_i_paste_normalize(gates_allocator_t alloc, gates_str_t in, boo
         }
         at += step;
         if (keep_lines && (cp == '\r' || cp == '\n')) {
-            dst[n++] = '\n'; /* an editor keeps line breaks (plan-0022) */
+            dst[n++] = '\n'; /* an editor keeps line breaks (0.7.0) */
         } else if (keep_lines && cp == '\t') {
             dst[n++] = '\t';
         } else if (cp == '\r' || cp == '\n' || cp == '\t') {

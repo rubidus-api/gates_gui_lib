@@ -12,7 +12,7 @@
  * view asked for in its last paint, and a "go to row 500000" button that
  * selects and reveals a row from code.
  *
- * Field check (T032): the list scrolls with the wheel and the thumb; Down,
+ * Field check: the list scrolls with the wheel and the thumb; Down,
  * PageDown, End, Home move the selection and keep it in view; a click selects;
  * Enter or a double click reports "activated"; "go to row 500000" jumps there
  * and selects it; the cells-per-paint number stays small whatever the

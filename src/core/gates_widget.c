@@ -1,4 +1,4 @@
-/* gates_gui_lib - primitive widget state and properties (RFC-0001 section 12 L1). */
+/* gates_gui_lib - primitive widget state and properties. */
 #include <gates/widget.h>
 #include "gates_tree_internal.h"
 
@@ -142,7 +142,7 @@ gates_err_t gates_textbox_set_text(gates_tree_t *tree, gates_node_t node, gates_
         return PROVEN_ERR_INVALID_ARG;
     }
     if (gates_text_edit_preedit(st->edit).size > 0) {
-        return PROVEN_ERR_BUSY; /* RFC-0003 6.1: never invent a result from a preedit */
+        return PROVEN_ERR_BUSY; /* never invent a result from a preedit */
     }
     gates_str_t cur = gates_text_edit_text(st->edit);
     if (cur.size == text.size && (text.size == 0 || memcmp(cur.ptr, text.ptr, text.size) == 0)) {
@@ -224,12 +224,12 @@ gates_err_t gates_widget_set_disabled(gates_tree_t *tree, gates_node_t node, boo
         gates_node_t box = gates_i_handle(tree, gates_i_slot(tree, node.index)->first_child);
         gates_widget_state_t *bs = state_of(tree, box);
         if (bs != nullptr && bs->disabled != disabled) {
-            bs->disabled = disabled; /* the box is the spin box's input (plan-0019) */
+            bs->disabled = disabled; /* the box is the spin box's input (0.4.0) */
             gates_i_mark_dirty(tree, box.index, GATES_DIRTY_PAINT);
         }
     }
     if (disabled && gates_i_slot(tree, node.index)->kind == GATES_NODE_VIEW) {
-        gates_i_view_cancel_edit(tree, node.index); /* plan-0021 */
+        gates_i_view_cancel_edit(tree, node.index);
     }
     if (st->disabled != disabled) {
         st->disabled = disabled;
@@ -271,7 +271,7 @@ bool gates_widget_pressed(const gates_tree_t *tree, gates_node_t node) {
     return gates_i_valid(tree, node) && tree->pressed == node.index;
 }
 
-/* -- textbox error state, separator, progress (plan-0010) ------------------------ */
+/* -- textbox error state, separator, progress ------------------------ */
 
 gates_err_t gates_textbox_set_invalid(gates_tree_t *tree, gates_node_t node, bool invalid) {
     if (!gates_i_valid(tree, node) ||

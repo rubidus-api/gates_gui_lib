@@ -1,7 +1,6 @@
-/* gates_gui_lib - window/surface boundary (RFC-0001 section 3 gates_surface).
- * Opaque, platform-free header. A window owns its retained tree (section 7); in
- * Phase 1 painting is driven by the paint callback emitting draw commands -
- * widgets take over draw-list generation in Phase 2. */
+/* gates_gui_lib - window/surface boundary.
+ * Opaque, platform-free header. A window owns its retained tree; the tree lays
+ * out and paints its widgets, and the paint callback may add draw commands. */
 #ifndef GATES_WINDOW_H
 #define GATES_WINDOW_H
 
@@ -41,10 +40,10 @@ typedef struct gates_window_callbacks_t {
                                               gates_window_t **out_window);
 void gates_window_destroy(gates_window_t *win);
 
-/* The window's retained node tree (owned by the window; section 7). */
+/* The window's retained node tree (owned by the window). */
 gates_tree_t *gates_window_tree(gates_window_t *win);
 
-/* Theme (plan-0013). SYSTEM (the default) follows the desktop: high contrast
+/* Theme. SYSTEM (the default) follows the desktop: high contrast
  * when it is on, else dark or light as the Windows app mode says, switching
  * live when the user changes it; the title bar follows too. */
 typedef enum gates_theme_mode_t {
@@ -60,13 +59,13 @@ gates_theme_mode_t gates_window_theme_mode(const gates_window_t *win);
 /* The theme in use now. */
 const gates_theme_t *gates_window_theme(const gates_window_t *win);
 
-/* Logical units (plan-0013): the window scales its drawing to the monitor's DPI
+/* Logical units: the window scales its drawing to the monitor's DPI
  * and converts pointer positions back, so the tree never sees device pixels.
  * GATES_FORCE_DPI=<dpi> in the environment forces a DPI (diagnostics). */
 gates_size_t gates_window_client_size(const gates_window_t *win);
 void gates_window_request_repaint(gates_window_t *win);
 
-/* Accessibility (plan-0014). The window is a UI Automation provider: screen
+/* Accessibility. The window is a UI Automation provider: screen
  * readers and automation tools see the tree as access.h describes it.
  * Zoom (percent, 25..400, 100 = none) scales the whole interface on top of the
  * monitor's DPI and the Windows "Text size" setting, which it also follows. */
@@ -77,7 +76,7 @@ bool gates_window_reduced_motion(const gates_window_t *win);
 /* Spoken by screen readers (a UI Automation notification); assertive
  * interrupts what is being read. The text is copied. */
 [[nodiscard]] gates_err_t gates_window_announce(gates_window_t *win, gates_str_t text, bool assertive);
-/* Placement (plan-0018, RFC-0005 A5): where the window is, as text to keep in a
+/* Placement (0.3.0): where the window is, as text to keep in a
  * file - "x,y,w,h,state" with the normal (restored) rectangle in screen pixels
  * and state "normal" or "maximized". *needed always receives its length; with
  * a buffer too small nothing is written (OVERFLOW). set_placement takes that
@@ -86,7 +85,7 @@ bool gates_window_reduced_motion(const gates_window_t *win);
 [[nodiscard]] gates_err_t gates_window_placement(const gates_window_t *win, gates_u8 *buf,
                                                  gates_usize_t cap, gates_usize_t *needed);
 [[nodiscard]] gates_err_t gates_window_set_placement(gates_window_t *win, gates_str_t text);
-/* Native dialogs (plan-0020): the platform's own modal dialogs. The call
+/* Native dialogs (0.5.0): the platform's own modal dialogs. The call
  * returns when the person answers; the window's menus close first. A cancel is
  * GATES_OK with *len = 0 (or chosen = false). Paths are UTF-8; *len receives the
  * path's length, and a too small cap returns OVERFLOW and writes nothing.

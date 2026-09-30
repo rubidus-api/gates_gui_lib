@@ -1,12 +1,12 @@
 #!/bin/sh
-# T040: the package (plan-0015). Run from the repository root: make package-check
+# the package. Run from the repository root: make package-check
 #   1. every public header compiles on its own; gates.h includes all of them;
 #   2. the version agrees: version.h, CHANGELOG, the library at run time;
 #   3. the libraries export only gates_* (libgates*) and proven_* (libproven) names;
 #   4. make dist lays out the package;
 #   5. a consumer builds from a copy of the package alone - the source tree is not on
 #      any path - and runs (host). With a Windows cross compiler present, the Windows
-#      consumer builds the same way (it is run on Windows by hand, T042).
+#      consumer builds the same way (it is run on Windows by hand).
 set -eu
 CC=${CC:-gcc}
 CC_WIN=${CC_WIN:-x86_64-w64-mingw32-gcc}

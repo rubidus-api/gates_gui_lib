@@ -1,4 +1,4 @@
-/* gates_gui_lib - 2D geometry primitives (RFC-0001 section 11, section 15, section 20).
+/* gates_gui_lib - 2D geometry primitives.
  * Pixel geometry is integer (gates_i32); float appears only in vectors that
  * carry sub-pixel data (pointer deltas). Platform-free. */
 #ifndef GATES_GEOMETRY_H
@@ -11,7 +11,7 @@ typedef struct gates_point_t {
     gates_i32 y;
 } gates_point_t;
 
-/* 2D size (RFC-0001 section 11.1). Byte sizes are gates_usize_t in gates/types.h. */
+/* 2D size. Byte sizes are gates_usize_t in gates/types.h. */
 typedef struct gates_size_t {
     gates_i32 w;
     gates_i32 h;
@@ -49,7 +49,7 @@ static inline gates_rect_t gates_rect_intersect(gates_rect_t a, gates_rect_t b) 
     return (gates_rect_t){ x0, y0, x1 - x0, y1 - y0 };
 }
 
-/* -- logical units (plan-0013) ---------------------------------------------------
+/* -- logical units ---------------------------------------------------
  *
  * Every coordinate and size the API takes or returns is a logical unit,
  * 1/96 inch. A window scales once at its boundary: drawing goes to device

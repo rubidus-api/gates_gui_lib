@@ -1,8 +1,8 @@
-/* gates_gui_lib - intrinsic layout (RFC-0001 section 11, Phase 2 set):
- * absolute, row, column, stack; padding/gap/grow/align; measure/arrange.
- * Split and scroll are staged next (see plan-0003). Platform-free.
+/* gates_gui_lib - intrinsic layout: absolute, row, column, stack, split,
+ * scroll, form, grid and wrap; padding/gap/grow/align; measure/arrange.
+ * Platform-free.
  *
- * Invariant (section 9, section 30): after arrange, sibling layout rects in normal-flow
+ * Invariant: after arrange, sibling layout rects in normal-flow
  * containers (row/column) do not overlap. Stack children intentionally share
  * their parent's content rect; only the active child is painted/hit. */
 #ifndef GATES_LAYOUT_H
@@ -20,9 +20,9 @@ typedef enum gates_layout_t {
     GATES_LAYOUT_KIND_STACK,
     GATES_LAYOUT_KIND_SPLIT,      /* exactly two panes + draggable handle */
     GATES_LAYOUT_KIND_SCROLL,     /* clipped viewport over a taller column */
-    GATES_LAYOUT_KIND_FORM,       /* rows of label | editor (plan-0010), see below */
-    GATES_LAYOUT_KIND_GRID,       /* rows and columns (plan-0019), see below */
-    GATES_LAYOUT_KIND_WRAP,       /* a row that breaks onto new lines (plan-0019) */
+    GATES_LAYOUT_KIND_FORM,       /* rows of label | editor, see below */
+    GATES_LAYOUT_KIND_GRID,       /* rows and columns (0.4.0), see below */
+    GATES_LAYOUT_KIND_WRAP,       /* a row that breaks onto new lines (0.4.0) */
 } gates_layout_t;
 
 /* GRID: children fill cells left to right, row by row, gates_layout_set_grid
@@ -72,7 +72,7 @@ typedef enum gates_align_t {
     GATES_ALIGN_END_V,
 } gates_align_t;
 
-/* GRID (plan-0019): columns 1..GATES_GRID_MAX_COLUMNS; a column's grow weight;
+/* GRID (0.4.0): columns 1..GATES_GRID_MAX_COLUMNS; a column's grow weight;
  * a child's span in columns (1 by default; wider than the grid is cut to fit). */
 [[nodiscard]] gates_err_t gates_layout_set_grid(gates_tree_t *tree, gates_node_t node, gates_u32 columns);
 [[nodiscard]] gates_err_t gates_layout_set_grid_column_grow(gates_tree_t *tree, gates_node_t node,
@@ -128,7 +128,7 @@ gates_size_t gates_layout_scroll_content(const gates_tree_t *tree, gates_node_t 
 gates_rect_t gates_node_layout_rect(const gates_tree_t *tree, gates_node_t node);
 gates_size_t gates_node_preferred_size(const gates_tree_t *tree, gates_node_t node);
 
-/* section 30 checker: recursively verifies that sibling layout rects in row/column
+/* Invariant checker: recursively verifies that sibling layout rects in row/column
  * containers do not overlap. Used by tests and debug builds. */
 bool gates_layout_validate(const gates_tree_t *tree, gates_node_t node);
 

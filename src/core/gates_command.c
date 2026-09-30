@@ -1,5 +1,5 @@
-/* gates_gui_lib - command registry, shortcut matching and queued invocation
- * (plan-0009, RFC-0003 5.2). Platform-free. */
+/* gates_gui_lib - command registry, shortcut matching and queued invocation.
+ * Platform-free. */
 #include <gates/command.h>
 #include <gates/widget.h>
 #include "gates_tree_internal.h"
@@ -266,7 +266,7 @@ gates_err_t gates_command_invoke(gates_tree_t *tree, gates_node_t scope, gates_c
     return GATES_OK;
 }
 
-/* Scope chain: the active scope, then the tree root (stage 2 adds nesting). */
+/* Scope chain: the active scope, then the tree root. */
 static gates_i_command_t *in_scope_chain(const gates_tree_t *tree,
                                          bool (*match)(const gates_i_command_t *, const void *),
                                          const void *arg) {
@@ -361,7 +361,7 @@ bool gates_i_widget_inert(const gates_tree_t *tree, const gates_widget_state_t *
         return true; /* a radio group or choice with nothing to choose */
     }
     if (st->tbar != nullptr && !gates_i_toolbar_any_enabled(tree, st)) {
-        return true; /* a toolbar whose commands are all disabled (plan-0018) */
+        return true; /* a toolbar whose commands are all disabled (0.3.0) */
     }
     if (st->cmd_id == 0) {
         return false;
@@ -402,7 +402,7 @@ gates_err_t gates_button_set_command(gates_tree_t *tree, gates_node_t button, ga
     return GATES_OK;
 }
 
-/* -- keymap (plan-0018, RFC-0005 A4) ------------------------------------------------ */
+/* -- keymap (0.3.0) ------------------------------------------------ */
 
 /* Key names as shortcuts print and parse them; aliases after the first name. */
 static const struct {

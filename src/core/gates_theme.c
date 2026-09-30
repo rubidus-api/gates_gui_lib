@@ -1,5 +1,5 @@
-/* gates_gui_lib - built-in theme profiles: light, dark and high contrast
- * (RFC-0001 14, plan-0013). The only place in the library where widget RGB
+/* gates_gui_lib - built-in theme profiles: light, dark and high contrast.
+ * The only place in the library where widget RGB
  * values live; everything else speaks tokens. Platform-free. */
 #include <gates/theme.h>
 

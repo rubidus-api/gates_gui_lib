@@ -1,6 +1,6 @@
 /* gates_gui_lib - the Windows image decoder: Windows Imaging Component turns
  * PNG, JPEG, BMP, GIF, ICO and TIFF into RGBA8 for the tree's image store
- * (plan-0020). WIC is reached through COM (the app initialised it); the GUIDs
+ * (0.5.0). WIC is reached through COM (the app initialised it); the GUIDs
  * are defined here so the link line needs no extra library. */
 #define COBJMACROS
 #include "gates_win32_internal.h"

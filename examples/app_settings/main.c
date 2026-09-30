@@ -13,7 +13,7 @@
  * "applying" step after a valid Save - a progress bar filled by a timer, or at
  * once when the person asked Windows for less motion; a status line.
  *
- * Field check (T029 stage 2): with an empty name and "abc" as e-mail, Enter
+ * Field check: with an empty name and "abc" as e-mail, Enter
  * shows two messages under the fields (the text boxes turn red) and puts the
  * focus in the name box; fixing them and pressing Enter saves ("saved: ...");
  * ticking "use a proxy server" shows the proxy row (Tab reaches it), unticking
@@ -89,7 +89,7 @@ static void set_status(app_t *a, const char *text) {
     (void)gates_widget_set_text(a->tree, a->status, cstr(text));
 }
 
-/* Input the tree could not complete (usually out of memory): say so (RFC-0003 section 13). */
+/* Input the tree could not complete (usually out of memory): say so. */
 static void on_input_error(gates_window_t *win, gates_err_t err, void *user) {
     (void)win;
     set_status(user, err == PROVEN_ERR_NOMEM ? "Out of memory: the last change was not made" : "The last change failed");

@@ -1,4 +1,4 @@
-/* gates_gui_lib - persisted UI state (plan-0018, RFC-0005 A5).
+/* gates_gui_lib - persisted UI state (0.3.0).
  *
  * What a person arranges - split positions, the selected tab, column widths,
  * scroll positions - can outlive the program: gates_state_save writes it as

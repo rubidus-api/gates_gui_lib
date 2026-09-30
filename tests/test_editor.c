@@ -1,4 +1,4 @@
-/* T055: the multi-line editor node (plan-0022 stage 2) - typing, lines,
+/* the multi-line editor node (0.7.0) - typing, lines,
  * caret movement, deletion runs, selection, clipboard, Tab, read-only, the
  * byte limit, undo/redo and the modified mark, program edits, painting only
  * the lines shown, tabs, pointer and wheel, scrolling, events, accessibility
@@ -719,7 +719,7 @@ static void test_failures(void) {
     }
 }
 
-/* -- stage 3: wrap, gutter, highlighting, marks, find, indenting --------------------------------- */
+/* -- wrap, gutter, highlighting, marks, find, indenting --------------------------------- */
 
 /* The editor's own text commands (not the buttons around it), in order. */
 static gates_rect_t text_zone;
@@ -1192,7 +1192,7 @@ static void test_indenting(void) {
     done(&a);
 }
 
-/* -- stage 4: input methods and accessibility by line ------------------------------------------- */
+/* -- input methods and accessibility by line ------------------------------------------- */
 
 typedef struct pre_rec_t {
     int n;

@@ -1,5 +1,4 @@
-/* gates_gui_lib - posting from worker threads to the UI (plan-0012, RFC-0003
- * section 9).
+/* gates_gui_lib - posting from worker threads to the UI.
  *
  * A worker never touches the tree. It holds a sender (from gates_app_sender
  * on the UI thread, before the worker starts) and posts messages: a target

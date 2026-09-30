@@ -117,7 +117,7 @@ static void show_status(app_t *a) {
     (void)gates_command_set_enabled(a->tree, root, CMD_DELETE, any);
 }
 
-/* Input the tree could not complete (usually out of memory): say so (RFC-0003 section 13). */
+/* Input the tree could not complete (usually out of memory): say so. */
 static void on_input_error(gates_window_t *win, gates_err_t err, void *user) {
     (void)win;
     app_t *a = user;

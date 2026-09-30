@@ -1,5 +1,5 @@
 /* gates_gui_lib - toolbar (command buttons, one Tab stop, ">>" overflow menu)
- * and status bar (label segments with separators) (plan-0018). Platform-free. */
+ * and status bar (label segments with separators) (0.3.0). Platform-free. */
 #include <gates/frame.h>
 #include <gates/widget.h>
 #include <gates/layout.h>
@@ -155,7 +155,7 @@ static gates_i32 entry_w(const gates_tree_t *tree, const gates_text_backend_t *b
     }
     const gates_i_command_t *c = gates_i_command_find(tree, tb->scope_index, tb->scope_generation, tb->ids[k]);
     gates_str_t label = c != nullptr ? (gates_str_t){ .ptr = c->label, .size = c->label_len } : (gates_str_t){0};
-    if (c != nullptr && gates_tree_image(tree, c->icon) != nullptr) { /* plan-0020 */
+    if (c != nullptr && gates_tree_image(tree, c->icon) != nullptr) {
         return tb->icons_only ? GATES_ICON_SIZE + 2 * TB_PAD_X
                               : GATES_ICON_SIZE + 4 + gates_i_mn_width(be, font, label) + 2 * TB_PAD_X;
     }

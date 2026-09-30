@@ -1,4 +1,4 @@
-/* gates_gui_lib - tabs: a strip of titles over a stack of pages (plan-0018).
+/* gates_gui_lib - tabs: a strip of titles over a stack of pages (0.3.0).
  * The tabs node is a column holding the strip (one node owning its titles,
  * one Tab stop) and a stack panel with the pages. Platform-free. */
 #include <gates/frame.h>

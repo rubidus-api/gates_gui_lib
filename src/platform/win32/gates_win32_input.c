@@ -1,5 +1,5 @@
 /* gates_gui_lib - Win32 input translation to the unified pointer/key model
- * (RFC-0001 section 15, Phase 1: mouse + keyboard + WM_CHAR). */
+ * (mouse, keyboard, WM_CHAR). */
 #include "gates_win32_internal.h"
 
 #include <windowsx.h> /* GET_X_LPARAM / GET_Y_LPARAM */
@@ -55,7 +55,7 @@ static void fill_common(gates_window_t *win, gates_pointer_event_t *ev,
     POINT sp = { pos.x, pos.y };
     ClientToScreen(win->hwnd, &sp);
     ev->screen_pos = (gates_point_t){ sp.x, sp.y }; /* device pixels, as the OS gives them */
-    /* The tree lives in logical units (plan-0013): the unit containing the pixel. */
+    /* The tree lives in logical units: the unit containing the pixel. */
     pos = (gates_point_t){ gates_logical(pos.x, win->dpi), gates_logical(pos.y, win->dpi) };
     ev->pos = pos;
     if (win->have_last_pos) {
@@ -131,7 +131,7 @@ bool gates_win32_handle_input(gates_window_t *win, UINT msg, WPARAM wparam, LPAR
     switch (msg) {
     case WM_MOUSEMOVE: {
         if (!win->leave_tracked) {
-            /* Hear when the pointer leaves, so hover and tooltips end (plan-0018). */
+            /* Hear when the pointer leaves, so hover and tooltips end (0.3.0). */
             TRACKMOUSEEVENT tme = { .cbSize = sizeof tme, .dwFlags = TME_LEAVE, .hwndTrack = win->hwnd };
             win->leave_tracked = TrackMouseEvent(&tme) != FALSE;
         }
@@ -148,7 +148,7 @@ bool gates_win32_handle_input(gates_window_t *win, UINT msg, WPARAM wparam, LPAR
         return true;
     }
     /* The class has CS_DBLCLKS: the second press of a double click arrives as
-     * WM_*BUTTONDBLCLK instead of WM_*BUTTONDOWN (plan-0011 views). */
+     * WM_*BUTTONDBLCLK instead of WM_*BUTTONDOWN. */
     case WM_LBUTTONDOWN:   button_event(win, pos, GATES_BUTTON_LEFT, true, left_clicks(win, pos, false)); return true;
     case WM_LBUTTONDBLCLK: button_event(win, pos, GATES_BUTTON_LEFT, true, left_clicks(win, pos, true));  return true;
     case WM_LBUTTONUP:     button_event(win, pos, GATES_BUTTON_LEFT, false, 1);  return true;
@@ -176,7 +176,7 @@ bool gates_win32_handle_input(gates_window_t *win, UINT msg, WPARAM wparam, LPAR
     }
 
     case WM_SYSCHAR:
-        /* Alt+letter: a mnemonic (plan-0018); anything else stays with Windows
+        /* Alt+letter: a mnemonic (0.3.0); anything else stays with Windows
          * (Alt+Space, Alt+F4 come as other messages or fail to match). */
         if (gates_input_mnemonic(win->tree, (gates_u32)wparam)) {
             gates_win32_after_input(win);
@@ -191,7 +191,7 @@ bool gates_win32_handle_input(gates_window_t *win, UINT msg, WPARAM wparam, LPAR
             return false;                     /* Windows still turns Alt alone into SC_KEYMENU */
         }
         if (wparam == VK_DOWN || wparam == VK_UP) {
-            /* Alt+Down opens a choice's list (plan-0010); unused, it goes to Windows. */
+            /* Alt+Down opens a choice's list; unused, it goes to Windows. */
             gates_key_event_t akev = {
                 .vkey = (gates_u32)wparam,
                 .key = map_vkey((UINT)wparam),
@@ -262,7 +262,7 @@ bool gates_win32_handle_input(gates_window_t *win, UINT msg, WPARAM wparam, LPAR
     }
 }
 
-/* -- IMM32 composition (plan-0006) -------------------------------------------
+/* -- IMM32 composition -------------------------------------------
  * The installed IME (Microsoft IME, or a TSF IME through the system's IMM32
  * compatibility layer) owns language conversion; this adapter only moves its
  * strings into the focused textbox. GCS_RESULTSTR is the only commit;
@@ -271,7 +271,7 @@ bool gates_win32_handle_input(gates_window_t *win, UINT msg, WPARAM wparam, LPAR
 static bool ime_has_target(gates_window_t *win) {
     gates_node_t focus = gates_tree_focus(win->tree);
     bool text = gates_textbox_edit(win->tree, focus) != nullptr ||
-                gates_node_kind(win->tree, focus) == GATES_NODE_EDITOR; /* plan-0022 */
+                gates_node_kind(win->tree, focus) == GATES_NODE_EDITOR;
     return text && !gates_widget_disabled(win->tree, focus);
 }
 

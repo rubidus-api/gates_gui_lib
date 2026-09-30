@@ -1,5 +1,5 @@
 /* gates_gui_lib - group box: a titled frame around a content panel, optionally
- * collapsible (plan-0019). The group is a column holding its title (GROUPHEAD,
+ * collapsible (0.4.0). The group is a column holding its title (GROUPHEAD,
  * the Tab stop of a collapsible group) and the content panel. Platform-free. */
 #include <gates/widget.h>
 #include <gates/layout.h>

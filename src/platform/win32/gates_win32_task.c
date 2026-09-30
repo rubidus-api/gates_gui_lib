@@ -1,4 +1,4 @@
-/* gates_gui_lib - threads for background tasks on Windows (plan-0021): the
+/* gates_gui_lib - threads for background tasks on Windows (0.6.0): the
  * core starts, joins and yields through these; each window's tree gets them. */
 #include "gates_win32_internal.h"
 

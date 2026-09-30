@@ -1,4 +1,4 @@
-/* T053: the undo stack (plan-0021 stage 3) - push, undo, redo, labels,
+/* the undo stack (0.6.0) - push, undo, redo, labels,
  * merge runs, the bound, the clean mark, refusals and data dropping, and
  * two commands kept in step. */
 #include <gates/undo.h>

@@ -1,4 +1,4 @@
-/* gates_gui_lib - version (plan-0015). */
+/* gates_gui_lib - version. */
 #include <gates/version.h>
 
 gates_u32 gates_version(void) {

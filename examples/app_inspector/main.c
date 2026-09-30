@@ -15,7 +15,7 @@
  * (F5), Shuffle (F6), Remove selected (F8); a status line with the record
  * count and any allocation failure.
  *
- * Field check (T032 stage 1): select a record, press F6: the rows reorder,
+ * Field check: select a record, press F6: the rows reorder,
  * the same record stays selected and in view; F5 adds 1000 records (the count
  * grows, the selection stays); F8 removes the selected record and the next
  * one is selected, the form follows; clicking "Size" sorts, clicking again
@@ -148,7 +148,7 @@ static gates_err_t m_set_cell(void *u, gates_item_id_t id, gates_column_id_t col
 /* -- the program's side: change, then tell the view ------------------------------------- */
 
 static void set_status(app_t *a, const char *extra);
-/* Input the tree could not complete (usually out of memory): say so (RFC-0003 section 13). */
+/* Input the tree could not complete (usually out of memory): say so. */
 static void on_input_error(gates_window_t *win, gates_err_t err, void *user) {
     (void)win;
     set_status(user, err == PROVEN_ERR_NOMEM ? "(out of memory: the last action was not done)" : "(the last action failed)");

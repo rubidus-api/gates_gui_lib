@@ -229,7 +229,7 @@ static void set_status(app_t *a, const char *s) {
     (void)gates_widget_set_text(a->tree, a->status, (gates_str_t){ .ptr = (const gates_u8 *)s, .size = strlen(s) });
 }
 
-/* Input the tree could not complete (usually out of memory): say so (RFC-0003 section 13). */
+/* Input the tree could not complete (usually out of memory): say so. */
 static void on_input_error(gates_window_t *win, gates_err_t err, void *user) {
     (void)win;
     set_status(user, err == PROVEN_ERR_NOMEM ? "Out of memory: the last action was not done" : "The last action failed");

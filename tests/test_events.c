@@ -1,5 +1,4 @@
-/* T020: typed change notifications and pointer lifecycle
- * (docs/tests/cases/T020-events.md, plan-0007, RFC-0003 section 4.1). */
+/* typed change notifications and pointer lifecycle. */
 #include <gates/ui.h>
 #include <gates/widget.h>
 #include <gates/event.h>

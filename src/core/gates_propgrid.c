@@ -1,4 +1,4 @@
-/* gates_gui_lib - property grid (plan-0021): categories as collapsible group
+/* gates_gui_lib - property grid (0.6.0): categories as collapsible group
  * boxes of label/editor grids, built from the ordinary controls; one handler
  * hears every property change by id. Platform-free. */
 #include <gates/propgrid.h>

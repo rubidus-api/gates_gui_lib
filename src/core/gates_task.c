@@ -1,4 +1,4 @@
-/* gates_gui_lib - background tasks (plan-0021, RFC-0005 A9): a work function
+/* gates_gui_lib - background tasks (0.6.0): a work function
  * on a platform thread; progress and the end travel back through the tree's
  * sender as gates' own message kinds and are handled before any node's
  * message handler. A task is shared by the UI and its worker and freed by

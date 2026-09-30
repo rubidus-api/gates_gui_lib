@@ -8,7 +8,7 @@
  * Shows: a counting button, a button that enables/disables it, and a status
  * line updated from the events (never from paint).
  *
- * Field check (T021): "count" increments the status once per click; pressing
+ * Field check: "count" increments the status once per click; pressing
  * "count" and releasing outside it does not count; "disable count" greys it out
  * and clicks on it stop counting, pressing again re-enables it; ESC exits. */
 #include <gates/app.h>

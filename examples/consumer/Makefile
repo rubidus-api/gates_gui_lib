@@ -1,4 +1,4 @@
-# A program built from the gates package alone (plan-0015, T040/T042).
+# A program built from the gates package alone.
 # This folder sits in the package at examples/consumer/, so the package root is
 # ../.. - point PKG elsewhere for an installed copy: make host PKG=/some/prefix
 #   make host   headless.c against lib/host (gcc or clang, any system)
