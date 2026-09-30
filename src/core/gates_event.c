@@ -64,7 +64,7 @@ gates_err_t gates_i_event_reserve(gates_tree_t *tree, gates_u32 slots, gates_u32
 static bool coalesces(gates_event_kind_t kind) {
     return kind == GATES_EVENT_TEXT_CHANGED || kind == GATES_EVENT_PREEDIT_CHANGED ||
            kind == GATES_EVENT_VALUE_CHANGED || kind == GATES_EVENT_LIMIT_EXCEEDED ||
-           kind == GATES_EVENT_SELECTION_CHANGED;
+           kind == GATES_EVENT_SELECTION_CHANGED || kind == GATES_EVENT_FOLLOW_CHANGED;
 }
 
 /* -- bubbling (plan-0019) -------------------------------------------------------- */
@@ -404,7 +404,8 @@ gates_u32 gates_tree_dispatch_events(gates_tree_t *tree, gates_u32 max_events) {
                           ? (st->tabs != nullptr ? gates_i_tabs_selected(tree, node.index) : st->opt_sel)
                       : (e.kind == GATES_EVENT_SORT_REQUESTED || e.kind == GATES_EVENT_EXPAND_REQUESTED ||
                          e.kind == GATES_EVENT_CELL_EDITED) ? e.aux
-                                                               : 0,
+                      : e.kind == GATES_EVENT_FOLLOW_CHANGED ? (gates_i_view_following(st) ? 1u : 0u)
+                                                             : 0,
             /* A selection is read at delivery (latest); an activation keeps its row. */
             .item = e.kind == GATES_EVENT_SELECTION_CHANGED
                         ? (st->editor != nullptr ? gates_i_editor_caret(st) : gates_i_view_selected(st))

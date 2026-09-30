@@ -10,6 +10,7 @@
 #include <string.h>
 
 #define MENU_PAD 4
+#define MENU_SEP_H 9 /* a separator row: a line with room around it (0.8.0) */
 #define MENU_ROW_EXTRA 6
 
 /* -- records -------------------------------------------------------------- */
@@ -580,6 +581,17 @@ static gates_i32 row_height(const gates_tree_t *tree) {
     return h < GATES_ACCESS_MIN_TARGET ? GATES_ACCESS_MIN_TARGET : h; /* WCAG 2.5.8 */
 }
 
+/* A row's height and its top below the menu's padding: separators are short. */
+static gates_i32 menu_row_h(const gates_widget_state_t *st, gates_u32 row, gates_i32 row_h) {
+    return st->menu_ids[row] == 0 ? MENU_SEP_H : row_h;
+}
+
+static gates_i32 menu_row_top(const gates_widget_state_t *st, gates_u32 row, gates_i32 row_h) {
+    gates_i32 y = 0;
+    for (gates_u32 k = 0; k < row && k < st->menu_count; k++) y += menu_row_h(st, k, row_h);
+    return y;
+}
+
 static gates_usize_t shortcut_text(const gates_shortcut_t *k, char *buf, gates_usize_t cap) {
     return gates_i_shortcut_text(k, buf, cap); /* one formatter (gates_command.c) */
 }
@@ -607,7 +619,7 @@ gates_size_t gates_i_menu_measure(const gates_tree_t *tree, const gates_widget_s
     gates_i32 gut = 2 * m.advance > GATES_ICON_SIZE + 4 ? 2 * m.advance : GATES_ICON_SIZE + 4; /* check or icon */
     gates_i32 w = 2 * MENU_PAD + gut + label_w + (key_w > 0 ? 3 * m.advance + key_w : 0) +
                   m.advance;
-    gates_i32 h = 2 * MENU_PAD + (gates_i32)st->menu_count * row_h;
+    gates_i32 h = 2 * MENU_PAD + menu_row_top(st, st->menu_count, row_h);
     if (w < st->menu_min_w) {
         w = st->menu_min_w;
     }
@@ -627,11 +639,12 @@ gates_err_t gates_i_menu_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
     if (gates_is_ok(err)) {
         err = gates_draw_border(dl, r, 1, gates_theme_color(theme, GATES_COLOR_CONTROL_BORDER));
     }
+    gates_i32 top = r.y + MENU_PAD;
     for (gates_u32 row = 0; st != nullptr && row < st->menu_count && gates_is_ok(err); row++) {
-        gates_rect_t rr = { r.x + MENU_PAD, r.y + MENU_PAD + (gates_i32)row * row_h,
-                            r.w - 2 * MENU_PAD, row_h };
+        gates_rect_t rr = { r.x + MENU_PAD, top, r.w - 2 * MENU_PAD, menu_row_h(st, row, row_h) };
+        top += rr.h;
         if (st->menu_ids[row] == 0) {
-            err = gates_draw_rect(dl, (gates_rect_t){ rr.x, rr.y + row_h / 2, rr.w, 1 },
+            err = gates_draw_rect(dl, (gates_rect_t){ rr.x, rr.y + rr.h / 2, rr.w, 1 },
                                   gates_theme_color(theme, GATES_COLOR_CONTROL_BORDER));
             continue;
         }
@@ -689,9 +702,14 @@ static gates_i32 menu_row_at(const gates_tree_t *tree, gates_u32 idx, gates_poin
     if (y < 0) {
         return -1;
     }
-    gates_i32 row = y / row_height(tree);
     const gates_widget_state_t *st = state_at(tree, idx);
-    return (st != nullptr && (gates_u32)row < st->menu_count) ? row : -1;
+    gates_i32 h = row_height(tree);
+    for (gates_u32 row = 0; st != nullptr && row < st->menu_count; row++) {
+        gates_i32 rh = menu_row_h(st, row, h);
+        if (y < rh) return (gates_i32)row;
+        y -= rh;
+    }
+    return -1;
 }
 
 static void menu_select(gates_tree_t *tree, gates_u32 idx, gates_i32 row) {
@@ -878,6 +896,9 @@ gates_err_t gates_i_menu_invoke(gates_tree_t *tree, gates_u32 menu_idx, gates_co
 
 gates_rect_t gates_i_menu_row_rect(const gates_tree_t *tree, gates_u32 menu_idx, gates_u32 row) {
     gates_rect_t r = gates_i_slot(tree, menu_idx)->layout_rect;
+    const gates_widget_state_t *st = state_at(tree, menu_idx);
     gates_i32 h = row_height(tree);
-    return (gates_rect_t){ r.x + MENU_PAD, r.y + MENU_PAD + (gates_i32)row * h, r.w - 2 * MENU_PAD, h };
+    if (st == nullptr || row >= st->menu_count) return (gates_rect_t){ r.x + MENU_PAD, r.y + MENU_PAD, r.w - 2 * MENU_PAD, 0 };
+    return (gates_rect_t){ r.x + MENU_PAD, r.y + MENU_PAD + menu_row_top(st, row, h), r.w - 2 * MENU_PAD,
+                           menu_row_h(st, row, h) };
 }

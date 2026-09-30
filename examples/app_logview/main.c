@@ -193,6 +193,7 @@ static void on_command(gates_tree_t *tree, gates_command_id_t id, void *user) {
 static void on_log(gates_tree_t *tree, const gates_event_t *ev, void *user) {
     (void)tree;
     if (ev->kind == GATES_EVENT_SELECTION_CHANGED) show_detail(user);
+    if (ev->kind == GATES_EVENT_FOLLOW_CHANGED) status(user); /* scrolled away from the end, or back */
 }
 
 static gates_err_t build_ui(app_t *a) {

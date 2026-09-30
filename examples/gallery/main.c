@@ -34,7 +34,7 @@
 
 enum {
     CMD_UNDO = 60, CMD_REDO, CMD_COLUMNS,
-    CMD_OPEN_PIC = 40, CMD_SAVE_AS, CMD_FOLDER, CMD_COLOUR, CMD_ASK,
+    CMD_OPEN_PIC = 40, CMD_SAVE_AS, CMD_FOLDER, CMD_COLOUR, CMD_ASK, CMD_OPEN_MANY,
     CMD_SAVE = 1, CMD_QUIT, CMD_SYSTEM, CMD_LIGHT, CMD_DARK, CMD_ZOOM_IN, CMD_ZOOM_OUT, CMD_ZOOM_RESET,
     CMD_ABOUT, CMD_ABOUT_OK, CMD_STEP,
 };
@@ -430,6 +430,21 @@ static void on_media(gates_tree_t *tree, gates_command_id_t id, void *user) {
             media_say(a, "No picture chosen", path, 0);
         }
         break;
+    case CMD_OPEN_MANY: {
+        /* Several paths, each ended by a NUL: say how many and name the first. */
+        static gates_u8 many[8192];
+        gates_u32 count = 0;
+        gates_err_t err = gates_window_open_files(a->win, &(gates_file_dialog_t){ .title = cs("Open several files") },
+                                                  many, sizeof many, &n, &count);
+        if (gates_is_ok(err) && count > 0) {
+            char line[64];
+            snprintf(line, sizeof line, "%u files, the first: ", count);
+            media_say(a, line, many, strlen((const char *)many));
+        } else {
+            media_say(a, err == PROVEN_ERR_OVERFLOW ? "Too many files for the buffer" : "No files chosen", path, 0);
+        }
+        break;
+    }
     case CMD_SAVE_AS: {
         gates_file_dialog_t d = { .title = cs("Save the notes"), .filters = cs("Text files|*.txt|All files|*.*"),
                                   .name = cs("notes.txt") };
@@ -476,7 +491,7 @@ static gates_err_t page_pictures(app_t *a, gates_node_t page) {
     gates_node_t row, b;
     static const struct { gates_command_id_t id; const char *label; } media[] = {
         { CMD_OPEN_PIC, "O&pen picture..." }, { CMD_SAVE_AS, "Save &as..." }, { CMD_FOLDER, "Choose fol&der..." },
-        { CMD_COLOUR, "Choose &colour..." }, { CMD_ASK, "As&k..." },
+        { CMD_COLOUR, "Choose &colour..." }, { CMD_ASK, "As&k..." }, { CMD_OPEN_MANY, "Open man&y files..." },
     };
     TRY(gates_panel_create(t, page, &row));
     TRY(gates_layout_set(t, row, GATES_LAYOUT_KIND_WRAP));

@@ -6,6 +6,7 @@
 #include <gates/layout.h>
 #include <gates/ui.h>
 #include "gates_tree_internal.h"
+#include <gates/timer.h>
 
 #include <string.h>
 
@@ -170,6 +171,13 @@ bool gates_i_range_info(const gates_tree_t *tree, gates_u32 idx, gates_i64 *min,
     *max = r->max;
     *value = r->value;
     return true;
+}
+
+void gates_i_range_steps(const gates_tree_t *tree, gates_u32 idx, gates_i64 *step, gates_i64 *page, gates_u32 *scale) {
+    const gates_i_range *r = range_of(tree, idx);
+    *step = r != nullptr ? r->step : 1;
+    *page = r != nullptr ? r->page : 1;
+    *scale = r != nullptr && r->scale > 1 ? r->scale : 1u;
 }
 
 gates_err_t gates_i_range_user_set(gates_tree_t *tree, gates_u32 idx, gates_i64 v) {
@@ -381,14 +389,86 @@ bool gates_i_spin_key(gates_tree_t *tree, gates_u32 spin, const gates_key_event_
     return true;
 }
 
-void gates_i_spin_arrows_press(gates_tree_t *tree, gates_u32 arrows, gates_point_t p) {
+static void spin_step(gates_tree_t *tree, gates_u32 spin, bool up) {
+    gates_key_event_t ev = { .key = up ? GATES_KEY_UP : GATES_KEY_DOWN, .down = true };
+    (void)gates_i_spin_key(tree, spin, &ev);
+}
+
+/* Held down, an arrow repeats after a pause, while the pointer stays on it (0.8.0). */
+#define SPIN_REPEAT_DELAY_MS 400u
+#define SPIN_REPEAT_MS 50u
+
+static bool on_half(const gates_tree_t *tree, gates_u32 arrows, gates_point_t p, bool up) {
+    gates_rect_t r = gates_i_slot(tree, arrows)->layout_rect;
+    return gates_rect_contains(r, p) && (p.y < r.y + r.h / 2) == up;
+}
+
+static void spin_tick(gates_tree_t *tree, gates_node_t node, gates_timer_id_t id, void *user) {
+    (void)id;
+    (void)user;
+    tree->spin_timer = 0;
+    if (tree->drag_kind != GATES_DRAG_SPIN || tree->drag_node != node.index) return;
+    bool up = tree->drag_start_value > 0;
+    gates_u32 spin = gates_i_slot(tree, node.index)->parent;
+    if (on_half(tree, node.index, tree->drag_start, up)) spin_step(tree, spin, up);
+    gates_timer_id_t t = 0;
+    if (gates_is_ok(gates_timer_start(tree, node, SPIN_REPEAT_MS, false, spin_tick, nullptr, &t))) tree->spin_timer = t;
+}
+
+/* A press on an arrow steps once and, when the tree has a clock, repeats while held. */
+bool gates_i_spin_arrows_press(gates_tree_t *tree, gates_u32 arrows, gates_point_t p) {
     gates_u32 spin = gates_i_slot(tree, arrows)->parent;
     const gates_widget_state_t *st = spin != GATES_NONE ? state_at(tree, spin) : nullptr;
-    if (st == nullptr || st->disabled) return;
+    if (st == nullptr || st->disabled) return true;
     gates_rect_t r = gates_i_slot(tree, arrows)->layout_rect;
+    bool up = p.y < r.y + r.h / 2;
     gates_tree_set_focus(tree, gates_i_handle(tree, box_of(tree, spin)));
-    gates_key_event_t ev = { .key = p.y < r.y + r.h / 2 ? GATES_KEY_UP : GATES_KEY_DOWN, .down = true };
-    (void)gates_i_spin_key(tree, spin, &ev);
+    spin_step(tree, spin, up);
+    gates_timer_id_t t = 0;
+    if (gates_is_ok(gates_timer_start(tree, gates_i_handle(tree, arrows), SPIN_REPEAT_DELAY_MS, false, spin_tick,
+                                      nullptr, &t))) {
+        tree->spin_timer = t;
+        tree->drag_kind = GATES_DRAG_SPIN;
+        tree->drag_node = arrows;
+        tree->drag_start = p;
+        tree->drag_start_value = up ? 1 : -1;
+    }
+    return true;
+}
+
+void gates_i_spin_arrows_release(gates_tree_t *tree) {
+    if (tree->spin_timer != 0) (void)gates_timer_cancel(tree, tree->spin_timer);
+    tree->spin_timer = 0;
+}
+
+/* The wheel over a focused spin box or slider steps it (0.8.0); unfocused, it
+ * scrolls what holds it, so scrolling a page never changes a value by accident. */
+bool gates_i_range_wheel(gates_tree_t *tree, gates_u32 idx, gates_vec2_t wheel) {
+    gates_u32 ctl = GATES_NONE;
+    gates_node_kind_t k = (gates_node_kind_t)gates_i_slot(tree, idx)->kind;
+    if (k == GATES_NODE_SLIDER || k == GATES_NODE_SPIN) {
+        ctl = idx;
+    } else if (k == GATES_NODE_SPINARROWS) {
+        ctl = gates_i_slot(tree, idx)->parent;
+    } else if (k == GATES_NODE_TEXTBOX) {
+        ctl = gates_i_spin_of_box(tree, idx);
+    }
+    if (ctl == GATES_NONE || wheel.y == 0.0f) return false;
+    bool slider = gates_i_slot(tree, ctl)->kind == GATES_NODE_SLIDER;
+    const gates_widget_state_t *st = state_at(tree, ctl);
+    if (st == nullptr || st->disabled || tree->focus != (slider ? ctl : box_of(tree, ctl))) return false;
+    gates_i32 n = (gates_i32)(wheel.y < 0 ? -wheel.y + 0.5f : wheel.y + 0.5f);
+    if (n < 1) n = 1;
+    if (n > 100) n = 100;
+    for (gates_i32 i = 0; i < n; i++) {
+        if (slider) {
+            gates_key_event_t ev = { .key = wheel.y > 0 ? GATES_KEY_UP : GATES_KEY_DOWN, .down = true };
+            (void)gates_i_slider_key(tree, ctl, &ev);
+        } else {
+            spin_step(tree, ctl, wheel.y > 0);
+        }
+    }
+    return true;
 }
 
 gates_err_t gates_i_spin_arrows_paint(const gates_tree_t *tree, gates_u32 idx, gates_draw_list_t *dl,

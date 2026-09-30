@@ -19,6 +19,8 @@
 #define VIEW_WHEEL_ROWS 3
 #define VIEW_STEP_CELLS 4        /* Left/Right and horizontal wheel step */
 #define VIEW_BAR_INSET 6         /* progress cells: bar inset from the row's top and bottom */
+#define VIEW_FIND_PAUSE_MS 1000  /* type-ahead: a pause this long starts a new search */
+#define VIEW_FIND_SCAN 4096u     /* type-ahead: rows looked at per character, at most */
 
 typedef struct gates_i_column {
     gates_column_id_t id;
@@ -76,6 +78,11 @@ struct gates_i_view {
     gates_u32 edit_rev;          /* the editor's revision when it opened */
     bool column_menu;            /* the header menu: commands in the view's own scope */
     gates_node_t self;
+    /* 0.8.0: the keyboard's current column (0 = none), and type-ahead. */
+    gates_column_id_t cur_col;
+    gates_u8 find[64];
+    gates_u32 find_len;
+    gates_u64 find_at;           /* clock time of the last typed character */
 };
 
 typedef struct view_geom_t {
@@ -755,6 +762,16 @@ gates_err_t gates_i_view_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
                                                        g.body.w, g.row_h },
                                    gates_theme_focus_width(theme),
                                    gates_theme_color(theme, GATES_COLOR_FOCUS_RING)));
+        gates_i32 cc = -1; /* the current cell, inside the row's ring (0.8.0) */
+        for (gates_u32 c = 0; v->cur_col != 0 && c < v->ncol; c++) {
+            if (v->cols[c].id == v->cur_col && !v->cols[c].hidden) cc = (gates_i32)c;
+        }
+        if (cc >= 0) {
+            gates_i32 fw = gates_theme_focus_width(theme);
+            TRY_DRAW(gates_draw_border(dl, (gates_rect_t){ col_left(v, &g, (gates_u32)cc) + fw, g.body.y + sel_k * g.row_h + fw,
+                                                           v->cols[cc].width - 2 * fw, g.row_h - 2 * fw },
+                                       1, gates_theme_color(theme, GATES_COLOR_FOCUS_RING)));
+        }
     }
     TRY_DRAW(gates_draw_clip_pop(dl));
 
@@ -774,11 +791,19 @@ gates_err_t gates_i_view_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
 
 /* -- interaction ------------------------------------------------------------------------------ */
 
-/* After a person moved the view: a log follows exactly when it shows its end. */
-static void note_scrolled(struct gates_i_view *v, const view_geom_t *g) {
-    if (v->log != nullptr) {
-        v->follow = v->first >= g->max_first;
+/* After a person moved the view: a log follows exactly when it shows its end,
+ * and says so when that changes (0.8.0). */
+static void note_scrolled(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v, const view_geom_t *g) {
+    if (v->log == nullptr) return;
+    bool follow = v->first >= g->max_first;
+    if (follow != v->follow) {
+        v->follow = follow;
+        gates_i_event_try_push(tree, idx, GATES_EVENT_FOLLOW_CHANGED, 0);
     }
+}
+
+bool gates_i_view_following(const gates_widget_state_t *st) {
+    return st->view != nullptr && st->view->follow;
 }
 
 /* Asks the model to open or close a tree row. */
@@ -813,7 +838,7 @@ static void pick(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v, cons
     }
     v->sel_row = row;
     keep_visible(v, g, row);
-    note_scrolled(v, g);
+    note_scrolled(tree, idx, v, g);
     gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
 }
 
@@ -853,7 +878,7 @@ static void scroll_rows(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *
         v->first = f;
         gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
     }
-    note_scrolled(v, g);
+    note_scrolled(tree, idx, v, g);
 }
 
 /* -- editing cells (plan-0021) ------------------------------------------------------------- */
@@ -1036,7 +1061,7 @@ static gates_err_t begin_edit(gates_tree_t *tree, gates_u32 idx, struct gates_i_
     geom_now(tree, idx, v, &g);
     keep_visible(v, &g, row);
     column_into_view(v, &g, c);
-    note_scrolled(v, &g);
+    note_scrolled(tree, idx, v, &g);
     v->editing = true;
     v->edit_id = id;
     v->edit_col = v->cols[c].id;
@@ -1125,20 +1150,86 @@ static void tree_key(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v, 
     }
 }
 
+/* The column F2 edits or Space toggles: the current one when it can, else the first (0.8.0). */
+static gates_i32 key_col(const struct gates_i_view *v, bool text) {
+    gates_i32 c = v->cur_col != 0 ? col_pos(v, v->cur_col) : -1;
+    return c >= 0 && can_edit(v, c, text) ? c : first_editable(v, text);
+}
+
+/* Ctrl+Left/Right: the current column moves over the shown columns. */
+static void move_cur_col(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v, const view_geom_t *g, bool right) {
+    gates_u32 n = nvisible(v);
+    if (v->ncol == 0 || n == 0) return;
+    gates_i32 at = -1; /* the current column's place among the shown ones */
+    for (gates_u32 k = 0; k < n; k++) {
+        if (v->cols[visible_at(v, k)].id == v->cur_col) at = (gates_i32)k;
+    }
+    gates_i32 to = at < 0 ? (right ? 0 : (gates_i32)n - 1) : right ? (at + 1 < (gates_i32)n ? at + 1 : at) : (at > 0 ? at - 1 : 0);
+    gates_i32 c = visible_at(v, (gates_u32)to);
+    v->cur_col = v->cols[c].id;
+    column_into_view(v, g, c);
+    gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
+}
+
+/* Ctrl+C: the selected row's shown cells, tab-separated, on the clipboard (0.8.0). */
+static void copy_row(gates_tree_t *tree, struct gates_i_view *v) {
+    if (!tree->has_clipboard || v->sel == 0 || !v->has_model) return;
+    gates_allocator_t a = tree->alloc;
+    gates_u8 *buf = nullptr;
+    gates_usize_t len = 0, cap = 0;
+    gates_err_t err = GATES_OK;
+    gates_u32 n = v->ncol > 0 ? nvisible(v) : 1;
+    for (gates_u32 k = 0; k < n && gates_is_ok(err); k++) {
+        gates_column_id_t cid = v->ncol > 0 ? v->cols[visible_at(v, k)].id : 0;
+        gates_cell_t cell = {0};
+        err = v->model.cell(v->model.user, v->sel, cid, &cell);
+        if (!gates_is_ok(err)) break;
+        gates_usize_t need = len + (k > 0 ? 1 : 0) + cell.text.size;
+        if (need > cap) {
+            gates_usize_t nc = cap < 64 ? 64 : cap;
+            while (nc < need) nc *= 2;
+            proven_result_mem_mut_t m = buf == nullptr ? a.alloc_fn(a.ctx, nc, 1) : a.realloc_fn(a.ctx, buf, cap, nc, 1);
+            if (!proven_is_ok(m.err)) {
+                err = m.err;
+                break;
+            }
+            buf = m.value.ptr;
+            cap = nc;
+        }
+        if (k > 0) buf[len++] = '\t';
+        if (cell.text.size > 0) memcpy(buf + len, cell.text.ptr, cell.text.size);
+        len += cell.text.size;
+    }
+    if (gates_is_ok(err)) err = tree->clipboard.set_text(tree->clipboard.ctx, (gates_str_t){ .ptr = buf, .size = len });
+    if (buf != nullptr) a.free_fn(a.ctx, buf);
+    if (!gates_is_ok(err)) tree->input_error = err;
+}
+
 bool gates_i_view_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t *ev) {
     struct gates_i_view *v = view_at(tree, idx);
-    if (v == nullptr || ev->ctrl || ev->alt) {
-        return false;
-    }
+    if (v == nullptr) return false;
     view_geom_t g;
     geom_now(tree, idx, v, &g);
+    if (ev->ctrl && !ev->alt && !ev->shift) {
+        if (ev->key == GATES_KEY_C) {
+            copy_row(tree, v);
+            return v->sel != 0;
+        }
+        if ((ev->key == GATES_KEY_LEFT || ev->key == GATES_KEY_RIGHT) && v->ncol > 0) {
+            move_cur_col(tree, idx, v, &g, ev->key == GATES_KEY_RIGHT);
+            return true;
+        }
+    }
+    if (ev->ctrl || ev->alt) {
+        return false;
+    }
     gates_i32 step = VIEW_STEP_CELLS * (tree->advance > 0 ? tree->advance : 8);
     switch (ev->key) {
     case GATES_KEY_ENTER:
         activate(tree, idx, v);
         return true; /* never falls through to a default command */
     case GATES_KEY_F2: {
-        gates_i32 c = first_editable(v, true);
+        gates_i32 c = key_col(v, true);
         if (ev->shift || c < 0 || v->sel == 0) return false;
         gates_err_t err = begin_edit(tree, idx, v, v->sel, c);
         if (err == PROVEN_ERR_NOMEM) tree->input_error = err;
@@ -1153,13 +1244,14 @@ bool gates_i_view_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t
         }
         return true;
     case GATES_KEY_SPACE: {
-        gates_i32 c = first_editable(v, false);
+        gates_i32 c = key_col(v, false);
         if (ev->shift || c < 0 || v->sel == 0) return false;
         toggle_check(tree, idx, v, v->sel, c);
         return true;
     }
     case GATES_KEY_LEFT:
     case GATES_KEY_RIGHT:
+        v->find_len = 0; /* moving ends a type-ahead search */
         if (v->tree) {
             tree_key(tree, idx, v, &g, ev->key == GATES_KEY_RIGHT);
         } else {
@@ -1176,6 +1268,7 @@ bool gates_i_view_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t
     default:
         return false;
     }
+    v->find_len = 0;
     if (g.count == 0) {
         return true;
     }
@@ -1193,6 +1286,56 @@ bool gates_i_view_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t
     default:                  target = last; break;
     }
     pick(tree, idx, v, &g, target);
+    return true;
+}
+
+static gates_u8 fold(gates_u8 c) { return c >= 'A' && c <= 'Z' ? (gates_u8)(c + 32) : c; }
+
+/* Whether the row's first shown cell starts with needle (ASCII letters in any case). */
+static bool row_starts(struct gates_i_view *v, gates_u64 row, const gates_u8 *needle, gates_u32 n) {
+    gates_item_id_t id = v->model.id_at(v->model.user, row);
+    gates_cell_t cell = {0};
+    gates_column_id_t cid = v->ncol > 0 && nvisible(v) > 0 ? v->cols[visible_at(v, 0)].id : 0;
+    if (id == 0 || !gates_is_ok(v->model.cell(v->model.user, id, cid, &cell)) || cell.text.size < n) return false;
+    for (gates_u32 k = 0; k < n; k++) {
+        if (fold(cell.text.ptr[k]) != fold(needle[k])) return false;
+    }
+    return true;
+}
+
+/* Type-ahead (0.8.0): typed characters, within a pause of each other, select
+ * the next row whose first shown cell starts with them; the same letter again
+ * steps through the rows that start with it. A character looks at no more
+ * than VIEW_FIND_SCAN rows, so a keystroke's cost stays bounded. */
+bool gates_i_view_char(gates_tree_t *tree, gates_u32 idx, gates_str_t ch) {
+    struct gates_i_view *v = view_at(tree, idx);
+    const gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
+    if (v == nullptr || !v->has_model || st->disabled || v->editing) return false;
+    gates_u64 now = tree->clock != nullptr ? tree->clock(tree->clock_ctx) : 0;
+    if (tree->clock != nullptr && v->find_len > 0 && now - v->find_at >= VIEW_FIND_PAUSE_MS) v->find_len = 0;
+    if (v->find_len == 0 && ch.size == 1 && ch.ptr[0] == ' ') return false; /* Space is a key, not a search */
+    if (v->find_len + ch.size <= sizeof v->find) {
+        memcpy(v->find + v->find_len, ch.ptr, ch.size);
+        v->find_len += (gates_u32)ch.size;
+    }
+    v->find_at = now;
+    view_geom_t g;
+    geom_now(tree, idx, v, &g);
+    if (g.count == 0) return true;
+    bool same = true; /* "aaa": the rows starting with 'a', one by one */
+    for (gates_u32 k = 1; k < v->find_len; k++) same = same && v->find[k] == v->find[0];
+    gates_u32 n = same ? 1u : v->find_len;
+    gates_u64 row = 0;
+    bool have = v->sel != 0 && v->model.index_of(v->model.user, v->sel, &row);
+    gates_u64 start = !have ? 0 : (n == 1 ? row + 1 : row) % g.count;
+    gates_u64 scan = g.count < VIEW_FIND_SCAN ? g.count : VIEW_FIND_SCAN;
+    for (gates_u64 k = 0; k < scan; k++) {
+        gates_u64 r = (start + k) % g.count;
+        if (row_starts(v, r, v->find, n)) {
+            pick(tree, idx, v, &g, r);
+            break;
+        }
+    }
     return true;
 }
 
@@ -1289,6 +1432,7 @@ bool gates_i_view_pointer_down(gates_tree_t *tree, gates_u32 idx, gates_point_t 
             gates_item_id_t before = v->sel;
             gates_item_id_t id = v->model.id_at(v->model.user, g.first + k);
             gates_i32 c = body_col_at(v, &g, p);
+            if (c >= 0 && v->ncol > 0) v->cur_col = v->cols[c].id; /* the cell pressed is current (0.8.0) */
             pick(tree, idx, v, &g, g.first + k);
             if (can_edit(v, c, false) && v->sel == id &&
                 p.x < col_left(v, &g, (gates_u32)c) + row_indent(v, c, id) + VIEW_CELL_PAD + GATES_CHECK_BOX +
@@ -1373,7 +1517,7 @@ void gates_i_view_drag(gates_tree_t *tree, gates_point_t p) {
         v->first = f;
         gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
     }
-    note_scrolled(v, &g);
+    note_scrolled(tree, idx, v, &g);
 }
 
 bool gates_i_view_wheel(gates_tree_t *tree, gates_u32 idx, gates_vec2_t wheel) {
@@ -1724,7 +1868,7 @@ gates_err_t gates_i_view_scroll_set(gates_tree_t *tree, gates_u32 idx, gates_u32
         v->first = f;
         gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);
     }
-    note_scrolled(v, &g);
+    note_scrolled(tree, idx, v, &g);
     return GATES_OK;
 }
 

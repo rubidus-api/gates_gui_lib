@@ -134,6 +134,7 @@ void gates_input_cancel_pointer(gates_tree_t *tree) {
     if (tree == nullptr) {
         return;
     }
+    if (tree->drag_kind == GATES_DRAG_SPIN) gates_i_spin_arrows_release(tree); /* no tick after it */
     if (tree->pressed != GATES_NONE) {
         gates_i_mark_dirty(tree, tree->pressed, GATES_DIRTY_PAINT);
         tree->pressed = GATES_NONE;
@@ -204,8 +205,7 @@ static bool drag_begin(gates_tree_t *tree, gates_u32 idx, const gates_pointer_ev
         return gates_i_slider_press(tree, idx, p); /* plan-0019 */
     }
     if (s->kind == GATES_NODE_SPINARROWS) {
-        gates_i_spin_arrows_press(tree, idx, p);
-        return true;
+        return gates_i_spin_arrows_press(tree, idx, p); /* repeats while held (0.8.0) */
     }
     if (s->kind == GATES_NODE_VIEW) {
         return gates_i_view_pointer_down(tree, idx, p, clicks); /* rows, header, bars */
@@ -297,6 +297,10 @@ static void drag_update(gates_tree_t *tree, gates_point_t p) {
         gates_i_slider_drag(tree, p, false);
         return;
     }
+    if (tree->drag_kind == GATES_DRAG_SPIN) {
+        tree->drag_start = p; /* where the pointer is: a tick steps only over the pressed arrow */
+        return;
+    }
     if (tree->drag_kind == GATES_DRAG_EDITOR_SELECT || tree->drag_kind == GATES_DRAG_EDITOR_VTHUMB ||
         tree->drag_kind == GATES_DRAG_EDITOR_HTHUMB) {
         gates_i_editor_drag(tree, p); /* plan-0022 */
@@ -364,6 +368,7 @@ gates_node_t gates_input_pointer(gates_tree_t *tree, const gates_pointer_event_t
         } else if (ev->action == GATES_POINTER_UP) {
             drag_update(tree, ev->pos);
             if (tree->drag_kind == GATES_DRAG_SLIDER) gates_i_slider_drag(tree, ev->pos, true);
+            if (tree->drag_kind == GATES_DRAG_SPIN) gates_i_spin_arrows_release(tree);
             tree->drag_kind = GATES_DRAG_NONE;
             tree->drag_node = GATES_NONE;
         }
@@ -459,6 +464,9 @@ gates_node_t gates_input_pointer(gates_tree_t *tree, const gates_pointer_event_t
         if (hit != GATES_NONE && gates_i_slot(tree, hit)->kind == GATES_NODE_EDITOR &&
             gates_i_editor_wheel(tree, hit, ev->wheel)) {
             return gates_i_handle(tree, hit); /* so does an editor (plan-0022) */
+        }
+        if (hit != GATES_NONE && gates_i_range_wheel(tree, hit, ev->wheel)) {
+            return gates_i_handle(tree, hit); /* a focused spin box or slider steps (0.8.0) */
         }
         wheel_scroll(tree, hit, ev->wheel);
         return hit == GATES_NONE ? GATES_NODE_NULL : gates_i_handle(tree, hit);

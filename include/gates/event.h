@@ -41,6 +41,9 @@ typedef enum gates_event_kind_t {
     GATES_EVENT_EXPAND_REQUESTED,
     /* view (plan-0021): a person changed a cell; ev->item = the row, ev->result = the column id */
     GATES_EVENT_CELL_EDITED,
+    /* log view (0.8.0): a person's scrolling started or stopped following new
+     * lines; ev->result = 1 following, 0 not (read at delivery) */
+    GATES_EVENT_FOLLOW_CHANGED,
 } gates_event_kind_t;
 
 typedef enum gates_event_origin_t {

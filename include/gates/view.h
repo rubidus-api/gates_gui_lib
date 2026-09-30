@@ -20,7 +20,11 @@
  * the selected row activates it; Left/Right and Shift+wheel scroll sideways.
  * A click selects the row under it. Clicking a header cell asks for sorting
  * (the model sorts); dragging a header cell's right edge resizes the column,
- * never below its minimum. The view is one Tab stop.
+ * never below its minimum. The view is one Tab stop. Typing selects the next
+ * row whose first shown cell starts with the letters typed (ASCII letters in
+ * any case; a pause of a second starts over, the same letter again steps
+ * through such rows; each character looks at up to 4096 rows). Ctrl+C copies
+ * the selected row's shown cells, separated by tabs.
  * Events (a tree adds GATES_EVENT_EXPAND_REQUESTED, see gates_view_desc_t):
  * GATES_EVENT_SELECTION_CHANGED (ev->item = the selected id; a change
  * made by gates_view_model_changed because the selected item went away is
@@ -30,11 +34,13 @@
  *
  * Cells (plan-0021): a column shows text, a check box, a progress bar or an
  * icon and text, or paints itself. An editable column lets a person change
- * the selected row's cell: F2 edits the first editable text column, a double
- * click edits the text cell under it; a text box opens over the cell with the
- * model's text selected. Enter commits, Escape cancels, focus leaving commits.
- * Space toggles the first editable check column, a click on the box toggles
- * it. A commit calls the model's set_cell; an error keeps the editor open and
+ * the selected row's cell. A table has a current column (Ctrl+Left/Right, or
+ * the cell pressed; outlined in the selected row): F2 edits it when it is an
+ * editable text column, else the first such column; a double click edits the
+ * text cell under it; a text box opens over the cell with the model's text
+ * selected. Enter commits, Escape cancels, focus leaving commits. Space
+ * toggles the current column when it is an editable check column, else the
+ * first such column; a click on the box toggles it. A commit calls the model's set_cell; an error keeps the editor open and
  * marks it invalid (when focus left, the edit is dropped instead). After a
  * commit the view re-reads the model (as gates_view_model_changed) and reports
  * CELL_EDITED. Scrolling or resizing a column first commits an open edit; the
@@ -244,7 +250,9 @@ gates_rect_t gates_view_part_rect(const gates_tree_t *tree, gates_node_t view,
  * line stays selected until it is dropped (then the oldest remaining line is
  * selected, announced with origin PROGRAM). While the view shows the last
  * line it follows new lines; scrolling up (wheel, keys, thumb) stops
- * following; reaching the end again (End, wheel, thumb) resumes it. The
+ * following; reaching the end again (End, wheel, thumb) resumes it, and
+ * both report GATES_EVENT_FOLLOW_CHANGED (the program's set_following is
+ * silent). The
  * worker-thread producer arrives with RFC-0003 phase G through the same
  * append path. gates_view_set_model is refused on a log view. */
 typedef struct gates_log_desc_t {

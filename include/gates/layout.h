@@ -27,7 +27,8 @@ typedef enum gates_layout_t {
 
 /* GRID: children fill cells left to right, row by row, gates_layout_set_grid
  * columns to a row (default 2). A column is as wide as its widest child; the
- * spare width goes to columns by their grow weights (none by default). A child
+ * spare width goes to columns by their grow weights (none by default), and
+ * the spare height to the first GATES_GRID_MAX_GROW_ROWS rows by theirs. A child
  * may span columns (gates_layout_set_child_span). A row is as tall as its
  * tallest child; children are centred vertically in their row and take the
  * cell's width unless their align says START_V, CENTER_V or END_V (then their
@@ -38,6 +39,7 @@ typedef enum gates_layout_t {
  * layout runs a second pass when that width changes). Hidden children take no
  * place in either. At most GATES_GRID_MAX_COLUMNS columns. */
 #define GATES_GRID_MAX_COLUMNS 16
+#define GATES_GRID_MAX_GROW_ROWS 16  /* rows that can have a grow weight */
 
 /* FORM: every child is a row whose first child is its label and whose second
  * child is its editor (further children are not shown). Labels share one
@@ -75,6 +77,9 @@ typedef enum gates_align_t {
 [[nodiscard]] gates_err_t gates_layout_set_grid(gates_tree_t *tree, gates_node_t node, gates_u32 columns);
 [[nodiscard]] gates_err_t gates_layout_set_grid_column_grow(gates_tree_t *tree, gates_node_t node,
                                                             gates_u32 column, gates_u8 weight);
+/* A row's grow weight (0.8.0): row < GATES_GRID_MAX_GROW_ROWS, counted over shown rows. */
+[[nodiscard]] gates_err_t gates_layout_set_grid_row_grow(gates_tree_t *tree, gates_node_t node, gates_u32 row,
+                                                         gates_u8 weight);
 [[nodiscard]] gates_err_t gates_layout_set_child_span(gates_tree_t *tree, gates_node_t child, gates_u32 columns);
 
 /* Container properties. */

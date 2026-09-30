@@ -97,6 +97,12 @@ typedef struct gates_file_dialog_t {
 } gates_file_dialog_t;
 [[nodiscard]] gates_err_t gates_window_open_file(gates_window_t *win, const gates_file_dialog_t *desc,
                                                  gates_u8 *buf, gates_usize_t cap, gates_usize_t *len);
+/* Several files at once (0.8.0): each path is followed by a NUL byte in buf,
+ * *len receives all of their bytes (OVERFLOW writes nothing), *count how many
+ * paths; a cancel gives *len = 0 and *count = 0. */
+[[nodiscard]] gates_err_t gates_window_open_files(gates_window_t *win, const gates_file_dialog_t *desc,
+                                                  gates_u8 *buf, gates_usize_t cap, gates_usize_t *len,
+                                                  gates_u32 *count);
 [[nodiscard]] gates_err_t gates_window_save_file(gates_window_t *win, const gates_file_dialog_t *desc,
                                                  gates_u8 *buf, gates_usize_t cap, gates_usize_t *len);
 [[nodiscard]] gates_err_t gates_window_choose_folder(gates_window_t *win, const gates_file_dialog_t *desc,

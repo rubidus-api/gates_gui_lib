@@ -9,7 +9,9 @@
  * text box keeps Left/Right/Home/End for its caret). Typing marks the box
  * invalid until the text is a number in range; Enter or leaving the box
  * commits it - text that is not a number in range goes back to the value.
- * A click on an arrow steps (the focus goes to the box).
+ * A click on an arrow steps (the focus goes to the box); held, it repeats
+ * after a pause while the pointer stays on it (a tree with a clock). The
+ * wheel steps a focused spin box or slider (unfocused, it scrolls the page).
  *
  * Slider: a track with a thumb, horizontal or vertical. Left/Down step down,
  * Right/Up step up, PgUp/PgDn page, Home/End go to the ends; dragging the

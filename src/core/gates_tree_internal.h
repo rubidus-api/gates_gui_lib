@@ -151,6 +151,7 @@ typedef enum gates_drag_kind_i {
     GATES_DRAG_EDITOR_SELECT,    /* plan-0022: selecting text in an editor, its scrollbar thumbs */
     GATES_DRAG_EDITOR_VTHUMB,
     GATES_DRAG_EDITOR_HTHUMB,
+    GATES_DRAG_SPIN,             /* 0.8.0: a spin arrow held down repeats */
 } gates_drag_kind_i;
 
 typedef enum gates_align_i {
@@ -335,7 +336,8 @@ struct gates_tree {
     gates_u32 drag_node;
     gates_u8 drag_kind;          /* gates_drag_kind_i */
     gates_point_t drag_start;    /* pointer position when the drag began */
-    gates_i32 drag_start_value;  /* pane-A px (split) or offset px (scroll) */
+    gates_i32 drag_start_value;  /* pane-A px (split), offset px (scroll), +1/-1 (spin arrow) */
+    gates_u32 spin_timer;        /* the held spin arrow's repeat timer, 0 = none */
 
     gates_u32 focus;         /* focused node index or GATES_NONE */
 
@@ -476,6 +478,7 @@ typedef struct gates_i_grid_grow {
     gates_u32 index;
     gates_u32 generation;
     gates_u8 weight[GATES_GRID_MAX_COLUMNS];
+    gates_u8 row_weight[GATES_GRID_MAX_GROW_ROWS]; /* 0.8.0 */
 } gates_i_grid_grow;
 void gates_i_grid_free(gates_tree_t *tree);
 
@@ -651,6 +654,7 @@ void gates_i_event_push_ex(gates_tree_t *tree, gates_u32 idx, gates_event_kind_t
 /* Virtual views (gates_view.c, plan-0011). */
 void gates_i_view_free(gates_tree_t *tree, gates_widget_state_t *st);
 gates_item_id_t gates_i_view_selected(const gates_widget_state_t *st);
+bool gates_i_view_following(const gates_widget_state_t *st);
 /* Accessibility (gates_view.c, plan-0014 stage 2): rows as items - the rows
  * shown now plus the selection; cells only for shown rows. */
 #define GATES_I_VIEW_LIST 0u
@@ -680,6 +684,7 @@ gates_size_t gates_i_view_measure(const gates_tree_t *tree, const gates_node_slo
 gates_err_t gates_i_view_paint(const gates_tree_t *tree, gates_u32 idx, gates_draw_list_t *dl,
                                const gates_theme_t *theme, const gates_text_backend_t *text);
 bool gates_i_view_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t *ev);
+bool gates_i_view_char(gates_tree_t *tree, gates_u32 idx, gates_str_t ch);
 /* Left press on the view (true: taken, possibly starting a drag). */
 bool gates_i_view_pointer_down(gates_tree_t *tree, gates_u32 idx, gates_point_t p,
                                gates_u32 clicks);
@@ -918,6 +923,7 @@ void gates_i_task_message(gates_tree_t *tree, gates_u32 kind, void *payload);
 void gates_i_tasks_shutdown(gates_tree_t *tree);
 gates_i64 gates_i_range_value(const gates_tree_t *tree, gates_u32 idx);
 bool gates_i_range_info(const gates_tree_t *tree, gates_u32 idx, gates_i64 *min, gates_i64 *max, gates_i64 *value);
+void gates_i_range_steps(const gates_tree_t *tree, gates_u32 idx, gates_i64 *step, gates_i64 *page, gates_u32 *scale);
 /* A person's change (accessibility, keys): reserved report, clamped, VALUE_CHANGED. */
 gates_err_t gates_i_range_user_set(gates_tree_t *tree, gates_u32 idx, gates_i64 v);
 /* The spin box a text box belongs to, or GATES_NONE. */
@@ -925,7 +931,9 @@ gates_u32 gates_i_spin_of_box(const gates_tree_t *tree, gates_u32 box);
 void gates_i_spin_typed(gates_tree_t *tree, gates_u32 spin);
 void gates_i_spin_commit(gates_tree_t *tree, gates_u32 spin);
 bool gates_i_spin_key(gates_tree_t *tree, gates_u32 spin, const gates_key_event_t *ev);
-void gates_i_spin_arrows_press(gates_tree_t *tree, gates_u32 arrows, gates_point_t p);
+bool gates_i_spin_arrows_press(gates_tree_t *tree, gates_u32 arrows, gates_point_t p);
+void gates_i_spin_arrows_release(gates_tree_t *tree);
+bool gates_i_range_wheel(gates_tree_t *tree, gates_u32 idx, gates_vec2_t wheel);
 gates_err_t gates_i_spin_arrows_paint(const gates_tree_t *tree, gates_u32 idx, gates_draw_list_t *dl,
                                       const gates_theme_t *theme);
 gates_size_t gates_i_spin_arrows_measure(void);

@@ -9,6 +9,7 @@
 #include <gates/access.h>
 #include <gates/inputs.h>
 #include <gates/form.h>
+#include <gates/timer.h>
 #include "gates_test.h"
 #include <proven/heap.h>
 
@@ -47,6 +48,12 @@ static void click(gates_tree_t *t, gates_node_t n) {
     pointer(t, GATES_POINTER_UP, center(t, n));
 }
 static void dispatch(gates_tree_t *t) { (void)gates_tree_dispatch_events(t, 0); }
+static gates_u64 fake_now(void *ctx) { return *(gates_u64 *)ctx; }
+static void fake_changed(void *ctx) { (void)ctx; }
+static void wheel(gates_tree_t *t, gates_point_t p, float notches) {
+    gates_pointer_event_t e = { .action = GATES_POINTER_WHEEL, .pos = p, .wheel = { 0, notches } };
+    (void)gates_input_pointer(t, &e);
+}
 
 typedef struct rec_t {
     gates_event_kind_t kind[32];
@@ -400,6 +407,52 @@ static void test_spin(void) {
     pointer(t, GATES_POINTER_DOWN, down);
     pointer(t, GATES_POINTER_UP, down);
     GT_ASSERT(gates_range_value(t, spin) == 425);
+    /* Held, an arrow repeats after a pause, while the pointer stays on it (0.8.0). */
+    gates_u64 now = 1000;
+    gates_tree_set_clock(t, fake_now, fake_changed, &now);
+    pointer(t, GATES_POINTER_DOWN, up);
+    GT_ASSERT(gates_range_value(t, spin) == 450);
+    now += 399;
+    (void)gates_tree_run_timers(t);
+    GT_ASSERT(gates_range_value(t, spin) == 450);
+    now += 1;
+    (void)gates_tree_run_timers(t);
+    GT_ASSERT(gates_range_value(t, spin) == 475);
+    now += 50;
+    (void)gates_tree_run_timers(t);
+    GT_ASSERT(gates_range_value(t, spin) == 500);
+    pointer(t, GATES_POINTER_MOVE, down); /* on the other arrow: paused */
+    now += 50;
+    (void)gates_tree_run_timers(t);
+    GT_ASSERT(gates_range_value(t, spin) == 500 && gates_tree_timer_count(t) == 1);
+    pointer(t, GATES_POINTER_MOVE, up);
+    now += 50;
+    (void)gates_tree_run_timers(t);
+    GT_ASSERT(gates_range_value(t, spin) == 525);
+    pointer(t, GATES_POINTER_UP, up); /* release: no more steps, no timer */
+    GT_ASSERT(gates_tree_timer_count(t) == 0);
+    now += 500;
+    (void)gates_tree_run_timers(t);
+    GT_ASSERT(gates_range_value(t, spin) == 525);
+    pointer(t, GATES_POINTER_DOWN, up); /* cancelled from outside, a tick stops */
+    gates_input_cancel_pointer(t);
+    now += 400;
+    (void)gates_tree_run_timers(t);
+    GT_ASSERT(gates_range_value(t, spin) == 550 && gates_tree_timer_count(t) == 0); /* the press's step only */
+    /* The wheel steps a focused spin box, over its text or its arrows; unfocused, nothing. */
+    wheel(t, center(t, box), 1);
+    GT_ASSERT(gates_range_value(t, spin) == 575);
+    wheel(t, up, -2);
+    GT_ASSERT(gates_range_value(t, spin) == 525);
+    wheel(t, up, 0.2f); /* a fine wheel step still steps once */
+    GT_ASSERT(gates_range_value(t, spin) == 550);
+    gates_tree_set_focus(t, other);
+    wheel(t, center(t, box), 1);
+    GT_ASSERT(gates_range_value(t, spin) == 550);
+    gates_tree_set_focus(t, box);
+    pointer(t, GATES_POINTER_DOWN, down);
+    pointer(t, GATES_POINTER_UP, down);
+    GT_ASSERT(gates_range_value(t, spin) == 525);
     /* The program: silent, clamped; new limits clamp the value. */
     rec.n = 0;
     dispatch(t);
@@ -429,6 +482,7 @@ static void test_spin(void) {
     GT_ASSERT_OK(gates_access_info(t, spin, 0, &info));
     GT_ASSERT(info.role == GATES_ROLE_SPINNER && seq(info.name, "Width"));
     GT_ASSERT(info.has_range && info.range_min == 0 && info.range_max == 500 && info.range_value == 500);
+    GT_ASSERT(info.range_scale == 100 && info.range_step == 10 && info.range_page == 10); /* 0.8.0 */
     GT_ASSERT(info.actions & GATES_ACCESS_SET_VALUE);
     GT_ASSERT_OK(gates_access_info(t, box, 0, &info));
     GT_ASSERT(info.role == GATES_ROLE_EDIT && seq(info.name, "Width"));
@@ -463,6 +517,19 @@ static void test_slider(void) {
     gates_rect_t sr = gates_node_layout_rect(t, s), vr = gates_node_layout_rect(t, v);
     GT_ASSERT(sr.w > sr.h && sr.h >= 24);
     GT_ASSERT(vr.h > vr.w && vr.w >= 24);
+    /* The wheel: only when focused (0.8.0). */
+    wheel(t, (gates_point_t){ sr.x + sr.w / 2, sr.y + sr.h / 2 }, 1);
+    GT_ASSERT(gates_range_value(t, s) == 0);
+    gates_tree_set_focus(t, s);
+    wheel(t, (gates_point_t){ sr.x + sr.w / 2, sr.y + sr.h / 2 }, 2);
+    GT_ASSERT(gates_range_value(t, s) == 10);
+    wheel(t, (gates_point_t){ sr.x + sr.w / 2, sr.y + sr.h / 2 }, -2);
+    GT_ASSERT(gates_range_value(t, s) == 0);
+    GT_ASSERT_OK(gates_widget_set_disabled(t, s, true));
+    gates_tree_set_focus(t, s); /* focused by the program while disabled: still inert */
+    wheel(t, (gates_point_t){ sr.x + sr.w / 2, sr.y + sr.h / 2 }, 1);
+    GT_ASSERT(gates_range_value(t, s) == 0);
+    GT_ASSERT_OK(gates_widget_set_disabled(t, s, false));
     /* Keys. */
     gates_tree_set_focus(t, s);
     GT_ASSERT(key(t, GATES_KEY_RIGHT));
@@ -530,6 +597,7 @@ static void test_slider(void) {
     gates_access_info_t info;
     GT_ASSERT_OK(gates_access_info(t, s, 0, &info));
     GT_ASSERT(info.role == GATES_ROLE_SLIDER && info.has_range && info.range_min == -50 && info.range_max == 50);
+    GT_ASSERT(info.range_scale == 1 && info.range_step == 5 && info.range_page == 20);
     GT_ASSERT_OK(gates_access_set_range_value(t, s, 12));
     GT_ASSERT(gates_range_value(t, s) == 12);                 /* any value in range, not only steps */
     GT_ASSERT_OK(gates_access_set_range_value(t, s, 999));
@@ -625,6 +693,47 @@ static void test_grid(void) {
     gates_i32 span_w = 25 * adv;
     GT_ASSERT(rect(t, long_span).w == span_w && gates_node_preferred_size(t, g).w == span_w);
     GT_ASSERT(rect(t, long_span).y > rect(t, p2).y);          /* a span that does not fit starts a row */
+    /* Row grow weights (0.8.0): the spare height goes to rows 1 and 2 as 1:3; rows
+     * that do not exist take no share; a row's cells stay centred in it. */
+    GT_ASSERT_OK(gates_layout_set_child_grow(t, g, 1));
+    GT_ASSERT_OK(gates_layout_set_grid_row_grow(t, g, 1, 1));
+    GT_ASSERT_OK(gates_layout_set_grid_row_grow(t, g, 2, 3));
+    GT_ASSERT_OK(gates_layout_set_grid_row_grow(t, g, GATES_GRID_MAX_GROW_ROWS - 1, 9));
+    GT_ASSERT(gates_layout_set_grid_row_grow(t, g, GATES_GRID_MAX_GROW_ROWS, 1) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_layout_set_grid_row_grow(t, GATES_NODE_NULL, 0, 1) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT_OK(gates_layout_set_grid_row_grow(t, g, 2, 2)); /* 1:2 - the rounding goes to row 2 */
+    GT_ASSERT_OK(gates_layout_set_gap(t, g, 4));
+    gates_node_t p4 = label(t, g, "d"); /* row 3, no weight */
+    layout(t);
+    gates_rect_t gr = rect(t, g);
+    GT_ASSERT(gr.h == VH);
+    gates_i32 spare = VH - 4 * lh - 3 * 4, r1 = spare * 1 / 3, r2 = spare - r1;
+    GT_ASSERT(spare % 3 != 0); /* the case with a remainder */
+    GT_ASSERT(rect(t, p0).y == gr.y && rect(t, p1).y == gr.y);            /* row 0 keeps its height */
+    GT_ASSERT(rect(t, p2).y == gr.y + lh + 4 + r1 / 2);
+    GT_ASSERT(rect(t, long_span).y == gr.y + 2 * lh + 8 + r1 + r2 / 2);
+    GT_ASSERT(rect(t, p4).y == gr.y + 3 * lh + 12 + r1 + r2 && rect(t, p4).y + lh == gr.y + gr.h);
+    GT_ASSERT(gates_layout_validate(t, root));
+    /* Less than enough height: rows keep their own heights (none shrinks). */
+    GT_ASSERT_OK(gates_layout_run(t, (gates_size_t){ VW, 2 * lh }, be));
+    GT_ASSERT(rect(t, p2).y == rect(t, g).y + lh + 4 && rect(t, long_span).y == rect(t, g).y + 2 * lh + 8);
+    gates_tree_destroy(t);
+}
+
+/* A grid given less height than it needs (the window's root): rows keep their own heights. */
+static void test_grid_short(void) {
+    gates_tree_t *t;
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &t));
+    gates_i32 lh = be->metrics(be->ctx, GATES_FONT_UI).line_height;
+    gates_node_t root = gates_tree_root(t);
+    GT_ASSERT_OK(gates_layout_set(t, root, GATES_LAYOUT_KIND_GRID));
+    GT_ASSERT_OK(gates_layout_set_grid(t, root, 1));
+    gates_node_t r0 = label(t, root, "a"), r1 = label(t, root, "b"), r2 = label(t, root, "c");
+    GT_ASSERT_OK(gates_layout_set_grid_row_grow(t, root, 1, 1));
+    GT_ASSERT_OK(gates_layout_run(t, (gates_size_t){ VW, lh }, be));
+    GT_ASSERT(rect(t, r0).y == 0 && rect(t, r1).y == lh && rect(t, r2).y == 2 * lh);
+    GT_ASSERT_OK(gates_layout_run(t, (gates_size_t){ VW, 3 * lh + 10 }, be));
+    GT_ASSERT(rect(t, r1).y == lh + 5 && rect(t, r2).y == 2 * lh + 10);
     gates_tree_destroy(t);
 }
 
@@ -774,6 +883,7 @@ int main(void) {
     test_spin();
     test_slider();
     test_grid();
+    test_grid_short();
     test_wrap();
     test_group();
     return gt_report("test_inputs");

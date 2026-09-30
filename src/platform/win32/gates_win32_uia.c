@@ -745,10 +745,19 @@ static const IValueProviderVtbl value_vtbl = {
     value_qi, value_addref, value_release, value_set, value_get, value_read_only,
 };
 
-/* A progress bar reads as a percentage; other ranges as they are. */
-static double range_scale(const gates_access_info_t *i) {
-    return i->role == GATES_ROLE_PROGRESS_BAR && i->range_max > i->range_min
-               ? 100.0 / (double)(i->range_max - i->range_min) : 1.0;
+/* The range as shown (0.8.0): the model's numbers divided by the scale, so a
+ * scaled spin box reads 1.25 and a progress bar a percentage; Small and Large
+ * change are the step and page. */
+static double range_num(const gates_access_info_t *i, int which) {
+    double k = i->range_scale > 1 ? (double)i->range_scale : 1.0;
+    double span = (double)i->range_max - (double)i->range_min;
+    switch (which) {
+    case 0:  return (double)i->range_value / k;
+    case 1:  return (double)i->range_min / k;
+    case 2:  return (double)i->range_max / k;
+    case 3:  return (i->range_page > 0 ? (double)i->range_page : span / 10.0) / k;
+    default: return (i->range_step > 0 ? (double)i->range_step : span / 100.0) / k;
+    }
 }
 
 static HRESULT range_get(IRangeValueProvider *This, double *out, int which) {
@@ -757,24 +766,7 @@ static HRESULT range_get(IRangeValueProvider *This, double *out, int which) {
     gates_access_info_t i;
     HRESULT hr = el_info(e, &i);
     if (FAILED(hr)) return hr;
-    double k = range_scale(&i);
-    if (i.role == GATES_ROLE_SPINNER || i.role == GATES_ROLE_SLIDER) {
-        /* plan-0019: the model's own numbers (a scaled spin box reads 125 for 1.25;
-         * its Value text says 1.25). */
-        switch (which) {
-        case 0:  *out = (double)i.range_value; return S_OK;
-        case 1:  *out = (double)i.range_min; return S_OK;
-        case 2:  *out = (double)i.range_max; return S_OK;
-        default: break;
-        }
-    }
-    switch (which) {
-    case 0:  *out = (double)(i.range_value - i.range_min) * k; break;
-    case 1:  *out = 0.0; break;
-    case 2:  *out = (double)(i.range_max - i.range_min) * k; break;
-    case 3:  *out = (double)(i.range_max - i.range_min) * k / 10.0; break;
-    default: *out = (double)(i.range_max - i.range_min) * k / 100.0; break;
-    }
+    *out = range_num(&i, which);
     return S_OK;
 }
 
@@ -786,6 +778,7 @@ static HRESULT STDMETHODCALLTYPE range_set(IRangeValueProvider *This, double v) 
     if ((i.actions & GATES_ACCESS_SET_VALUE) == 0) {
         return (i.states & GATES_ACCESS_DISABLED) ? UIA_E_ELEMENTNOTENABLED : UIA_E_INVALIDOPERATION;
     }
+    v *= i.range_scale > 1 ? (double)i.range_scale : 1.0; /* as shown -> the model's number */
     if (!(v == v) || v > 9.2e18 || v < -9.2e18) return E_INVALIDARG; /* NaN or beyond 64 bits */
     gates_i64 n = (gates_i64)(v < 0 ? v - 0.5 : v + 0.5);
     return acted(e, gates_access_set_range_value(e->win->tree, e->ref.node, n));
@@ -1819,7 +1812,7 @@ static void diff(uia_el_t *e) {
     if (now.range != was.range && i.has_range) {
         VariantInit(&v);
         v.vt = VT_R8;
-        v.dblVal = (double)(i.range_value - i.range_min) * range_scale(&i);
+        v.dblVal = range_num(&i, 0);
         raise_prop(e, UIA_RangeValueValuePropertyId, v);
     }
     gates_u32 flip = now.states ^ was.states;

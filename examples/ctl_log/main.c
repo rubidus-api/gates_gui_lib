@@ -66,14 +66,10 @@ static void on_button(gates_tree_t *tree, const gates_event_t *ev, void *user) {
     update(d);
 }
 
+/* Selection and follow changes (scrolling up stops following, the end resumes
+ * it: GATES_EVENT_FOLLOW_CHANGED) both refresh the status line. */
 static void on_log(gates_tree_t *tree, const gates_event_t *ev, void *user) {
     (void)tree; (void)ev;
-    update(user);
-}
-
-/* The follow state changes with scrolling, which sends no event: refresh on input. */
-static void on_pointer(gates_window_t *win, const gates_pointer_event_t *ev, void *user) {
-    (void)win; (void)ev;
     update(user);
 }
 
@@ -83,7 +79,6 @@ static void on_key(gates_window_t *win, const gates_key_event_t *ev, void *user)
     if (ev->down && ev->key == GATES_KEY_ESCAPE) {
         gates_app_quit(d->app);
     }
-    update(d);
 }
 
 static gates_err_t button(demo_t *d, gates_node_t row, gates_str_t text, gates_node_t *out) {
@@ -124,7 +119,7 @@ int main(void) {
         return 1;
     }
     demo_t d = { .app = app };
-    gates_window_callbacks_t cb = { .on_key = on_key, .on_pointer = on_pointer, .user_data = &d };
+    gates_window_callbacks_t cb = { .on_key = on_key, .user_data = &d };
     gates_window_desc_t desc = { .title = GATES_STR("gates: log"), .size = { 480, 400 } };
     gates_window_t *win = nullptr;
     if (!gates_is_ok(gates_window_create(app, &desc, &cb, &win))) {

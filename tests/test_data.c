@@ -13,6 +13,8 @@
 #include <gates/command.h>
 #include <gates/propgrid.h>
 #include <gates/inputs.h>
+#include <gates/timer.h>
+#include <gates/clipboard.h>
 #include "gates_test.h"
 #include <proven/heap.h>
 
@@ -643,6 +645,126 @@ static void test_checks(void) {
     (void)gates_input_key(a.t, &sp);
     click(a.t, at(cell_rect(&a, 0, 1), 10), 1);
     GT_ASSERT(a.m.sets == 0 && !a.m.rows[0].done);
+    free_app(&a);
+}
+
+/* -- 0.8.0: type-ahead, the current column, copying a row ------------------------------------ */
+
+static gates_u64 fake_now(void *ctx) { return *(gates_u64 *)ctx; }
+static void fake_changed(void *ctx) { (void)ctx; }
+static char clip_text[128];
+static gates_err_t clip_fail;
+static gates_err_t clip_set(void *ctx, gates_str_t t) {
+    (void)ctx;
+    if (!gates_is_ok(clip_fail)) return clip_fail;
+    size_t n = t.size < sizeof clip_text - 1 ? t.size : sizeof clip_text - 1;
+    memcpy(clip_text, t.ptr, n);
+    clip_text[n] = 0;
+    return GATES_OK;
+}
+static gates_err_t clip_get(void *ctx, gates_allocator_t a, gates_u8 **out, gates_usize_t *n) {
+    (void)ctx;
+    (void)a;
+    *out = nullptr;
+    *n = 0;
+    return GATES_OK;
+}
+
+static void test_keyboard_extras(void) {
+    app_t a;
+    make_app(&a, 6, true);
+    const char *names[6] = { "apple", "banana", "avocado", "Berry", "cherry", "apricot" };
+    for (int i = 0; i < 6; i++) snprintf(a.m.rows[i].name, sizeof a.m.rows[i].name, "%s", names[i]);
+    gates_u64 now = 5000;
+    gates_tree_set_clock(a.t, fake_now, fake_changed, &now);
+    gates_tree_set_clipboard(a.t, &(gates_clipboard_t){ .get_text = clip_get, .set_text = clip_set });
+    gates_tree_set_focus(a.t, a.view);
+    /* Type-ahead: the next row starting with the letters, any case for ASCII. */
+    GT_ASSERT(gates_input_char(a.t, ' ') == GATES_INPUT_IGNORED); /* Space starts no search */
+    type(a.t, "b");
+    GT_ASSERT(gates_view_selected(a.t, a.view) == 101);
+    type(a.t, "e");
+    GT_ASSERT(gates_view_selected(a.t, a.view) == 103); /* "be": Berry */
+    now += 1000; /* a pause starts over */
+    type(a.t, "a");
+    GT_ASSERT(gates_view_selected(a.t, a.view) == 105);
+    type(a.t, "a"); /* the same letter again: the next one, around the end */
+    GT_ASSERT(gates_view_selected(a.t, a.view) == 100);
+    type(a.t, "a");
+    GT_ASSERT(gates_view_selected(a.t, a.view) == 102);
+    now += 999;
+    type(a.t, "v"); /* "aaav" matches nothing: the selection stays */
+    GT_ASSERT(gates_view_selected(a.t, a.view) == 102);
+    GT_ASSERT(key(a.t, GATES_KEY_DOWN)); /* a move ends the search */
+    type(a.t, "c");
+    GT_ASSERT(gates_view_selected(a.t, a.view) == 104);
+    GT_ASSERT(key(a.t, GATES_KEY_RIGHT));
+    type(a.t, "ap");
+    GT_ASSERT(gates_view_selected(a.t, a.view) == 105);
+    /* The current column: Ctrl+Right/Left over the shown columns; F2 edits it. */
+    gates_key_event_t cr = { .key = GATES_KEY_RIGHT, .down = true, .ctrl = true };
+    gates_key_event_t cl = { .key = GATES_KEY_LEFT, .down = true, .ctrl = true };
+    GT_ASSERT(gates_input_key(a.t, &cl)); /* none yet: from the last */
+    GT_ASSERT(gates_input_key(a.t, &cl) && gates_input_key(a.t, &cl)); /* Note, File */
+    GT_ASSERT(key(a.t, GATES_KEY_F2));
+    gates_column_id_t col = 0;
+    GT_ASSERT(gates_view_editing(a.t, a.view, nullptr, &col) && col == C_FILE);
+    GT_ASSERT(key(a.t, GATES_KEY_ESCAPE));
+    for (int i = 0; i < 8; i++) (void)gates_input_key(a.t, &cl); /* stops at the first */
+    GT_ASSERT(gates_input_key(a.t, &cr)); /* Done */
+    bool was = a.m.rows[5].done;
+    GT_ASSERT(key(a.t, GATES_KEY_SPACE) && a.m.rows[5].done != was);
+    GT_ASSERT(gates_input_key(a.t, &cr)); /* Progress: F2 falls back to the first text column */
+    GT_ASSERT(key(a.t, GATES_KEY_F2));
+    GT_ASSERT(gates_view_editing(a.t, a.view, nullptr, &col) && col == C_NAME);
+    GT_ASSERT(key(a.t, GATES_KEY_ESCAPE));
+    /* It is drawn inside the selected row's ring. */
+    gates_draw_list_t dl;
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    GT_ASSERT_OK(gates_paint_tree(a.t, &dl, theme, be));
+    gates_rect_t pc = cell_rect(&a, 5, 2);
+    gates_i32 fw = gates_theme_focus_width(theme);
+    bool outlined = false;
+    for (gates_u32 i = 0; i < gates_draw_list_len(&dl); i++) {
+        const gates_draw_cmd_t *c = gates_draw_list_at(&dl, i);
+        if (c->kind == GATES_DRAW_BORDER && c->rect.x == pc.x + fw && c->rect.y == pc.y + fw &&
+            c->rect.w == pc.w - 2 * fw) {
+            outlined = true;
+        }
+    }
+    GT_ASSERT(outlined);
+    gates_draw_list_deinit(&dl);
+    for (int i = 0; i < 10; i++) (void)gates_input_key(a.t, &cr); /* stops at the last (Own) */
+    GT_ASSERT(gates_input_key(a.t, &cl) && gates_input_key(a.t, &cl)); /* Note, File */
+    GT_ASSERT(key(a.t, GATES_KEY_F2));
+    GT_ASSERT(gates_view_editing(a.t, a.view, nullptr, &col) && col == C_FILE);
+    GT_ASSERT(key(a.t, GATES_KEY_ESCAPE));
+    for (int i = 0; i < 6; i++) (void)gates_input_key(a.t, &cl); /* back to Name */
+    /* A press on a cell makes its column current. */
+    click(a.t, at(cell_rect(&a, 4, 3), 30), 1);
+    GT_ASSERT(key(a.t, GATES_KEY_F2));
+    GT_ASSERT(gates_view_editing(a.t, a.view, nullptr, &col) && col == C_FILE);
+    GT_ASSERT(key(a.t, GATES_KEY_ESCAPE));
+    /* Ctrl+C: the selected row's shown cells, tab-separated. */
+    gates_key_event_t cc = { .key = GATES_KEY_C, .down = true, .ctrl = true };
+    GT_ASSERT(gates_input_key(a.t, &cc));
+    GT_ASSERT(strcmp(clip_text, "cherry\t\tpct\tf4.txt\tnote\tnote") == 0);
+    GT_ASSERT_OK(gates_view_set_column_hidden(a.t, a.view, C_PROG, true));
+    GT_ASSERT_OK(gates_view_move_column(a.t, a.view, C_NOTE, 0));
+    GT_ASSERT(gates_input_key(a.t, &cc));
+    GT_ASSERT(strcmp(clip_text, "note\tcherry\t\tf4.txt\tnote") == 0);
+    clip_fail = PROVEN_ERR_BUSY;
+    GT_ASSERT(gates_input_key(a.t, &cc));
+    GT_ASSERT(gates_input_take_error(a.t) == PROVEN_ERR_BUSY);
+    clip_fail = GATES_OK;
+    free_app(&a);
+    /* Nothing selected: Ctrl+C is not the view's. */
+    make_app(&a, 3, true);
+    gates_tree_set_clipboard(a.t, &(gates_clipboard_t){ .get_text = clip_get, .set_text = clip_set });
+    gates_tree_set_focus(a.t, a.view);
+    GT_ASSERT(!gates_input_key(a.t, &cc));
+    type(a.t, "r"); /* no clock: letters still search */
+    GT_ASSERT(gates_view_selected(a.t, a.view) == 100);
     free_app(&a);
 }
 
@@ -1320,6 +1442,7 @@ int main(void) {
     test_focus_leaving_commits();
     test_double_click();
     test_checks();
+    test_keyboard_extras();
     test_scroll_and_model();
     test_create_failures();
     test_hide_and_move();

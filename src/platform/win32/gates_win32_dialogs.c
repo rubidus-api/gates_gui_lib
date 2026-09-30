@@ -12,6 +12,7 @@
 static const GUID gates_clsid_open = { 0xdc1c5a9c, 0xe88a, 0x4dde, { 0xa5, 0xa1, 0x60, 0xf8, 0x2a, 0x20, 0xae, 0xf7 } };
 static const GUID gates_clsid_save = { 0xc0b4e2f3, 0xba21, 0x4773, { 0x8d, 0xba, 0x33, 0x5e, 0xc9, 0x46, 0xeb, 0x8b } };
 static const GUID gates_iid_file_dialog = { 0x42f85136, 0xdb7e, 0x439c, { 0x85, 0xf1, 0xe4, 0x07, 0x5d, 0x13, 0x5f, 0xc8 } };
+static const GUID gates_iid_file_open_dialog = { 0xd57c7288, 0xd4ad, 0x4768, { 0xbe, 0x02, 0x9d, 0x96, 0x95, 0x32, 0xd9, 0x60 } };
 static const GUID gates_iid_shell_item = { 0x43826d1e, 0xe718, 0x42ee, { 0xbc, 0x55, 0xa1, 0xe2, 0x61, 0xc3, 0x7b, 0xfe } };
 
 /* UTF-8 to a NUL-terminated UTF-16 string on the process heap (null for empty). */
@@ -62,18 +63,56 @@ static UINT filters(wchar_t *spec, COMDLG_FILTERSPEC *out) {
     return n;
 }
 
+/* Several answers (0.8.0): each path and a NUL; OVERFLOW (nothing written) when they do not fit. */
+static gates_err_t answers(IShellItemArray *arr, gates_u8 *buf, gates_usize_t cap, gates_usize_t *len,
+                           gates_u32 *count) {
+    DWORD n = 0;
+    if (FAILED(IShellItemArray_GetCount(arr, &n))) return PROVEN_ERR_INVALID_STATE;
+    gates_usize_t total = 0;
+    gates_err_t err = GATES_OK;
+    for (int pass = 0; pass < 2 && gates_is_ok(err); pass++) {
+        gates_usize_t at = 0;
+        for (DWORD k = 0; k < n && gates_is_ok(err); k++) {
+            IShellItem *item = nullptr;
+            wchar_t *path = nullptr;
+            HRESULT hr = IShellItemArray_GetItemAt(arr, k, &item);
+            if (SUCCEEDED(hr)) hr = IShellItem_GetDisplayName(item, SIGDN_FILESYSPATH, &path);
+            int m = SUCCEEDED(hr) ? WideCharToMultiByte(CP_UTF8, 0, path, -1, nullptr, 0, nullptr, nullptr) : 0;
+            if (m <= 0) {
+                err = PROVEN_ERR_INVALID_STATE;
+            } else if (pass == 1) {
+                WideCharToMultiByte(CP_UTF8, 0, path, -1, (char *)buf + at, m, nullptr, nullptr); /* its NUL too */
+            }
+            at += m > 0 ? (gates_usize_t)m : 0;
+            if (path != nullptr) CoTaskMemFree(path);
+            if (item != nullptr) IShellItem_Release(item);
+        }
+        total = at;
+        if (pass == 0 && (buf == nullptr || cap < total)) {
+            *len = total;
+            return gates_is_ok(err) ? PROVEN_ERR_OVERFLOW : err;
+        }
+    }
+    if (!gates_is_ok(err)) return err;
+    *len = total;
+    *count = (gates_u32)n;
+    return GATES_OK;
+}
+
 typedef HRESULT(WINAPI *item_from_path_fn)(PCWSTR, IBindCtx *, REFIID, void **);
 
+/* kind: 0 open, 1 save, 2 folder, 3 open several (count is set only then). */
 static gates_err_t file_dialog(gates_window_t *win, const gates_file_dialog_t *d, int kind, gates_u8 *buf,
-                               gates_usize_t cap, gates_usize_t *len) {
-    if (win == nullptr || len == nullptr) return PROVEN_ERR_INVALID_ARG;
+                               gates_usize_t cap, gates_usize_t *len, gates_u32 *count) {
+    if (win == nullptr || len == nullptr || (kind == 3 && count == nullptr)) return PROVEN_ERR_INVALID_ARG;
     *len = 0;
+    if (count != nullptr) *count = 0;
     gates_file_dialog_t none = {0};
     if (d == nullptr) d = &none;
     gates_tree_dismiss_menus(win->tree); /* the window's own menus close first */
     IFileDialog *dlg = nullptr;
     HRESULT hr = CoCreateInstance(kind == 1 ? &gates_clsid_save : &gates_clsid_open, nullptr, CLSCTX_INPROC_SERVER,
-                                  &gates_iid_file_dialog, (void **)&dlg);
+                                  kind == 3 ? &gates_iid_file_open_dialog : &gates_iid_file_dialog, (void **)&dlg);
     if (FAILED(hr)) return PROVEN_ERR_UNSUPPORTED;
     wchar_t *title = wide(d->title), *spec = wide(d->filters), *name = wide(d->name), *folder = wide(d->folder);
     COMDLG_FILTERSPEC fs[16];
@@ -82,6 +121,7 @@ static gates_err_t file_dialog(gates_window_t *win, const gates_file_dialog_t *d
     opts |= FOS_FORCEFILESYSTEM;
     if (kind == 2) opts |= FOS_PICKFOLDERS;
     if (kind == 1) opts |= FOS_OVERWRITEPROMPT;
+    if (kind == 3) opts |= FOS_ALLOWMULTISELECT;
     IFileDialog_SetOptions(dlg, opts);
     if (title != nullptr) IFileDialog_SetTitle(dlg, title);
     if (kind != 2 && spec != nullptr) {
@@ -103,7 +143,12 @@ static gates_err_t file_dialog(gates_window_t *win, const gates_file_dialog_t *d
     }
     hr = IFileDialog_Show(dlg, win->hwnd);
     gates_err_t err = GATES_OK;
-    if (SUCCEEDED(hr)) {
+    if (SUCCEEDED(hr) && kind == 3) {
+        IShellItemArray *arr = nullptr; /* an IFileOpenDialog: it begins as an IFileDialog */
+        hr = IFileOpenDialog_GetResults((IFileOpenDialog *)dlg, &arr);
+        err = SUCCEEDED(hr) ? answers(arr, buf, cap, len, count) : PROVEN_ERR_INVALID_STATE;
+        if (arr != nullptr) IShellItemArray_Release(arr);
+    } else if (SUCCEEDED(hr)) {
         IShellItem *item = nullptr;
         hr = IFileDialog_GetResult(dlg, &item);
         wchar_t *path = nullptr;
@@ -125,17 +170,22 @@ static gates_err_t file_dialog(gates_window_t *win, const gates_file_dialog_t *d
 
 gates_err_t gates_window_open_file(gates_window_t *win, const gates_file_dialog_t *desc, gates_u8 *buf,
                                    gates_usize_t cap, gates_usize_t *len) {
-    return file_dialog(win, desc, 0, buf, cap, len);
+    return file_dialog(win, desc, 0, buf, cap, len, nullptr);
+}
+
+gates_err_t gates_window_open_files(gates_window_t *win, const gates_file_dialog_t *desc, gates_u8 *buf,
+                                    gates_usize_t cap, gates_usize_t *len, gates_u32 *count) {
+    return file_dialog(win, desc, 3, buf, cap, len, count);
 }
 
 gates_err_t gates_window_save_file(gates_window_t *win, const gates_file_dialog_t *desc, gates_u8 *buf,
                                    gates_usize_t cap, gates_usize_t *len) {
-    return file_dialog(win, desc, 1, buf, cap, len);
+    return file_dialog(win, desc, 1, buf, cap, len, nullptr);
 }
 
 gates_err_t gates_window_choose_folder(gates_window_t *win, const gates_file_dialog_t *desc, gates_u8 *buf,
                                        gates_usize_t cap, gates_usize_t *len) {
-    return file_dialog(win, desc, 2, buf, cap, len);
+    return file_dialog(win, desc, 2, buf, cap, len, nullptr);
 }
 
 typedef BOOL(WINAPI *choose_color_fn)(LPCHOOSECOLORW);

@@ -1063,6 +1063,9 @@ gates_err_t gates_access_info(gates_tree_t *tree, gates_node_t node, gates_u64 i
         out->range_min = 0;
         out->range_max = 1000;
         out->range_value = st != nullptr ? st->value : 0;
+        out->range_step = 10; /* a percent */
+        out->range_page = 100;
+        out->range_scale = 10;
         break;
     case GATES_NODE_GROUP:
         if (gates_i_group_foldable(tree, idx)) {
@@ -1079,6 +1082,10 @@ gates_err_t gates_access_info(gates_tree_t *tree, gates_node_t node, gates_u64 i
             out->range_min = lo < INT32_MIN ? INT32_MIN : lo > INT32_MAX ? INT32_MAX : (gates_i32)lo;
             out->range_max = hi < INT32_MIN ? INT32_MIN : hi > INT32_MAX ? INT32_MAX : (gates_i32)hi;
             out->range_value = v < INT32_MIN ? INT32_MIN : v > INT32_MAX ? INT32_MAX : (gates_i32)v;
+            gates_i64 step, page;
+            gates_i_range_steps(tree, idx, &step, &page, &out->range_scale);
+            out->range_step = step > INT32_MAX ? INT32_MAX : (gates_i32)step;
+            out->range_page = page > INT32_MAX ? INT32_MAX : (gates_i32)page;
             if (!inert) actions |= GATES_ACCESS_SET_VALUE;
             if (s->kind == GATES_NODE_SPIN) {
                 gates_str_t t = gates_textbox_text(tree, gates_i_handle(tree, s->first_child));

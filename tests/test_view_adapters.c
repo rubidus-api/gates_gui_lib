@@ -385,9 +385,16 @@ static void test_log_ring(void) {
     gates_tree_destroy(t);
 }
 
+static int count_follow(const rec_t *r, gates_u32 result) {
+    int n = 0;
+    for (int i = 0; i < r->n; i++) n += r->kind[i] == GATES_EVENT_FOLLOW_CHANGED && r->result[i] == result;
+    return n;
+}
+
 static void test_log_follow(void) {
     gates_tree_t *t = nullptr;
-    gates_node_t log = make_log(&t, 1000, 1000000, (gates_allocator_t){0}, nullptr);
+    rec_t rec = {0};
+    gates_node_t log = make_log(&t, 1000, 1000000, (gates_allocator_t){0}, &rec);
     GT_ASSERT_OK(append_n(t, log, 1, 50));
     layout(t);
     gates_u32 vis = gates_view_visible_rows(t, log);
@@ -397,6 +404,12 @@ static void test_log_follow(void) {
     wheel(t, mid(body), 1.0f);
     gates_u64 first = gates_view_first_row(t, log);
     GT_ASSERT(first == 50 - vis - 3 && !gates_log_following(t, log));
+    (void)gates_tree_dispatch_events(t, 0);
+    GT_ASSERT(count_follow(&rec, 0) == 1 && count_follow(&rec, 1) == 0); /* 0.8.0 */
+    wheel(t, mid(body), 1.0f); /* further up: no second report */
+    (void)gates_tree_dispatch_events(t, 0);
+    GT_ASSERT(count_follow(&rec, 0) == 1 && count_follow(&rec, 1) == 0);
+    wheel(t, mid(body), -1.0f);
     GT_ASSERT_OK(append_n(t, log, 51, 10));
     GT_ASSERT(gates_view_first_row(t, log) == first);
     /* End resumes following. */
@@ -410,12 +423,20 @@ static void test_log_follow(void) {
     GT_ASSERT(!gates_log_following(t, log));
     wheel(t, mid(body), -1.0f);
     GT_ASSERT(gates_log_following(t, log));
-    /* The program can stop and resume. */
+    rec.n = 0;
+    wheel(t, mid(body), 1.0f); /* stop and resume before delivery: one report, read at delivery */
+    wheel(t, mid(body), -1.0f);
+    (void)gates_tree_dispatch_events(t, 0);
+    GT_ASSERT(count_follow(&rec, 1) == 1 && count_follow(&rec, 0) == 0);
+    rec.n = 0;
+    /* The program can stop and resume (silently). */
     GT_ASSERT_OK(gates_log_set_following(t, log, false));
     GT_ASSERT_OK(append_n(t, log, 66, 5));
     GT_ASSERT(gates_view_first_row(t, log) == 65 - vis);
     GT_ASSERT_OK(gates_log_set_following(t, log, true));
     GT_ASSERT(gates_view_first_row(t, log) == 70 - vis);
+    (void)gates_tree_dispatch_events(t, 0);
+    GT_ASSERT(count_follow(&rec, 0) + count_follow(&rec, 1) == 0);
 
     /* Not following while old lines are dropped: the same lines stay on screen. */
     gates_tree_destroy(t);

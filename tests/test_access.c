@@ -152,6 +152,7 @@ static void test_names(void) {
     GT_ASSERT(str_is(info(t, a.plain, 0).automation_id, "plain-button"));
     /* Progress and separator. */
     gates_access_info_t p = info(t, a.bar, 0);
+    GT_ASSERT(p.range_scale == 10 && p.range_step == 10 && p.range_page == 100); /* reads as a percent */
     GT_ASSERT(p.role == GATES_ROLE_PROGRESS_BAR && p.has_range && p.range_value == 250 && p.range_max == 1000);
     GT_ASSERT(info(t, a.sep, 0).role == GATES_ROLE_SEPARATOR);
     /* A dialog is named by its title and is modal. */

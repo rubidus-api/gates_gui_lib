@@ -1011,7 +1011,23 @@ static void test_toolbar_overflow(void) {
     GT_ASSERT_OK(gates_layout_run(w.t, (gates_size_t){ 200, VH }, be));
     gates_node_t more_menu = gates_access_last_child(w.t, (gates_access_ref_t){ gates_tree_root(w.t), 0 }).node;
     GT_ASSERT(gates_node_kind(w.t, more_menu) == GATES_NODE_MENU);
-    GT_ASSERT(gates_node_layout_rect(w.t, more_menu).h == 2 * 4 + 4 * 24);
+    gates_rect_t mm = gates_node_layout_rect(w.t, more_menu);
+    GT_ASSERT(mm.h == 2 * 4 + 3 * 24 + 9); /* a separator row is short (0.8.0) */
+    /* Rows below the separator are hit and exposed where they are drawn. */
+    gates_u64 help_id = gates_access_last_child(w.t, (gates_access_ref_t){ more_menu, 0 }).item;
+    gates_access_info_t help;
+    GT_ASSERT_OK(gates_access_info(w.t, more_menu, help_id, &help));
+    GT_ASSERT(help.bounds.y == mm.y + 4 + 2 * 24 + 9 && help.bounds.h == 24);
+    gates_access_ref_t under = gates_access_at_point(w.t, (gates_point_t){ mm.x + 10, mm.y + 4 + 2 * 24 + 9 }); /* its top pixel */
+    GT_ASSERT(gates_node_eq(under.node, more_menu) && under.item == help_id);
+    gates_pointer_event_t hover = { .action = GATES_POINTER_MOVE, .pos = { mm.x + 10, mm.y + 4 + 2 * 24 + 9 } };
+    (void)gates_input_pointer(w.t, &hover); /* the pointer too: Help's top pixel highlights Help */
+    GT_ASSERT(gates_access_focus_ref(w.t).item == help_id);
+    hover.pos.y--; /* the separator's last pixel: not Help */
+    (void)gates_input_pointer(w.t, &hover);
+    GT_ASSERT(gates_access_focus_ref(w.t).item != help_id);
+    under = gates_access_at_point(w.t, (gates_point_t){ mm.x + 10, mm.y + 4 + 2 * 24 + 4 }); /* the separator */
+    GT_ASSERT(!(gates_node_eq(under.node, more_menu) && under.item == help_id));
     gates_tree_destroy(w.t);
 
     tapp_t a;

@@ -151,10 +151,9 @@ static gates_u32 grid_columns(const gates_node_slot_t *s) {
     return s->grid_cols != 0 ? s->grid_cols : 2u;
 }
 
-gates_err_t gates_layout_set_grid_column_grow(gates_tree_t *tree, gates_node_t node, gates_u32 column,
-                                              gates_u8 weight) {
-    gates_node_slot_t *s = slot_checked(tree, node);
-    if (s == nullptr || column >= grid_columns(s)) return PROVEN_ERR_INVALID_ARG;
+/* The node's grow entry, made (or a dead node's reused) when it has none. */
+static gates_err_t grow_entry(gates_tree_t *tree, gates_node_t node, const gates_node_slot_t *s,
+                              gates_i_grid_grow **out) {
     gates_i_grid_grow *g = grow_of(tree, node.index);
     if (g == nullptr) {
         for (gates_u32 i = 0; i < tree->grid_grow_count && g == nullptr; i++) {
@@ -180,7 +179,29 @@ gates_err_t gates_layout_set_grid_column_grow(gates_tree_t *tree, gates_node_t n
     if (g->index != node.index || g->generation != s->generation) {
         *g = (gates_i_grid_grow){ .index = node.index, .generation = s->generation };
     }
+    *out = g;
+    return GATES_OK;
+}
+
+gates_err_t gates_layout_set_grid_column_grow(gates_tree_t *tree, gates_node_t node, gates_u32 column,
+                                              gates_u8 weight) {
+    gates_node_slot_t *s = slot_checked(tree, node);
+    if (s == nullptr || column >= grid_columns(s)) return PROVEN_ERR_INVALID_ARG;
+    gates_i_grid_grow *g = nullptr;
+    gates_err_t err = grow_entry(tree, node, s, &g);
+    if (!gates_is_ok(err)) return err;
     g->weight[column] = weight;
+    gates_i_mark_dirty(tree, node.index, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
+    return GATES_OK;
+}
+
+gates_err_t gates_layout_set_grid_row_grow(gates_tree_t *tree, gates_node_t node, gates_u32 row, gates_u8 weight) {
+    gates_node_slot_t *s = slot_checked(tree, node);
+    if (s == nullptr || row >= GATES_GRID_MAX_GROW_ROWS) return PROVEN_ERR_INVALID_ARG;
+    gates_i_grid_grow *g = nullptr;
+    gates_err_t err = grow_entry(tree, node, s, &g);
+    if (!gates_is_ok(err)) return err;
+    g->row_weight[row] = weight;
     gates_i_mark_dirty(tree, node.index, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
     return GATES_OK;
 }
@@ -772,10 +793,32 @@ static void arrange_grid(gates_tree_t *tree, gates_node_slot_t *s, gates_rect_t 
         col_x[k] = x;
         x += col_w[k] + s->gap;
     }
+    /* Spare height by the rows' grow weights (0.8.0). */
+    gates_i32 row_add[GATES_GRID_MAX_GROW_ROWS] = {0};
+    if (gw != nullptr) {
+        gates_i32 used_h = 0, total_h = 0;
+        gates_u32 rows = 0;
+        for (gates_u32 c = next_shown(tree, s->first_child); c != GATES_NONE; rows++) {
+            gates_i32 rh;
+            c = grid_row(tree, c, cols, &rh);
+            used_h += rh + (rows > 0 ? s->gap : 0);
+            if (rows < GATES_GRID_MAX_GROW_ROWS) total_h += gw->row_weight[rows];
+        }
+        gates_i32 spare_h = content.h - used_h, given = 0, last = -1;
+        for (gates_u32 k = 0; spare_h > 0 && total_h > 0 && k < rows && k < GATES_GRID_MAX_GROW_ROWS; k++) {
+            if (gw->row_weight[k] == 0) continue;
+            row_add[k] = (gates_i32)((gates_i64)spare_h * gw->row_weight[k] / total_h);
+            given += row_add[k];
+            last = (gates_i32)k;
+        }
+        if (last >= 0) row_add[last] += spare_h - given; /* rounding goes to the last growing row */
+    }
     gates_i32 row_y = content.y;
-    for (gates_u32 c = next_shown(tree, s->first_child); c != GATES_NONE;) {
+    gates_u32 row = 0;
+    for (gates_u32 c = next_shown(tree, s->first_child); c != GATES_NONE; row++) {
         gates_i32 rh;
         gates_u32 next = grid_row(tree, c, cols, &rh);
+        if (row < GATES_GRID_MAX_GROW_ROWS) rh += row_add[row];
         gates_u32 col = 0;
         for (gates_u32 k = c; k != next; k = next_shown(tree, gates_i_slot(tree, k)->next_sibling)) {
             gates_node_slot_t *cs = gates_i_slot(tree, k);

@@ -422,6 +422,11 @@ gates_input_result_t gates_input_char(gates_tree_t *tree, gates_u32 codepoint) {
         return gates_i_editor_char(tree, tree->focus, (gates_str_t){ .ptr = buf, .size = n }) ? GATES_INPUT_CONSUMED
                                                                                            : GATES_INPUT_IGNORED;
     }
+    if (tree != nullptr && tree->focus != GATES_NONE && is_kind(tree, tree->focus, GATES_NODE_VIEW) &&
+        gates_i_focus_eligible(tree, tree->focus) && n > 0) {
+        return gates_i_view_char(tree, tree->focus, (gates_str_t){ .ptr = buf, .size = n }) ? GATES_INPUT_CONSUMED
+                                                                                         : GATES_INPUT_IGNORED;
+    }
     gates_widget_state_t *st = focused_box(tree);
     if (st == nullptr || st->read_only) {
         return GATES_INPUT_IGNORED;

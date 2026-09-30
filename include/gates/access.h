@@ -118,6 +118,10 @@ typedef struct gates_access_info_t {
                                     selected option of a radio group or choice */
     bool has_range;              /* progress: range_value in range_min..range_max */
     gates_i32 range_value, range_min, range_max;
+    /* A spin box or slider (0.8.0): its step and page, and the scale its
+     * numbers are divided by to read as shown (1, or 10/100/1000). */
+    gates_i32 range_step, range_page;
+    gates_u32 range_scale;
     gates_rect_t bounds;         /* logical units, window coordinates */
     gates_node_t labelled_by;    /* the tied label (set_labelled_by, a form field), or null */
     gates_live_t live;
