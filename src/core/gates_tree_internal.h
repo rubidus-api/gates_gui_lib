@@ -1,4 +1,4 @@
-/* gates_gui_lib — core-internal tree structures, shared by src/core modules
+/* gates_gui_lib - core-internal tree structures, shared by src/core modules
  * (tree, widget, layout, paint, hit). Never installed; public API stays in
  * include/gates. Platform-free. */
 #ifndef GATES_TREE_INTERNAL_H
@@ -120,11 +120,11 @@ typedef struct gates_i_command_t {
 #define GATES_PROGRESS_H     10
 
 /* Dirty bits (RFC-0001 dirty layout / dirty paint; v1 resolves them as
- * full relayout / full repaint — see plan-0003 decision 6). */
+ * full relayout / full repaint - see plan-0003 decision 6). */
 #define GATES_DIRTY_LAYOUT 0x1u
 #define GATES_DIRTY_PAINT  0x2u
 
-/* Layout kinds (RFC-0001 §11). Values mirror the public gates_layout_t. */
+/* Layout kinds (RFC-0001 section 11). Values mirror the public gates_layout_t. */
 typedef enum gates_layout_kind_i {
     GATES_LAYOUT_NONE = 0,
     GATES_LAYOUT_ABSOLUTE,
@@ -170,7 +170,7 @@ typedef struct gates_i_option_t {
     bool disabled;
 } gates_i_option_t;
 
-/* Widget state (label/button/checkbox payload; RFC-0001 §6.2 state_index). */
+/* Widget state (label/button/checkbox payload; RFC-0001 section 6.2 state_index). */
 typedef struct gates_widget_state_t {
     bool in_use;
     gates_u32 next_free;
@@ -298,8 +298,8 @@ typedef struct gates_node_slot_t {
     gates_size_t content_size;
     /* FORM: the label column width found by the last measure. */
     gates_i32 form_label_w;
-    /* GRID (plan-0019): columns (0 = 2); a child's span (0 = 1). WRAP: the
-     * width the last measure used (the line breaks depend on it). */
+    /* GRID (plan-0019): columns (0 = 2); a child's span (0 = 1). WRAP and
+     * FORM: the width of the last arrange (line breaks and stacking depend on it). */
     gates_u8 grid_cols;
     gates_u8 span;
     gates_i32 wrap_w;

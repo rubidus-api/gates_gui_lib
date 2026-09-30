@@ -1,4 +1,4 @@
-/* gates_gui_lib — UTF-8 text edit core (RFC-0001 §16 "text edit core").
+/* gates_gui_lib - UTF-8 text edit core (RFC-0001 section 16 "text edit core").
  *
  * Owns a UTF-8 buffer, a caret, a selection and an uncommitted preedit range
  * (filled by an IME adapter). Platform-free and allocator-injected; the

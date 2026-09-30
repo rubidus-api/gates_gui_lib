@@ -1,10 +1,10 @@
-/* gates_gui_lib — retained node tree core (RFC-0001 §6-§8, Phase 0).
+/* gates_gui_lib - retained node tree core (RFC-0001 sections 6-8, Phase 0).
  *
  * Phase 0 scope: node pool with generation handles, O(1) tree links, subtree
  * destroy with deferred free at explicit safe points. The tree is owned by
  * gates_tree_t; from Phase 1 on, gates_window_t owns one of these.
  *
- * Threading: a gates_tree_t is single-thread-owned (UI thread; RFC-0001 §17). */
+ * Threading: a gates_tree_t is single-thread-owned (UI thread; RFC-0001 section 17). */
 #ifndef GATES_TREE_H
 #define GATES_TREE_H
 
@@ -67,17 +67,17 @@ void gates_tree_destroy(gates_tree_t *tree);
 gates_node_t gates_tree_root(const gates_tree_t *tree);
 
 /* True only for a live, non-destroy-pending node whose generation matches
- * (RFC-0001 §6.1, §30: a destroy_pending node is no longer a valid target). */
+ * (RFC-0001 section 6.1, section 30: a destroy_pending node is no longer a valid target). */
 bool gates_node_is_valid(const gates_tree_t *tree, gates_node_t node);
 
-/* -- node ops (RFC-0001 §7) ---------------------------------------------- */
+/* -- node ops (RFC-0001 section 7) ---------------------------------------------- */
 
 /* parent == GATES_NODE_NULL creates a detached node (attach with append). */
 [[nodiscard]] gates_err_t gates_node_create(gates_tree_t *tree, gates_node_t parent,
                                             const gates_node_desc_t *desc,
                                             gates_node_t *out_node);
 
-/* Subtree destroy (§8): marks node + descendants destroy_pending and unlinks
+/* Subtree destroy (section 8): marks node + descendants destroy_pending and unlinks
  * from the parent. Slots are freed at the next gates_tree_flush_destroys().
  * The root cannot be destroyed. */
 [[nodiscard]] gates_err_t gates_node_destroy(gates_tree_t *tree, gates_node_t node);
@@ -95,12 +95,12 @@ bool gates_node_is_valid(const gates_tree_t *tree, gates_node_t node);
                                                    gates_node_t child, gates_node_t before);
 
 /* Moves node (attached or detached) under new_parent (append position).
- * Rejects making a node a descendant of itself (cycle prevention, §30);
+ * Rejects making a node a descendant of itself (cycle prevention, section 30);
  * link updates are O(1), the cycle check walks new_parent's ancestors. */
 [[nodiscard]] gates_err_t gates_node_reparent(gates_tree_t *tree, gates_node_t node,
                                               gates_node_t new_parent);
 
-/* Safe point (§8): frees all destroy_pending slots (generation bump + free
+/* Safe point (section 8): frees all destroy_pending slots (generation bump + free
  * list). Callers from Phase 2 on: after event dispatch, before layout,
  * at frame end. */
 [[nodiscard]] gates_err_t gates_tree_flush_destroys(gates_tree_t *tree);

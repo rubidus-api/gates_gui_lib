@@ -1,4 +1,4 @@
-/* gates_gui_lib — builtin reference text backend (RFC-0002 §5).
+/* gates_gui_lib - builtin reference text backend (RFC-0002 section 5).
  * Embedded 8x16 monospace cells (advances by the cell rule, RFC-0004): vendored public-domain font8x8 glyphs
  * (ASCII), each 8x8 row doubled to 16 px. Deterministic everywhere.
  * Platform-free. */

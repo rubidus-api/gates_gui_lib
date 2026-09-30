@@ -78,7 +78,7 @@ static gates_str_t join(gates_u8 *buf, gates_usize_t cap, const char *prefix, ga
 static void on_field(gates_tree_t *tree, const gates_event_t *ev, void *user) {
     demo_t *d = user;
     gates_u8 buf[200];
-    bool is_name = ev->source.index == d->name.index;
+    bool is_name = gates_node_eq(ev->source, d->name);
     if (ev->kind == GATES_EVENT_TEXT_CHANGED) {
         (void)gates_widget_set_text(tree, is_name ? d->name_echo : d->city_echo,
                                     join(buf, sizeof buf, is_name ? "name: " : "city: ",
@@ -121,7 +121,7 @@ static void on_code(gates_tree_t *tree, const gates_event_t *ev, void *user) {
 
 static void on_answer(gates_tree_t *tree, const gates_event_t *ev, void *user) {
     demo_t *d = user;
-    if (ev->source.index == d->insert_btn.index) {
+    if (gates_node_eq(ev->source, d->insert_btn)) {
         if (!gates_is_ok(gates_textbox_accept_fit(tree, d->code))) {
             (void)gates_widget_set_text(tree, d->status, GATES_STR("that input is gone"));
         }

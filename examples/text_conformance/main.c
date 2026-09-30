@@ -1,4 +1,4 @@
-/* text_conformance — runs the RFC-0002 §8 backend checklist against the
+/* text_conformance - runs the RFC-0002 section 8 backend checklist against the
  * Win32 GDI backend on a real Windows machine (T017). Console app: run it
  * from a terminal and read the pass/fail counts. */
 #include "../../tests/text_conformance.h"

@@ -1,4 +1,4 @@
-/* gates_gui_lib — hit testing and pointer routing (Phase 2).
+/* gates_gui_lib - hit testing and pointer routing (Phase 2).
  * Hover and pressed live on the tree (slot indices); widgets are activated
  * on release-inside (button on_click, checkbox toggle + on_toggle). */
 #include <gates/ui.h>

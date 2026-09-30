@@ -1,4 +1,4 @@
-/* gates_gui_lib — keyboard, character and IME routing to the focused textbox.
+/* gates_gui_lib - keyboard, character and IME routing to the focused textbox.
  * Every text change goes through gates_i_box_edit (gates_textbox.c), which
  * owns limits, undo and notifications (plan-0008). Enter/Tab/Escape are left
  * for RFC-0003 phase D (activation and focus traversal). Platform-free. */

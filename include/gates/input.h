@@ -1,4 +1,4 @@
-/* gates_gui_lib — unified input events (RFC-0001 §15, Phase 1 subset).
+/* gates_gui_lib - unified input events (RFC-0001 section 15, Phase 1 subset).
  * Platform-free. Phase 1 fills mouse fields only; pen/touch arrive with
  * later backends, gestures in Phase 5. */
 #ifndef GATES_INPUT_H

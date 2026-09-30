@@ -117,6 +117,14 @@ static void show_status(app_t *a) {
     (void)gates_command_set_enabled(a->tree, root, CMD_DELETE, any);
 }
 
+/* Input the tree could not complete (usually out of memory): say so (RFC-0003 section 13). */
+static void on_input_error(gates_window_t *win, gates_err_t err, void *user) {
+    (void)win;
+    app_t *a = user;
+    const char *msg = err == PROVEN_ERR_NOMEM ? "Out of memory: the last action was not done" : "The last action failed";
+    (void)gates_widget_set_text(a->tree, a->status, (gates_str_t){ .ptr = (const gates_u8 *)msg, .size = strlen(msg) });
+}
+
 /* The tasks changed: tell the list, save, and update the status. */
 static void changed(app_t *a) {
     a->rev++;
@@ -290,7 +298,8 @@ int main(void) {
     static app_t a = { .next_id = 1 };
     load(&a);
     if (!gates_is_ok(gates_app_create(&(gates_app_desc_t){0}, &a.app))) return 1;
-    gates_window_callbacks_t cb = { .on_key = on_key, .on_pointer = on_pointer, .user_data = &a };
+    gates_window_callbacks_t cb = { .on_key = on_key, .on_pointer = on_pointer, .user_data = &a,
+                                    .on_input_error = on_input_error };
     gates_window_desc_t desc = { .title = GATES_STR("To-do"), .size = { 480, 460 } };
     gates_window_t *win = nullptr;
     if (!gates_is_ok(gates_window_create(a.app, &desc, &cb, &win))) {

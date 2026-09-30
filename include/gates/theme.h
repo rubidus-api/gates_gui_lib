@@ -1,5 +1,5 @@
-/* gates_gui_lib — semantic color tokens (RFC-0001 §14, Phase 2 subset).
- * Ordinary controls never use hard-coded RGB (§30); they resolve tokens
+/* gates_gui_lib - semantic color tokens (RFC-0001 section 14, Phase 2 subset).
+ * Ordinary controls never use hard-coded RGB (section 30); they resolve tokens
  * through the active theme. Full theme system (dark/high-contrast/system
  * notifications) arrives in Phase 5; this subset plus one built-in light
  * palette unblocks widgets. Platform-free. */

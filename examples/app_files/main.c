@@ -229,6 +229,12 @@ static void set_status(app_t *a, const char *s) {
     (void)gates_widget_set_text(a->tree, a->status, (gates_str_t){ .ptr = (const gates_u8 *)s, .size = strlen(s) });
 }
 
+/* Input the tree could not complete (usually out of memory): say so (RFC-0003 section 13). */
+static void on_input_error(gates_window_t *win, gates_err_t err, void *user) {
+    (void)win;
+    set_status(user, err == PROVEN_ERR_NOMEM ? "Out of memory: the last action was not done" : "The last action failed");
+}
+
 static void show_summary(app_t *a) {
     gates_u32 dirs = 0;
     unsigned long long bytes = 0;
@@ -438,7 +444,7 @@ static gates_err_t build(app_t *a) {
 int main(void) {
     static app_t a = { .next_id = 1 };
     if (!gates_is_ok(gates_app_create(&(gates_app_desc_t){0}, &a.app))) return 1;
-    gates_window_callbacks_t cb = { .on_key = on_key, .user_data = &a };
+    gates_window_callbacks_t cb = { .on_key = on_key, .user_data = &a, .on_input_error = on_input_error };
     gates_window_desc_t desc = { .title = GATES_STR("Files"), .size = { 680, 500 } };
     gates_window_t *win = nullptr;
     if (!gates_is_ok(gates_window_create(a.app, &desc, &cb, &win))) {

@@ -1,4 +1,4 @@
-/* gates_gui_lib — 2D geometry primitives (RFC-0001 §11, §15, §20).
+/* gates_gui_lib - 2D geometry primitives (RFC-0001 section 11, section 15, section 20).
  * Pixel geometry is integer (gates_i32); float appears only in vectors that
  * carry sub-pixel data (pointer deltas). Platform-free. */
 #ifndef GATES_GEOMETRY_H
@@ -11,7 +11,7 @@ typedef struct gates_point_t {
     gates_i32 y;
 } gates_point_t;
 
-/* 2D size (RFC-0001 §11.1). Byte sizes are gates_usize_t in gates/types.h. */
+/* 2D size (RFC-0001 section 11.1). Byte sizes are gates_usize_t in gates/types.h. */
 typedef struct gates_size_t {
     gates_i32 w;
     gates_i32 h;

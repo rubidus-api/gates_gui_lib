@@ -1,6 +1,6 @@
-/* gates_gui_lib — measure/arrange layout (RFC-0001 §11, Phase 2 set).
+/* gates_gui_lib - measure/arrange layout (RFC-0001 section 11, Phase 2 set).
  * Two passes: bottom-up measure (intrinsic sizes from the text metrics
- * contract, RFC-0002 §3) then top-down arrange. Platform-free. */
+ * contract, RFC-0002 section 3) then top-down arrange. Platform-free. */
 #include <gates/layout.h>
 #include <gates/widget.h>
 #include "gates_tree_internal.h"
@@ -313,6 +313,12 @@ static gates_size_t wrap_lines(gates_tree_t *tree, gates_node_slot_t *s, gates_i
     return (gates_size_t){ max_w, y + line_h };
 }
 
+/* A form at this content width puts labels above editors (plan-0010). */
+static bool form_stacked(const gates_tree_t *tree, const gates_node_slot_t *s, gates_i32 content_w) {
+    gates_i32 cells = GATES_FORM_MIN_EDITOR_CELLS * (tree->advance > 0 ? tree->advance : 8);
+    return content_w < s->form_label_w + GATES_FORM_COLUMN_GAP + cells;
+}
+
 /* -- measure (bottom-up) ------------------------------------------------------ */
 
 static gates_size_t widget_intrinsic(const gates_tree_t *tree, const gates_node_slot_t *s,
@@ -506,7 +512,7 @@ static void measure_node(gates_tree_t *tree, gates_u32 idx, const gates_text_bac
         }
         case GATES_LAYOUT_FORM: {
             /* One label column for all shown rows (plan-0010). */
-            gates_i32 label_w = 0, editor_w = 0, total_h = 0;
+            gates_i32 label_w = 0, editor_w = 0, total_h = 0, stacked_h = 0;
             for (gates_u32 c = s->first_child; c != GATES_NONE;
                  c = gates_i_slot(tree, c)->next_sibling) {
                 gates_size_t lp, ep, fp;
@@ -514,8 +520,12 @@ static void measure_node(gates_tree_t *tree, gates_u32 idx, const gates_text_bac
                 if (lp.w > label_w) label_w = lp.w;
                 if (ep.w > editor_w) editor_w = ep.w;
                 total_h += lp.h > ep.h ? lp.h : ep.h;
+                stacked_h += lp.h + GATES_FORM_STACK_GAP + ep.h;
             }
             s->form_label_w = label_w;
+            /* Last arranged too narrow for label and editor side by side, the rows
+             * stack: that is the height it needs (0.8.0; see arrange). */
+            if (s->wrap_w > 0 && form_stacked(tree, s, s->wrap_w - 2 * s->padding)) total_h = stacked_h;
             content = (gates_size_t){ label_w + GATES_FORM_COLUMN_GAP + editor_w,
                                       total_h + s->gap * (gates_i32)(n - 1) };
             break;
@@ -659,7 +669,7 @@ static void arrange_split(gates_tree_t *tree, gates_node_slot_t *s, gates_rect_t
 
 /* SCROLL: children stack in a column at preferred heights, then the whole
  * content is translated by -offset. layout_rect therefore holds final window
- * coordinates, so hit testing needs no scroll-specific case (plan-0004 §1). */
+ * coordinates, so hit testing needs no scroll-specific case (plan-0004 section 1). */
 static void arrange_scroll(gates_tree_t *tree, gates_node_slot_t *s, gates_rect_t content) {
     gates_i32 viewport_h = content.h;
     bool bar = s->content_size.h > viewport_h;
@@ -705,8 +715,7 @@ static void park(gates_tree_t *tree, gates_u32 idx, gates_point_t at) {
 /* FORM: rows top to bottom; label | editor, or label above editor when narrow. */
 static void arrange_form(gates_tree_t *tree, gates_node_slot_t *s, gates_rect_t content) {
     gates_i32 label_w = s->form_label_w;
-    gates_i32 cells = GATES_FORM_MIN_EDITOR_CELLS * (tree->advance > 0 ? tree->advance : 8);
-    bool stacked = content.w < label_w + GATES_FORM_COLUMN_GAP + cells;
+    bool stacked = form_stacked(tree, s, content.w);
     gates_i32 y = content.y;
     for (gates_u32 c = s->first_child; c != GATES_NONE; c = gates_i_slot(tree, c)->next_sibling) {
         gates_node_slot_t *rs = gates_i_slot(tree, c);
@@ -867,7 +876,7 @@ static void arrange_node(gates_tree_t *tree, gates_u32 idx) {
     case GATES_LAYOUT_STACK:
         for (gates_u32 c = s->first_child; c != GATES_NONE;
              c = gates_i_slot(tree, c)->next_sibling) {
-            gates_i_slot(tree, c)->layout_rect = content; /* children share (§10) */
+            gates_i_slot(tree, c)->layout_rect = content; /* children share (section 10) */
         }
         break;
     case GATES_LAYOUT_SPLIT:
@@ -877,6 +886,12 @@ static void arrange_node(gates_tree_t *tree, gates_u32 idx) {
         arrange_scroll(tree, s, content);
         break;
     case GATES_LAYOUT_FORM:
+        if (s->layout_rect.w != s->wrap_w) {
+            /* Stacked or not at another width than measured: measure again (0.8.0). */
+            bool was = s->wrap_w > 0 && form_stacked(tree, s, s->wrap_w - 2 * s->padding);
+            s->wrap_w = s->layout_rect.w;
+            if (was != form_stacked(tree, s, content.w)) tree->wrap_changed = true;
+        }
         arrange_form(tree, s, content);
         break;
     case GATES_LAYOUT_GRID:

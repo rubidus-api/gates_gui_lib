@@ -1,4 +1,4 @@
-/* gates_gui_lib — Win32 app lifecycle + message pump (RFC-0001 §3, §17). */
+/* gates_gui_lib - Win32 app lifecycle + message pump (RFC-0001 section 3, section 17). */
 #include "gates_win32_internal.h"
 #include <proven/heap.h>
 
@@ -213,6 +213,7 @@ gates_err_t gates_app_run(gates_app_t *app) {
         return PROVEN_ERR_INVALID_ARG;
     }
     app->running = true;
+    for (gates_window_t *w = app->windows; w != nullptr; w = w->next_window) gates_win32_show(w);
     MSG msg;
     BOOL got;
     while ((got = GetMessageW(&msg, nullptr, 0, 0)) != 0) {

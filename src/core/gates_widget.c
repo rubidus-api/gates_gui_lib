@@ -1,4 +1,4 @@
-/* gates_gui_lib — primitive widget state and properties (RFC-0001 §12 L1). */
+/* gates_gui_lib - primitive widget state and properties (RFC-0001 section 12 L1). */
 #include <gates/widget.h>
 #include "gates_tree_internal.h"
 

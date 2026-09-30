@@ -1,7 +1,7 @@
-/* gates_gui_lib — software renderer, the reference renderer (RFC-0001 §21-§22).
+/* gates_gui_lib - software renderer, the reference renderer (RFC-0001 sections 21-22).
  *
  * Consumes a balanced gates_draw_list_t and rasterizes into a caller-provided
- * 32-bit BGRA8 pixel buffer (byte order B,G,R,A — GDI-DIB native, one Phase 1
+ * 32-bit BGRA8 pixel buffer (byte order B,G,R,A - GDI-DIB native, one Phase 1
  * format). Deterministic, platform-free, testable on plain memory. */
 #ifndef GATES_RENDER_H
 #define GATES_RENDER_H

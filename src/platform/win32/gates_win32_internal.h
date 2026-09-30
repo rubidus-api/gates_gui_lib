@@ -1,4 +1,4 @@
-/* gates_gui_lib — Win32 backend internals. Only files under src/platform/win32
+/* gates_gui_lib - Win32 backend internals. Only files under src/platform/win32
  * may include this header (and windows.h). */
 #ifndef GATES_WIN32_INTERNAL_H
 #define GATES_WIN32_INTERNAL_H
@@ -82,13 +82,15 @@ struct gates_window {
     /* IME composition in progress and the node it started in (plan-0007). */
     bool ime_active;
     gates_node_t ime_node;
-    /* A GATES_WM_DISPATCH is queued for leftover events. */
+    /* The dispatch timer is armed for leftover events (0.8.0; was a posted message). */
     bool dispatch_posted;
     /* IME detached while a read-only or password box has focus (plan-0008). */
     bool ime_off;
     HIMC ime_saved;
     /* Next window of the app (posting pass), and whether the tree timer is armed. */
     struct gates_window *next_window;
+    bool shown;                  /* 0.8.0: shown once the program's UI is built (gates_app_run) */
+    bool show_max;               /* a placement set before that asked for maximized */
     bool timer_armed;
     gates_u64 timer_due_at;      /* absolute due time the armed timer stands for */
 
@@ -112,7 +114,6 @@ struct gates_window {
 };
 
 /* Posted to itself when more events are queued than one turn delivers. */
-#define GATES_WM_DISPATCH (WM_APP + 0x47)
 #define GATES_WIN32_EVENTS_PER_TURN 64u
 /* Sent to the app's message-only window when posted messages wait (plan-0012). */
 #define GATES_WM_POST (WM_APP + 0x48)
@@ -120,6 +121,7 @@ struct gates_window {
 #define GATES_WIN32_POST_TIMER_ID 0x6A7Fu
 /* The one Win32 timer per window that stands for the tree's next due timer. */
 #define GATES_WIN32_TIMER_ID 0x6A7Eu
+#define GATES_WIN32_DISPATCH_TIMER_ID 0x6A7Du /* 0.8.0: leftover events continue on a timer */
 
 /* gates_win32_app.c: DPI helpers that exist only on newer Windows (loaded at run time). */
 gates_u32 gates_win32_dpi_for_window(HWND hwnd);
@@ -134,7 +136,7 @@ const wchar_t *gates_win32_class_name(void);
 /* gates_win32_window.c */
 LRESULT CALLBACK gates_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 
-/* gates_win32_input.c — returns true when the message was consumed. */
+/* gates_win32_input.c - returns true when the message was consumed. */
 bool gates_win32_handle_input(gates_window_t *win, UINT msg, WPARAM wparam, LPARAM lparam);
 /* IMM32 composition (plan-0006): true when handled, with the LRESULT in *result. */
 bool gates_win32_handle_ime(gates_window_t *win, UINT msg, WPARAM wparam, LPARAM lparam,
@@ -145,6 +147,7 @@ void gates_win32_ime_place(gates_window_t *win);
 void gates_win32_ime_complete(gates_window_t *win);
 /* After every input message: deliver events, flush destroys, keep the IME in
  * step with focus, request a repaint when dirty. */
+void gates_win32_show(gates_window_t *win);
 void gates_win32_after_input(gates_window_t *win);
 /* gates_win32_uia.c: WM_GETOBJECT (true when answered, with *result); UIA
  * events for what changed (after every input pass); providers let go when the

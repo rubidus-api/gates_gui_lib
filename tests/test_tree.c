@@ -15,7 +15,7 @@ static gates_node_t mk(gates_tree_t *tree, gates_node_t parent) {
     return n;
 }
 
-/* Link-consistency checker (RFC-0001 §30), run after every mutation:
+/* Link-consistency checker (RFC-0001 section 30), run after every mutation:
  * child's parent points back, sibling chain doubly consistent, child_count
  * matches, no cycles (bounded by live node count). */
 static gates_u32 check_subtree(gates_tree_t *tree, gates_node_t node, gates_u32 budget) {
@@ -171,7 +171,7 @@ static void test_subtree_destroy_deferred(void) {
     gates_u32 live_before = gates_tree_live_count(tree); /* 6 */
 
     GT_ASSERT_OK(gates_node_destroy(tree, a));
-    /* Whole subtree invalid immediately (§30: no new event targets). */
+    /* Whole subtree invalid immediately (section 30: no new event targets). */
     GT_ASSERT(!gates_node_is_valid(tree, a));
     GT_ASSERT(!gates_node_is_valid(tree, a1));
     GT_ASSERT(!gates_node_is_valid(tree, a2));

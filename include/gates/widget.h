@@ -1,4 +1,4 @@
-/* gates_gui_lib — L1 primitive widgets (RFC-0001 §12 level 1, Phase 2 set):
+/* gates_gui_lib - L1 primitive widgets (RFC-0001 section 12 level 1, Phase 2 set):
  * panel, label, button, checkbox. Widgets are tree nodes with semantic
  * state; they emit theme-token draw commands during the paint walk and
  * receive interaction through the pointer routing (gates/hit via window).

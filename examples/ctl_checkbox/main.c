@@ -65,7 +65,7 @@ static void on_option(gates_tree_t *tree, const gates_event_t *ev, void *user) {
 
 static void on_all(gates_tree_t *tree, const gates_event_t *ev, void *user) {
     demo_t *d = user;
-    bool value = ev->source.index == d->all_on.index;
+    bool value = gates_node_eq(ev->source, d->all_on);
     for (int i = 0; i < OPTIONS; i++) {
         if (gates_widget_disabled(tree, d->opt[i])) {
             continue;

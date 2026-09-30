@@ -1,4 +1,4 @@
-/* gates_gui_lib — draw list implementation (RFC-0001 §20). Platform-free.
+/* gates_gui_lib - draw list implementation (RFC-0001 section 20). Platform-free.
  * Failure-atomic growth: on allocator failure the list is unchanged. */
 #include <gates/draw.h>
 #include <proven/heap.h>

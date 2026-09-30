@@ -3,7 +3,7 @@
 #include <proven/heap.h>
 #include "gates_test.h"
 
-/* Failing allocator: passes through until `fail_after` calls, then fails —
+/* Failing allocator: passes through until `fail_after` calls, then fails -
  * proves push/growth failure-atomicity. */
 typedef struct {
     gates_allocator_t inner;

@@ -1,4 +1,4 @@
-/* gates_gui_lib — software renderer (RFC-0001 §22). Platform-free.
+/* gates_gui_lib - software renderer (RFC-0001 section 22). Platform-free.
  * Reference implementation: correctness and determinism over speed. */
 #include <gates/render.h>
 #include <gates/text.h>
@@ -101,7 +101,7 @@ static void draw_image(soft_ctx_t *ctx, gates_rect_t dst, const struct gates_ima
     }
 }
 
-/* Border as four non-overlapping strips — corners are drawn exactly once,
+/* Border as four non-overlapping strips - corners are drawn exactly once,
  * which matters for translucent colors. */
 static void fill_border(soft_ctx_t *ctx, gates_rect_t r, gates_i32 t, gates_color_t color) {
     if (r.w <= 0 || r.h <= 0 || t < 1) {

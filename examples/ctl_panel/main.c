@@ -70,7 +70,7 @@ static gates_err_t add_item(demo_t *d) {
 
 static void on_button(gates_tree_t *tree, const gates_event_t *ev, void *user) {
     demo_t *d = user;
-    if (ev->source.index == d->add_btn.index) {
+    if (gates_node_eq(ev->source, d->add_btn)) {
         (void)add_item(d);
     } else {
         gates_node_t last = gates_node_last_child(tree, d->list);

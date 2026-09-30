@@ -1,4 +1,4 @@
-/* T009: widget behavior — creation, props, hit test, synthetic pointer
+/* T009: widget behavior - creation, props, hit test, synthetic pointer
  * interaction (docs/tests/cases/T009-widgets.md). */
 #include <gates/ui.h>
 #include <gates/widget.h>

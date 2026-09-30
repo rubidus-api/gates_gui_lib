@@ -1,4 +1,4 @@
-/* gates_gui_lib — foundation types (RFC-0001 §5).
+/* gates_gui_lib - foundation types (RFC-0001 section 5).
  * Thin, zero-cost aliases over proven_c_lib. Core code includes no platform headers. */
 #ifndef GATES_TYPES_H
 #define GATES_TYPES_H
@@ -17,7 +17,7 @@ typedef proven_u8   gates_u8;
 typedef proven_u32  gates_u32;
 typedef proven_u64  gates_u64;
 /* Byte/memory sizes. (2D geometric size is gates_size_t in gates/geometry.h,
- * matching RFC-0001 §11.1.) */
+ * matching RFC-0001 section 11.1.) */
 typedef proven_size_t gates_usize_t;
 
 /* Result-style errors: gates errors ARE proven errors (cheap boundary). */
@@ -40,7 +40,7 @@ static inline proven_u8str_view_t gates_str_to_proven(gates_str_t s) { return s;
 /* Allocator injection: gates uses the proven allocator trait everywhere. */
 typedef proven_allocator_t gates_allocator_t;
 
-/* Generation node handle (RFC-0001 §6.1). Never a raw pointer. */
+/* Generation node handle (RFC-0001 section 6.1). Never a raw pointer. */
 typedef struct gates_node_t {
     gates_u32 index;
     gates_u32 generation;

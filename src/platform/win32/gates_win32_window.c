@@ -1,4 +1,4 @@
-/* gates_gui_lib — Win32 window: surface, DIB present, paint path (RFC-0001 §21).
+/* gates_gui_lib - Win32 window: surface, DIB present, paint path (RFC-0001 section 21).
  * Present path: draw list -> gates_render_soft -> BGRA DIB section -> BitBlt. */
 #include "gates_win32_internal.h"
 #include <dwmapi.h>
@@ -238,12 +238,14 @@ LRESULT CALLBACK gates_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM 
             ReleaseCapture();
         }
         return DefWindowProcW(hwnd, msg, wparam, lparam);
-    case GATES_WM_DISPATCH:
-        if (gates_win32_perf_on()) gates_win32_perf_log("wake,%llu,dispatch", (unsigned long long)gates_win32_perf_now_us());
-        win->dispatch_posted = false;
-        gates_win32_after_input(win);
-        return 0;
     case WM_TIMER:
+        if (wparam == GATES_WIN32_DISPATCH_TIMER_ID) {
+            if (gates_win32_perf_on()) gates_win32_perf_log("wake,%llu,dispatch", (unsigned long long)gates_win32_perf_now_us());
+            KillTimer(hwnd, GATES_WIN32_DISPATCH_TIMER_ID);
+            win->dispatch_posted = false;
+            gates_win32_after_input(win);
+            return 0;
+        }
         if (wparam == GATES_WIN32_TIMER_ID) {
             if (gates_win32_perf_on()) gates_win32_perf_log("wake,%llu,timer", (unsigned long long)gates_win32_perf_now_us());
             win->timer_armed = false;
@@ -501,7 +503,7 @@ gates_err_t gates_window_create(gates_app_t *app, const gates_window_desc_t *des
     }
     win->theme_mode = GATES_THEME_SYSTEM;
     resolve_theme(win); /* again once the window exists, for the title bar */
-    win->text = gates_text_backend_win32_gdi(); /* real glyphs (RFC-0002 §5) */
+    win->text = gates_text_backend_win32_gdi(); /* real glyphs (RFC-0002 section 5) */
     if (callbacks != nullptr) {
         win->cb = *callbacks;
     }
@@ -568,11 +570,19 @@ gates_err_t gates_window_create(gates_app_t *app, const gates_window_desc_t *des
     win->next_window = app->windows;
     app->windows = win;
 
-    ShowWindow(hwnd, SW_SHOW);
-    UpdateWindow(hwnd);
+    /* Shown when the loop starts (0.8.0): the program builds its UI first, so
+     * the first frame on screen already has it - no blank frame before it. */
+    if (app->running) gates_win32_show(win);
 
     *out_window = win;
     return GATES_OK;
+}
+
+void gates_win32_show(gates_window_t *win) {
+    if (win->shown || win->hwnd == nullptr) return;
+    win->shown = true;
+    ShowWindow(win->hwnd, win->show_max ? SW_SHOWMAXIMIZED : SW_SHOW);
+    UpdateWindow(win->hwnd); /* the first WM_PAINT now: layout and the built UI */
 }
 
 void gates_window_destroy(gates_window_t *win) {
@@ -645,7 +655,8 @@ gates_err_t gates_window_placement(const gates_window_t *win, gates_u8 *buf, gat
     WINDOWPLACEMENT wp = { .length = sizeof wp };
     if (!GetWindowPlacement(win->hwnd, &wp)) return PROVEN_ERR_INVALID_STATE;
     RECT r = wp.rcNormalPosition;
-    bool max = wp.showCmd == SW_SHOWMAXIMIZED || (IsZoomed(win->hwnd) && !IsIconic(win->hwnd));
+    bool max = wp.showCmd == SW_SHOWMAXIMIZED || (IsZoomed(win->hwnd) && !IsIconic(win->hwnd)) ||
+               (!win->shown && win->show_max); /* set before the loop showed it */
     char tmp[96];
     int n = snprintf(tmp, sizeof tmp, "%ld,%ld,%ld,%ld,%s", (long)r.left, (long)r.top, (long)(r.right - r.left),
                      (long)(r.bottom - r.top), max ? "maximized" : "normal");
@@ -706,6 +717,10 @@ gates_err_t gates_window_set_placement(gates_window_t *win, gates_str_t text) {
     if (!GetWindowPlacement(win->hwnd, &wp)) return PROVEN_ERR_INVALID_STATE;
     wp.flags = 0;
     wp.showCmd = max ? SW_SHOWMAXIMIZED : SW_SHOWNORMAL;
+    if (!win->shown) { /* not on screen yet: keep it hidden until the loop shows it */
+        win->show_max = max;
+        wp.showCmd = SW_HIDE;
+    }
     wp.rcNormalPosition = r;
     return SetWindowPlacement(win->hwnd, &wp) ? GATES_OK : PROVEN_ERR_INVALID_STATE;
 }

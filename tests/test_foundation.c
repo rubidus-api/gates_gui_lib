@@ -1,4 +1,4 @@
-/* T003: foundation layer — proven wrappers, allocator injection (docs/tests/cases/T003-foundation.md). */
+/* T003: foundation layer - proven wrappers, allocator injection (docs/tests/cases/T003-foundation.md). */
 #include <gates/types.h>
 #include <gates/tree.h>
 #include <proven/heap.h>
@@ -19,7 +19,7 @@ static_assert((gates_u32)-1 > 0, "gates_u32 unsigned");
 static_assert(sizeof(gates_usize_t) == sizeof(proven_size_t), "gates_usize_t");
 static_assert(sizeof(gates_str_t) == sizeof(proven_u8str_view_t), "gates_str_t layout");
 
-/* Counting allocator: wraps the proven heap allocator and counts every call —
+/* Counting allocator: wraps the proven heap allocator and counts every call -
  * proves the tree performs no hidden allocation outside the injected trait. */
 typedef struct {
     gates_allocator_t inner;

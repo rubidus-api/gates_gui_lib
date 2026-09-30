@@ -163,6 +163,14 @@ static void on_lines(gates_tree_t *tree, gates_node_t node, gates_u32 kind, void
     }
 }
 
+/* Input the tree could not complete (usually out of memory): say so (RFC-0003 section 13). */
+static void on_input_error(gates_window_t *win, gates_err_t err, void *user) {
+    (void)win;
+    app_t *a = user;
+    a->failures += err == PROVEN_ERR_NOMEM ? 1u : 0u; /* shown by the status line */
+    status(a);
+}
+
 static void on_tick(gates_tree_t *tree, gates_node_t node, gates_timer_id_t id, void *user) {
     (void)tree; (void)node; (void)id;
     status(user);
@@ -250,7 +258,8 @@ int main(void) {
     }
     gates_window_desc_t desc = { .title = GATES_STR("gates: log viewer"), .size = { 640, 520 } };
     gates_window_t *win = nullptr;
-    if (!gates_is_ok(gates_window_create(a.app, &desc, &(gates_window_callbacks_t){0}, &win))) {
+    if (!gates_is_ok(gates_window_create(a.app, &desc, &(gates_window_callbacks_t){ .user_data = &a, .on_input_error = on_input_error },
+                                         &win))) {
         gates_app_destroy(a.app);
         return 1;
     }

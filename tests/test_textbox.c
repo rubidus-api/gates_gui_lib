@@ -1,4 +1,4 @@
-/* T015: textbox widget — focus, caret placement, typing, painting
+/* T015: textbox widget - focus, caret placement, typing, painting
  * (docs/tests/cases/T015-textbox.md). */
 #include <gates/ui.h>
 #include <gates/widget.h>

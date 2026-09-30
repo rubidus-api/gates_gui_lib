@@ -9,8 +9,9 @@
  *
  * Shows: a form with text fields (name, e-mail with a rule, proxy address),
  * a language choice, a theme radio group and a checkbox that reveals the
- * proxy row; a progress bar showing how much of what is required is filled
- * in; Save / Cancel as commands shared by buttons and keys; a status line.
+ * proxy row; Save / Cancel as commands shared by buttons and keys; an
+ * "applying" step after a valid Save - a progress bar filled by a timer, or at
+ * once when the person asked Windows for less motion; a status line.
  *
  * Field check (T029 stage 2): with an empty name and "abc" as e-mail, Enter
  * shows two messages under the fields (the text boxes turn red) and puts the
@@ -18,7 +19,9 @@
  * ticking "use a proxy server" shows the proxy row (Tab reaches it), unticking
  * hides it; Save with the proxy on and no address complains about it only;
  * editing a field clears its message; Escape restores the last saved values;
- * the progress bar grows as required fields are filled; the window's close
+ * a valid Save fills the progress bar in about half a second ("saving..."),
+ * then says "saved: ..." (with animations turned off in Windows: at once);
+ * Save and Cancel wait while it runs; the window's close
  * button exits. A window narrower than the label column plus 12 average characters puts
  * each label above its field. */
 #include <gates/app.h>
@@ -29,6 +32,7 @@
 #include <gates/form.h>
 #include <gates/ui.h>
 #include <gates/access.h>
+#include <gates/timer.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -40,6 +44,7 @@ enum { F_NAME = 1, F_MAIL, F_LANG, F_THEME, F_PROXY, F_PROXY_ADDR };
 enum { CMD_SAVE = 1, CMD_CANCEL };
 enum { LANG_EN = 1, LANG_KO, LANG_JA, LANG_DE };
 enum { THEME_LIGHT = 1, THEME_DARK };
+enum { APPLY_STEPS = 20, APPLY_TICK_MS = 30 }; /* the applying step: about 0.6 s */
 
 /* The application's own model: what is saved. The draft lives in the editors. */
 typedef struct settings_t {
@@ -53,10 +58,14 @@ typedef struct settings_t {
 
 typedef struct app_t {
     gates_app_t *app;
+    gates_window_t *win;
     gates_tree_t *tree;
     gates_node_t form, name, mail, lang, theme, proxy, proxy_addr;
     gates_node_t progress, status;
     settings_t saved;
+    settings_t draft;            /* checked, being applied */
+    gates_timer_id_t apply;      /* the applying step's timer, 0 = none */
+    int apply_step;
     bool loading;                /* set while the program fills the editors */
 } app_t;
 
@@ -80,6 +89,12 @@ static void set_status(app_t *a, const char *text) {
     (void)gates_widget_set_text(a->tree, a->status, cstr(text));
 }
 
+/* Input the tree could not complete (usually out of memory): say so (RFC-0003 section 13). */
+static void on_input_error(gates_window_t *win, gates_err_t err, void *user) {
+    (void)win;
+    set_status(user, err == PROVEN_ERR_NOMEM ? "Out of memory: the last change was not made" : "The last change failed");
+}
+
 /* Copies a text editor's value into buf (cut to fit, always terminated). */
 static void read_text(app_t *a, gates_node_t box, char *buf, size_t cap) {
     gates_str_t s = gates_textbox_text(a->tree, box);
@@ -101,18 +116,6 @@ static bool looks_like_proxy(const char *s) {
     return colon != nullptr && colon != s && colon[1] >= '0' && colon[1] <= '9';
 }
 
-/* Required fields that are filled, in per-mille. */
-static void update_progress(app_t *a) {
-    settings_t d = {0};
-    read_text(a, a->name, d.name, sizeof d.name);
-    read_text(a, a->mail, d.mail, sizeof d.mail);
-    read_text(a, a->proxy_addr, d.proxy_addr, sizeof d.proxy_addr);
-    bool proxy = gates_checkbox_checked(a->tree, a->proxy);
-    int need = proxy ? 3 : 2;
-    int have = (d.name[0] != '\0') + (d.mail[0] != '\0') + (proxy && d.proxy_addr[0] != '\0');
-    (void)gates_progress_set_value(a->tree, a->progress, (gates_i32)(have * 1000 / need));
-}
-
 /* Puts the saved settings into the editors (silently) and clears messages. */
 static void load(app_t *a) {
     a->loading = true;
@@ -127,11 +130,51 @@ static void load(app_t *a) {
     for (gates_u32 id = F_NAME; id <= F_PROXY_ADDR; id++) {
         (void)gates_form_set_error(a->tree, a->form, id, GATES_STR(""));
     }
-    update_progress(a);
     a->loading = false;
 }
 
 /* -- commands ----------------------------------------------------------------------- */
+
+/* The applying step's end: the draft becomes the saved settings. */
+static void finish_save(app_t *a) {
+    gates_node_t root = gates_tree_root(a->tree);
+    a->saved = a->draft;
+    (void)gates_progress_set_value(a->tree, a->progress, 1000);
+    (void)gates_command_set_enabled(a->tree, root, CMD_SAVE, true);
+    (void)gates_command_set_enabled(a->tree, root, CMD_CANCEL, true);
+    const settings_t *d = &a->saved;
+    char buf[160];
+    snprintf(buf, sizeof buf, "saved: %s, %s, %s theme%s", d->name, d->mail,
+             d->theme == THEME_DARK ? "dark" : "light", d->proxy ? ", proxy on" : "");
+    set_status(a, buf);
+}
+
+static void on_apply_tick(gates_tree_t *tree, gates_node_t node, gates_timer_id_t id, void *user) {
+    (void)node;
+    app_t *a = user;
+    a->apply_step++;
+    (void)gates_progress_set_value(tree, a->progress, (gates_i32)(a->apply_step * 1000 / APPLY_STEPS));
+    if (a->apply_step >= APPLY_STEPS) {
+        (void)gates_timer_cancel(tree, id);
+        a->apply = 0;
+        finish_save(a);
+    }
+}
+
+/* A checked draft: shown filling up, unless the person asked for less motion. */
+static void apply(app_t *a) {
+    gates_node_t root = gates_tree_root(a->tree);
+    a->apply_step = 0;
+    (void)gates_progress_set_value(a->tree, a->progress, 0);
+    if (gates_window_reduced_motion(a->win) ||
+        !gates_is_ok(gates_timer_start(a->tree, a->progress, APPLY_TICK_MS, true, on_apply_tick, a, &a->apply))) {
+        finish_save(a); /* at once (a timer that cannot start: at once too) */
+        return;
+    }
+    (void)gates_command_set_enabled(a->tree, root, CMD_SAVE, false); /* no second save meanwhile */
+    (void)gates_command_set_enabled(a->tree, root, CMD_CANCEL, false);
+    set_status(a, "saving...");
+}
 
 static void on_command(gates_tree_t *tree, gates_command_id_t id, void *user) {
     app_t *a = user;
@@ -172,11 +215,8 @@ static void on_command(gates_tree_t *tree, gates_command_id_t id, void *user) {
         set_status(a, "not saved: please correct the marked fields");
         return;
     }
-    a->saved = d;
-    char buf[160];
-    snprintf(buf, sizeof buf, "saved: %s, %s, %s theme%s", d.name, d.mail,
-             d.theme == THEME_DARK ? "dark" : "light", d.proxy ? ", proxy on" : "");
-    set_status(a, buf);
+    a->draft = d;
+    apply(a);
 }
 
 /* -- editors -------------------------------------------------------------------------- */
@@ -194,7 +234,6 @@ static void on_editor(gates_tree_t *tree, const gates_event_t *ev, void *user) {
         }
     }
     (void)gates_form_set_error(tree, a->form, field, GATES_STR("")); /* edited: message goes */
-    update_progress(a);
     set_status(a, "unsaved changes");
 }
 
@@ -236,7 +275,7 @@ static gates_err_t build_ui(app_t *a) {
     TRY(gates_panel_create(t, root, &row));
     TRY(gates_layout_set(t, row, GATES_LAYOUT_KIND_ROW));
     TRY(gates_layout_set_gap(t, row, 8));
-    TRY(gates_label_create(t, row, GATES_STR("required fields filled"), &n));
+    TRY(gates_label_create(t, row, GATES_STR("applying"), &n));
     TRY(gates_progress_create(t, row, 0, &a->progress));
     TRY(gates_node_set_labelled_by(t, a->progress, n));
     TRY(gates_layout_set_child_align(t, a->progress, GATES_ALIGN_CENTER_V));
@@ -278,10 +317,12 @@ int main(void) {
     app_t a = { .app = app };
     gates_window_desc_t desc = { .title = GATES_STR("gates: settings"), .size = { 560, 520 } };
     gates_window_t *win = nullptr;
-    if (!gates_is_ok(gates_window_create(app, &desc, &(gates_window_callbacks_t){0}, &win))) {
+    if (!gates_is_ok(gates_window_create(app, &desc, &(gates_window_callbacks_t){ .user_data = &a, .on_input_error = on_input_error },
+                                         &win))) {
         gates_app_destroy(app);
         return 1;
     }
+    a.win = win;
     a.tree = gates_window_tree(win);
     gates_err_t err = build_ui(&a);
     if (!gates_is_ok(err)) {

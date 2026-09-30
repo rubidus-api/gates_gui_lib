@@ -1,7 +1,7 @@
-/* widgets_demo — Phase 2 widgets, layout, and interaction (RFC-0001 §28).
+/* widgets_demo - Phase 2 widgets, layout, and interaction (RFC-0001 section 28).
  *
- * Semantic-first (RFC-0002): the app describes meaning — a column with a
- * title, a toolbar row, a two-page stack, checkboxes and a status label —
+ * Semantic-first (RFC-0002): the app describes meaning - a column with a
+ * title, a toolbar row, a two-page stack, checkboxes and a status label -
  * and the library lays out and paints it with theme tokens and the
  * system UI font (proportional, RFC-0004).
  *

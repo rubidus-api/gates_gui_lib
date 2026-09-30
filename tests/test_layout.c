@@ -1,4 +1,4 @@
-/* T008: intrinsic layout — measure/arrange (docs/tests/cases/T008-layout.md). */
+/* T008: intrinsic layout - measure/arrange (docs/tests/cases/T008-layout.md). */
 #include <gates/layout.h>
 #include <gates/widget.h>
 #include "gates_test.h"
@@ -61,7 +61,7 @@ static void test_row_layout_exact(void) {
     GT_ASSERT_OK(gates_layout_set_gap(t, root, 5));
 
     /* Three fixed 20x30 children via absolute pref (labels give text sizes;
-     * use panels with abs pref via children of size — simplest: labels with
+     * use panels with abs pref via children of size - simplest: labels with
      * known text lengths). */
     gates_node_t a = GATES_NODE_NULL, b = GATES_NODE_NULL, c = GATES_NODE_NULL;
     GT_ASSERT_OK(gates_label_create(t, root, GATES_STR("aa"), &a));   /* 16x16 */
@@ -152,7 +152,7 @@ static void test_stack_and_absolute(void) {
     gates_node_t p2 = mk_panel(t, root);
     GT_ASSERT_OK(gates_layout_run(t, (gates_size_t){ 100, 80 }, be));
 
-    /* Stack children share the content rect (overlap allowed by §10). */
+    /* Stack children share the content rect (overlap allowed by section 10). */
     GT_ASSERT(rect_eq(gates_node_layout_rect(t, p1), 4, 4, 92, 72));
     GT_ASSERT(rect_eq(gates_node_layout_rect(t, p2), 4, 4, 92, 72));
     GT_ASSERT(gates_layout_stack_active(t, root) == 0);

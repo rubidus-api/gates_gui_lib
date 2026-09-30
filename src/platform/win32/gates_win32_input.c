@@ -1,5 +1,5 @@
-/* gates_gui_lib — Win32 input translation to the unified pointer/key model
- * (RFC-0001 §15, Phase 1: mouse + keyboard + WM_CHAR). */
+/* gates_gui_lib - Win32 input translation to the unified pointer/key model
+ * (RFC-0001 section 15, Phase 1: mouse + keyboard + WM_CHAR). */
 #include "gates_win32_internal.h"
 
 #include <windowsx.h> /* GET_X_LPARAM / GET_Y_LPARAM */
@@ -319,8 +319,11 @@ void gates_win32_after_input(gates_window_t *win) {
     (void)gates_tree_flush_destroys(win->tree);
     ime_follow_focus(win);
     ime_policy(win);
+    /* The rest waits for a timer, not a posted message (as posting does): WM_TIMER
+     * comes after input and painting, so handlers that queue events without end
+     * cannot starve them (0.8.0). */
     if (left > 0 && !win->dispatch_posted) {
-        win->dispatch_posted = PostMessageW(win->hwnd, GATES_WM_DISPATCH, 0, 0) != 0;
+        win->dispatch_posted = SetTimer(win->hwnd, GATES_WIN32_DISPATCH_TIMER_ID, USER_TIMER_MINIMUM, nullptr) != 0;
     }
     if ((gates_tree_dirty(win->tree) &
          (GATES_TREE_DIRTY_PAINT | GATES_TREE_DIRTY_LAYOUT)) != 0) {
@@ -328,6 +331,10 @@ void gates_win32_after_input(gates_window_t *win) {
     }
     gates_win32_uia_events(win);
     gates_win32_caret_follow(win);
+    if (win->cb.on_input_error != nullptr) {
+        gates_err_t err = gates_input_take_error(win->tree);
+        if (!gates_is_ok(err)) win->cb.on_input_error(win, err, win->cb.user_data);
+    }
 }
 
 void gates_win32_cancel_pointer(gates_window_t *win) {

@@ -1,4 +1,4 @@
-/* gates_gui_lib — shared UTF-8 decoding and cell-width rules (RFC-0002 §3).
+/* gates_gui_lib - shared UTF-8 decoding and cell-width rules (RFC-0002 section 3).
  * The single source of truth used by every text backend and the edit core,
  * so cell counts cannot drift between them. Platform-free. */
 #include <gates/text.h>

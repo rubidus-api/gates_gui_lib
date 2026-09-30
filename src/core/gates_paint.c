@@ -1,6 +1,6 @@
-/* gates_gui_lib — tree -> draw list paint walk (RFC-0001 §20, Phase 2).
- * Widgets emit commands only; rendering happens in the renderer (§21).
- * All colors come from theme tokens (§30: no hard-coded RGB here). */
+/* gates_gui_lib - tree -> draw list paint walk (RFC-0001 section 20, Phase 2).
+ * Widgets emit commands only; rendering happens in the renderer (section 21).
+ * All colors come from theme tokens (section 30: no hard-coded RGB here). */
 #include <gates/ui.h>
 #include <gates/widget.h>
 #include "gates_tree_internal.h"
@@ -331,7 +331,7 @@ static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
         break; /* app-drawn via the window overlay callback */
     }
 
-    /* Children: stack paints only the active page (§10); scroll clips its
+    /* Children: stack paints only the active page (section 10); scroll clips its
      * content to the viewport and draws a scrollbar; split draws its handle. */
     if (s->layout_kind == GATES_LAYOUT_STACK) {
         gates_u32 i = 0;

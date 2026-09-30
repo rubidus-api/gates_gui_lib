@@ -52,7 +52,7 @@ static void show_where(demo_t *d) {
 static void on_page(gates_tree_t *tree, const gates_event_t *ev, void *user) {
     demo_t *d = user;
     for (gates_u32 i = 0; i < PAGES; i++) {
-        if (ev->source.index == d->page_btn[i].index) {
+        if (gates_node_eq(ev->source, d->page_btn[i])) {
             (void)gates_layout_set_stack_active(tree, d->stack, i);
         }
     }

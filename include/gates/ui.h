@@ -1,4 +1,4 @@
-/* gates_gui_lib — tree paint walk and pointer routing (Phase 2).
+/* gates_gui_lib - tree paint walk and pointer routing (Phase 2).
  * The window drives these each frame: layout (gates/layout.h) -> paint walk
  * emits theme-token draw commands -> renderer; pointer events route to the
  * deepest hit widget (hover/press/click/toggle). Platform-free. */
@@ -18,7 +18,7 @@
                                            const gates_theme_t *theme,
                                            const gates_text_backend_t *text);
 
-/* Deepest visible node whose layout rect contains p (§9 non-overlap makes
+/* Deepest visible node whose layout rect contains p (section 9 non-overlap makes
  * this unambiguous in normal flow; stack considers the active page only). */
 gates_node_t gates_hit_test(const gates_tree_t *tree, gates_point_t p);
 

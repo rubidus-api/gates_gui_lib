@@ -1,8 +1,8 @@
-/* gates_gui_lib — intrinsic layout (RFC-0001 §11, Phase 2 set):
+/* gates_gui_lib - intrinsic layout (RFC-0001 section 11, Phase 2 set):
  * absolute, row, column, stack; padding/gap/grow/align; measure/arrange.
  * Split and scroll are staged next (see plan-0003). Platform-free.
  *
- * Invariant (§9, §30): after arrange, sibling layout rects in normal-flow
+ * Invariant (section 9, section 30): after arrange, sibling layout rects in normal-flow
  * containers (row/column) do not overlap. Stack children intentionally share
  * their parent's content rect; only the active child is painted/hit. */
 #ifndef GATES_LAYOUT_H
@@ -47,9 +47,9 @@ typedef enum gates_layout_t {
  * GATES_FORM_COLUMN_GAP and keep their preferred width unless their align is
  * STRETCH (then they take the rest). When the form is narrower than the label
  * column + gap + GATES_FORM_MIN_EDITOR_CELLS average character widths, every label goes above its
- * editor (GATES_FORM_STACK_GAP between). The measured size is the side-by-side
- * one; stacked rows are taller, so give a form that may become narrow room to
- * grow (for example a scroll container). Hidden rows take no space. */
+ * editor (GATES_FORM_STACK_GAP between), and the form measures the stacked
+ * rows' height (the layout runs a second pass when stacking changes, as for
+ * WRAP). Hidden rows take no space. */
 #define GATES_FORM_COLUMN_GAP        8
 #define GATES_FORM_STACK_GAP         2
 #define GATES_FORM_MIN_EDITOR_CELLS 12
@@ -128,7 +128,7 @@ gates_size_t gates_layout_scroll_content(const gates_tree_t *tree, gates_node_t 
 gates_rect_t gates_node_layout_rect(const gates_tree_t *tree, gates_node_t node);
 gates_size_t gates_node_preferred_size(const gates_tree_t *tree, gates_node_t node);
 
-/* §30 checker: recursively verifies that sibling layout rects in row/column
+/* section 30 checker: recursively verifies that sibling layout rects in row/column
  * containers do not overlap. Used by tests and debug builds. */
 bool gates_layout_validate(const gates_tree_t *tree, gates_node_t node);
 

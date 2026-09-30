@@ -1050,6 +1050,13 @@ static gates_err_t build(app_t *a) {
     return GATES_OK;
 }
 
+/* Input the tree could not complete (usually out of memory): say so (RFC-0003 section 13). */
+static void on_input_error(gates_window_t *win, gates_err_t err, void *user) {
+    (void)win;
+    app_t *a = user;
+    (void)gates_widget_set_text(a->tree, a->status, cs(err == PROVEN_ERR_NOMEM ? "Out of memory: the last action was not done" : "The last action failed"));
+}
+
 static bool on_close(gates_window_t *win, void *user) {
     (void)win;
     save_state(user);
@@ -1059,7 +1066,7 @@ static bool on_close(gates_window_t *win, void *user) {
 int main(void) {
     static app_t a;
     if (!gates_is_ok(gates_app_create(&(gates_app_desc_t){0}, &a.app))) return 1;
-    gates_window_callbacks_t cb = { .on_close = on_close, .user_data = &a };
+    gates_window_callbacks_t cb = { .on_close = on_close, .user_data = &a, .on_input_error = on_input_error };
     gates_window_desc_t desc = { .title = cs("gates gallery"), .size = { 720, 520 } };
     if (!gates_is_ok(gates_window_create(a.app, &desc, &cb, &a.win))) {
         gates_app_destroy(a.app);

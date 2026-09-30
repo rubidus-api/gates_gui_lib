@@ -1,4 +1,4 @@
-/* T013: split layout — ratio sizing, handle geometry, drag, clamping
+/* T013: split layout - ratio sizing, handle geometry, drag, clamping
  * (docs/tests/cases/T013-split.md). */
 #include <gates/ui.h>
 #include <gates/widget.h>

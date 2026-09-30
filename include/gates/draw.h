@@ -1,7 +1,7 @@
-/* gates_gui_lib — draw command list (RFC-0001 §20, Phase 1 subset).
+/* gates_gui_lib - draw command list (RFC-0001 section 20, Phase 1 subset).
  *
  * Widgets never call a renderer directly; they emit commands into a
- * gates_draw_list_t, which a renderer consumes (§21). Phase 1 primitives:
+ * gates_draw_list_t, which a renderer consumes (section 21). Phase 1 primitives:
  * solid rect, border rect, line, clip push/pop; TEXT (RFC-0002) and IMAGE
  * (plan-0020: an image of gates/image.h drawn scaled into its rect). Platform-free. */
 #ifndef GATES_DRAW_H
@@ -20,7 +20,7 @@ typedef struct gates_color_t {
 #define GATES_RGBA(rr, gg, bb, aa) ((gates_color_t){ (rr), (gg), (bb), (aa) })
 #define GATES_RGB(rr, gg, bb)      GATES_RGBA((rr), (gg), (bb), 255)
 
-/* Order per RFC-0001 §20. */
+/* Order per RFC-0001 section 20. */
 typedef enum gates_draw_kind_t {
     GATES_DRAW_RECT,
     GATES_DRAW_BORDER,
@@ -45,7 +45,7 @@ typedef struct gates_draw_cmd_t {
 } gates_draw_cmd_t;
 
 /* Growable command list; treat the fields as read-only outside gates code.
- * TEXT bytes are COPIED into a frame-scoped arena (RFC-0002 §4) — no
+ * TEXT bytes are COPIED into a frame-scoped arena (RFC-0002 section 4) - no
  * lifetime coupling to the caller's string; reset() reclaims. */
 typedef struct gates_draw_list_t {
     gates_allocator_t alloc;

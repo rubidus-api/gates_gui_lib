@@ -54,7 +54,7 @@ static void on_button(gates_tree_t *tree, const gates_event_t *ev, void *user) {
     if (ev->kind != GATES_EVENT_ACTIVATED) {
         return;
     }
-    if (ev->source.index == d->count_btn.index) {
+    if (gates_node_eq(ev->source, d->count_btn)) {
         d->count++;
     } else {
         bool off = !gates_widget_disabled(tree, d->count_btn);

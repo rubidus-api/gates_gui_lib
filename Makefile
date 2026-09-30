@@ -1,4 +1,4 @@
-# gates_gui_lib — host build (Phase 0: core only, no platform backends).
+# gates_gui_lib - host build (Phase 0: core only, no platform backends).
 # Usage: make test          (gcc default)
 #        make test CC=clang
 # Test binaries land in build/tests/ (never in tests/).
@@ -15,7 +15,7 @@ BUILD   := build
 OBJ     := $(BUILD)/obj
 TESTBIN := $(BUILD)/tests
 
-# Compiled proven subset — keep minimal; update vendor/proven/VENDORED.md when it changes.
+# Compiled proven subset - keep minimal; update vendor/proven/VENDORED.md when it changes.
 PROVEN_SRC := \
   vendor/proven/src/proven/memory.c \
   vendor/proven/src/proven/panic.c \
@@ -124,7 +124,7 @@ check-core:
 clean:
 	rm -rf $(OBJ) $(TESTBIN) $(BUILD)/win $(BUILD)/lib $(BUILD)/objlib
 
-# ── Win32 lane (mingw-w64 cross build; run where mingw-w64 is installed) ──────
+# -- Win32 lane (mingw-w64 cross build; run where mingw-w64 is installed) ------
 CC_WIN    = x86_64-w64-mingw32-gcc
 WINFLAGS  = -std=c23 -Wall -Wextra -Werror -O2
 WIN_BUILD = $(BUILD)/win
@@ -159,7 +159,7 @@ win: $(WIN_BUILD)/hello_window.exe $(WIN_BUILD)/widgets_demo.exe \
      $(addprefix $(WIN_BUILD)/,$(addsuffix .exe,$(CONTROL_EXAMPLES)))
 
 # Console app (no -mwindows): prints the RFC-0002 8 checklist result.
-# ── Libraries and the package (plan-0015) ─────────────────────────────────────
+# -- Libraries and the package (plan-0015) -------------------------------------
 # gates and proven are separate static libraries (owner decision 2026-09-27):
 #   host:    libgates_core.a (platform-free core) + libproven.a
 #   Windows: libgates.a (core + Win32 backend)    + libproven.a

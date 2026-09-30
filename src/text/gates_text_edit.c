@@ -1,4 +1,4 @@
-/* gates_gui_lib — UTF-8 text edit core (RFC-0001 §16). Platform-free.
+/* gates_gui_lib - UTF-8 text edit core (RFC-0001 section 16). Platform-free.
  * Every mutation keeps the buffer valid UTF-8 and the caret/anchor on
  * codepoint boundaries; growth is failure-atomic. */
 #include <gates/text_edit.h>

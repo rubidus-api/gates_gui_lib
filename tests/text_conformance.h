@@ -71,7 +71,7 @@ static gates_rect_t gtc_ink_bounds(void) {
     return (gates_rect_t){ x0, y0, x1 - x0 + 1, y1 - y0 + 1 };
 }
 
-/* Runs the whole RFC-0002 §8 checklist against `be`. */
+/* Runs the whole RFC-0002 section 8 checklist against `be`. */
 static gates_i32 gtc_width(const gates_text_backend_t *be, gates_font_t f, const char *s) {
     return gates_text_width(be, f, gtc_str(s));
 }

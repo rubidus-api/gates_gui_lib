@@ -147,6 +147,15 @@ static gates_err_t m_set_cell(void *u, gates_item_id_t id, gates_column_id_t col
 
 /* -- the program's side: change, then tell the view ------------------------------------- */
 
+static void set_status(app_t *a, const char *extra);
+/* Input the tree could not complete (usually out of memory): say so (RFC-0003 section 13). */
+static void on_input_error(gates_window_t *win, gates_err_t err, void *user) {
+    (void)win;
+    set_status(user, err == PROVEN_ERR_NOMEM ? "(out of memory: the last action was not done)" : "(the last action failed)");
+}
+
+
+
 static void set_status(app_t *a, const char *extra) {
     char buf[160];
     int n = snprintf(buf, sizeof buf, "%llu records%s%s", (unsigned long long)a->count,
@@ -330,7 +339,8 @@ int main(void) {
     }
     gates_window_desc_t desc = { .title = GATES_STR("gates: inspector"), .size = { 560, 560 } };
     gates_window_t *win = nullptr;
-    if (!gates_is_ok(gates_window_create(a.app, &desc, &(gates_window_callbacks_t){0}, &win))) {
+    gates_window_callbacks_t cb = { .user_data = &a, .on_input_error = on_input_error };
+    if (!gates_is_ok(gates_window_create(a.app, &desc, &cb, &win))) {
         gates_app_destroy(a.app);
         free(a.recs);
         return 1;

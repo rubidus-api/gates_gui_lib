@@ -1,6 +1,6 @@
-/* gates_gui_lib — window/surface boundary (RFC-0001 §3 gates_surface).
- * Opaque, platform-free header. A window owns its retained tree (§7); in
- * Phase 1 painting is driven by the paint callback emitting draw commands —
+/* gates_gui_lib - window/surface boundary (RFC-0001 section 3 gates_surface).
+ * Opaque, platform-free header. A window owns its retained tree (section 7); in
+ * Phase 1 painting is driven by the paint callback emitting draw commands -
  * widgets take over draw-list generation in Phase 2. */
 #ifndef GATES_WINDOW_H
 #define GATES_WINDOW_H
@@ -28,6 +28,11 @@ typedef struct gates_window_callbacks_t {
     /* Return false to keep the window open. Absent -> close allowed. */
     bool (*on_close)(gates_window_t *win, void *user);
     void *user_data;
+    /* 0.8.0: an input-path failure (gates_input_take_error, gates/ui.h), taken
+     * after each input turn - an edit or activation skipped for want of memory,
+     * a clipboard that would not answer. Absent: the error waits for the
+     * program to take it. Show it; the tree is still consistent. */
+    void (*on_input_error)(gates_window_t *win, gates_err_t err, void *user);
 } gates_window_callbacks_t;
 
 [[nodiscard]] gates_err_t gates_window_create(gates_app_t *app,
@@ -36,7 +41,7 @@ typedef struct gates_window_callbacks_t {
                                               gates_window_t **out_window);
 void gates_window_destroy(gates_window_t *win);
 
-/* The window's retained node tree (owned by the window; §7). */
+/* The window's retained node tree (owned by the window; section 7). */
 gates_tree_t *gates_window_tree(gates_window_t *win);
 
 /* Theme (plan-0013). SYSTEM (the default) follows the desktop: high contrast

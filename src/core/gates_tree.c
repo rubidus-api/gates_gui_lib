@@ -1,6 +1,6 @@
-/* gates_gui_lib — node pool + retained tree core (RFC-0001 §6-§8).
+/* gates_gui_lib - node pool + retained tree core (RFC-0001 sections 6-8).
  *
- * Invariants maintained here (RFC-0001 §30):
+ * Invariants maintained here (RFC-0001 section 30):
  *   - live node links are mutually consistent; no cycles; root has no parent;
  *   - a dead slot is never linked in the tree;
  *   - a stale handle cannot access a new live node (generation check);
@@ -288,7 +288,7 @@ void gates_i_discard_detached(gates_tree_t *tree, gates_node_t node) {
     discard_subtree(tree, node.index);
 }
 
-/* -- link helpers (O(1), RFC-0001 §6.3) ------------------------------------- */
+/* -- link helpers (O(1), RFC-0001 section 6.3) ------------------------------------- */
 
 static void link_append(gates_tree_t *tree, gates_u32 parent, gates_u32 child) {
     gates_i_access_log(tree, GATES_ACCESS_STRUCTURE, parent, 0);

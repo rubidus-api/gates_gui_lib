@@ -96,6 +96,25 @@ static void test_form_layout(void) {
     r1 = gates_node_layout_rect(t, r.row[1]);
     GT_ASSERT(r1.y == r0.y + r0.h + 6);
     GT_ASSERT(gates_layout_validate(t, gates_tree_root(t)));
+    /* Stacked, the form is as tall as its stacked rows (0.8.0): what follows
+     * it starts below the last row, not over it. */
+    gates_i32 lh = gates_node_preferred_size(t, r.label[0]).h, eh = gates_node_preferred_size(t, r.editor[0]).h;
+    gates_i32 stacked_h = 3 * (lh + GATES_FORM_STACK_GAP + eh) + 2 * 6;
+    GT_ASSERT(gates_node_preferred_size(t, r.form).h == stacked_h);
+    GT_ASSERT(gates_node_layout_rect(t, r.form).h == stacked_h);
+    gates_rect_t last = gates_node_layout_rect(t, r.editor[2]);
+    GT_ASSERT(last.y + last.h == gates_node_layout_rect(t, r.form).y + stacked_h);
+    gates_node_t after;
+    GT_ASSERT_OK(gates_label_create(t, gates_tree_root(t), GATES_STR("after"), &after));
+    layout_w(t, threshold - 1);
+    GT_ASSERT(gates_node_layout_rect(t, after).y >= last.y + last.h);
+    layout_w(t, threshold - 5); /* stacked at both widths: no second pass needed, same height */
+    GT_ASSERT(gates_node_layout_rect(t, r.form).h == stacked_h);
+    layout_w(t, VW); /* wide again: side by side, the side-by-side height */
+    GT_ASSERT(gates_node_layout_rect(t, r.form).h == pref.h);
+    GT_ASSERT(gates_node_layout_rect(t, after).y < last.y);
+    GT_ASSERT_OK(gates_node_destroy(t, after));
+    (void)gates_tree_flush_destroys(t);
 
     /* A hidden row takes no space; the next row moves up. */
     layout_w(t, VW);

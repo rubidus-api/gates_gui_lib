@@ -1,4 +1,4 @@
-/* hello_window — first pixels for gates_gui_lib (RFC-0001 §28 Phase 1).
+/* hello_window - first pixels for gates_gui_lib (RFC-0001 section 28 Phase 1).
  *
  * Demonstrates: window create, message pump, draw list -> software renderer ->
  * GDI present, unified pointer input, keyboard.
