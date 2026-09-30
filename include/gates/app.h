@@ -18,6 +18,7 @@ typedef struct gates_app_desc_t {
     gates_usize_t post_max_bytes;
 } gates_app_desc_t;
 
+/* The application: one per process, made and used on the UI thread. */
 [[nodiscard]] gates_err_t gates_app_create(const gates_app_desc_t *desc,
                                            gates_app_t **out_app);
 void gates_app_destroy(gates_app_t *app);

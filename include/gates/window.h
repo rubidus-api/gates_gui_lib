@@ -34,6 +34,8 @@ typedef struct gates_window_callbacks_t {
     void (*on_input_error)(gates_window_t *win, gates_err_t err, void *user);
 } gates_window_callbacks_t;
 
+/* A top-level window with its tree; shown when gates_app_run starts (or at
+ * once while it runs). Destroying it cancels its running jobs and waits. */
 [[nodiscard]] gates_err_t gates_window_create(gates_app_t *app,
                                               const gates_window_desc_t *desc,
                                               const gates_window_callbacks_t *callbacks,
@@ -133,6 +135,8 @@ typedef enum gates_answer_t {
     GATES_ANSWER_YES,
     GATES_ANSWER_NO,
 } gates_answer_t;
+/* A message box, modal to the window: the button pressed, or
+ * GATES_ANSWER_NONE when it could not be shown. */
 gates_answer_t gates_window_message(gates_window_t *win, gates_str_t title, gates_str_t text,
                                     gates_message_buttons_t buttons, gates_message_icon_t icon);
 

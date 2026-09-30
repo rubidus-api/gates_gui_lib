@@ -63,6 +63,7 @@ typedef struct gates_node_desc_t {
 /* Frees every slot and the tree itself. Handles become meaningless. */
 void gates_tree_destroy(gates_tree_t *tree);
 
+/* The root node: everything in the window hangs from it; never destroyed. */
 gates_node_t gates_tree_root(const gates_tree_t *tree);
 
 /* True only for a live, non-destroy-pending node whose generation matches
@@ -105,6 +106,8 @@ bool gates_node_is_valid(const gates_tree_t *tree, gates_node_t node);
 
 /* -- introspection -------------------------------------------------------- */
 
+/* Links, counts, kind and the desc's user_data; GATES_NODE_NULL, 0,
+ * GATES_NODE_CUSTOM or null for a node that is gone. */
 gates_node_t gates_node_parent(const gates_tree_t *tree, gates_node_t node);
 gates_node_t gates_node_first_child(const gates_tree_t *tree, gates_node_t node);
 gates_node_t gates_node_last_child(const gates_tree_t *tree, gates_node_t node);
@@ -149,19 +152,22 @@ gates_u32 gates_tree_live_count(const gates_tree_t *tree);     /* valid nodes */
 gates_u32 gates_tree_pending_count(const gates_tree_t *tree);  /* awaiting flush */
 gates_u32 gates_tree_capacity(const gates_tree_t *tree);       /* slot array size */
 
-/* -- dirty tracking (v1: any layout-dirty relayouts from root; any
- *    paint-dirty repaints the window) ------------------------------------- */
+/* -- dirty tracking ------------------------------------------------------- */
 
 #define GATES_TREE_DIRTY_LAYOUT 0x1u
 #define GATES_TREE_DIRTY_PAINT  0x2u
 
+/* GATES_TREE_DIRTY_* bits set since they were last cleared (a layout run
+ * clears the layout bit). Any layout bit relayouts from the root; any paint
+ * bit repaints the window. */
+gates_u32 gates_tree_dirty(const gates_tree_t *tree);
+void gates_tree_clear_dirty(gates_tree_t *tree, gates_u32 bits);
+
 /* -- keyboard focus (traversal and scopes: gates/ui.h, gates/overlay.h) -------- */
 
+/* The focused node, or GATES_NODE_NULL. */
 gates_node_t gates_tree_focus(const gates_tree_t *tree);
 /* GATES_NODE_NULL clears focus. Marks paint dirty when the focus changes. */
 void gates_tree_set_focus(gates_tree_t *tree, gates_node_t node);
-
-gates_u32 gates_tree_dirty(const gates_tree_t *tree);
-void gates_tree_clear_dirty(gates_tree_t *tree, gates_u32 bits);
 
 #endif /* GATES_TREE_H */

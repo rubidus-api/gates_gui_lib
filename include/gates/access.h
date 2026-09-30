@@ -190,6 +190,9 @@ gates_u32 gates_access_cell_at(gates_tree_t *tree, gates_node_t node, gates_poin
 [[nodiscard]] gates_err_t gates_access_cell_set_value(gates_tree_t *tree, gates_node_t node, gates_u64 item,
                                                       gates_u32 cell, gates_str_t text);
 
+/* The element tree, walked like the node tree: an item's parent is its node,
+ * a node's children are its shown children then its items; overlays come
+ * after the root's children. A ref with no answer has node GATES_NODE_NULL. */
 gates_access_ref_t gates_access_parent(gates_tree_t *tree, gates_access_ref_t ref);
 gates_access_ref_t gates_access_first_child(gates_tree_t *tree, gates_access_ref_t ref);
 gates_access_ref_t gates_access_last_child(gates_tree_t *tree, gates_access_ref_t ref);
@@ -216,8 +219,9 @@ gates_access_ref_t gates_access_focus_ref(gates_tree_t *tree);
 [[nodiscard]] gates_err_t gates_node_set_live(gates_tree_t *tree, gates_node_t node,
                                               gates_live_t live);
 
-/* -- actions (refused as input would be: INVALID_STATE disabled/inert,
- *    PERMISSION read-only, INVALID_ARG not accepted by the node) -------------- */
+/* -- actions ------------------------------------------------------------------ */
+/* Refused as input would be: INVALID_STATE disabled/inert, PERMISSION
+ * read-only, INVALID_ARG not accepted by the node. */
 [[nodiscard]] gates_err_t gates_access_invoke(gates_tree_t *tree, gates_node_t node, gates_u64 item);
 [[nodiscard]] gates_err_t gates_access_toggle(gates_tree_t *tree, gates_node_t node);
 [[nodiscard]] gates_err_t gates_access_select(gates_tree_t *tree, gates_node_t node, gates_u64 item);
@@ -298,6 +302,8 @@ typedef struct gates_access_change_t {
     gates_u64 item;
 } gates_access_change_t;
 
+/* Change recording (for a platform adapter): off by default; turning it off
+ * drops what was recorded. */
 void gates_access_enable(gates_tree_t *tree, bool enable);
 bool gates_access_enabled(const gates_tree_t *tree);
 /* Moves up to `cap` recorded changes into out (oldest first); returns how

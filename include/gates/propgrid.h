@@ -27,6 +27,7 @@
 
 typedef gates_u32 gates_prop_id_t;
 
+/* An empty property grid; add properties below. */
 [[nodiscard]] gates_err_t gates_propgrid_create(gates_tree_t *tree, gates_node_t parent, gates_node_t *out_grid);
 
 /* Adds a property at the end of its category (made, as a collapsible group

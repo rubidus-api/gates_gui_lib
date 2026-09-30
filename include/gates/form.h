@@ -36,6 +36,7 @@ typedef struct gates_field_desc_t {
     gates_u32 selected_id;
 } gates_field_desc_t;
 
+/* A form node: the rows added below line up as label | editor. */
 [[nodiscard]] gates_err_t gates_form_create(gates_tree_t *tree, gates_node_t parent,
                                             gates_node_t *out_form);
 

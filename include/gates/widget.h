@@ -194,10 +194,12 @@ bool gates_group_expanded(const gates_tree_t *tree, gates_node_t group);
                                                 gates_str_t text);
 gates_str_t gates_widget_text(const gates_tree_t *tree, gates_node_t node);
 
+/* A disabled widget is drawn dimmed and takes no input or focus. */
 [[nodiscard]] gates_err_t gates_widget_set_disabled(gates_tree_t *tree, gates_node_t node,
                                                     bool disabled);
 bool gates_widget_disabled(const gates_tree_t *tree, gates_node_t node);
 
+/* Silent: no on_toggle for the program's own change. */
 [[nodiscard]] gates_err_t gates_checkbox_set_checked(gates_tree_t *tree, gates_node_t node,
                                                      bool checked);
 bool gates_checkbox_checked(const gates_tree_t *tree, gates_node_t node);

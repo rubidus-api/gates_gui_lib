@@ -49,6 +49,7 @@ typedef struct gates_target_t {
     gates_node_t node;
 } gates_target_t;
 
+/* The tree's serial number, and a target for a node of it (UI thread). */
 gates_u64 gates_tree_serial(const gates_tree_t *tree);
 gates_target_t gates_target(const gates_tree_t *tree, gates_node_t node);
 

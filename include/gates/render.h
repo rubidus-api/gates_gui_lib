@@ -41,6 +41,7 @@ static inline gates_u32 gates_pixel_pack(gates_color_t c) {
          | ((gates_u32)c.a << 24);
 }
 
+/* The inverse of gates_pixel_pack. */
 static inline gates_color_t gates_pixel_unpack(gates_u32 px) {
     return (gates_color_t){ .b = (gates_u8)(px & 0xff),
                             .g = (gates_u8)((px >> 8) & 0xff),

@@ -55,6 +55,7 @@ typedef struct gates_editor_desc_t {
     bool auto_indent;            /* Enter repeats the line's leading blanks */
 } gates_editor_desc_t;
 
+/* A multi-line editor set up by `desc` (a tab_width of 0 counts as 4). */
 [[nodiscard]] gates_err_t gates_editor_create(gates_tree_t *tree, gates_node_t parent,
                                               const gates_editor_desc_t *desc, gates_node_t *out_editor);
 
@@ -122,6 +123,8 @@ bool gates_editor_find(gates_tree_t *tree, gates_node_t editor, gates_str_t need
 [[nodiscard]] gates_err_t gates_editor_set_wrap(gates_tree_t *tree, gates_node_t editor, bool wrap);
 [[nodiscard]] gates_err_t gates_editor_set_line_numbers(gates_tree_t *tree, gates_node_t editor, bool on);
 
+/* Read-only: the text can be selected and copied, not changed by a person;
+ * the program still changes it. */
 [[nodiscard]] gates_err_t gates_editor_set_read_only(gates_tree_t *tree, gates_node_t editor, bool read_only);
 bool gates_editor_read_only(const gates_tree_t *tree, gates_node_t editor);
 

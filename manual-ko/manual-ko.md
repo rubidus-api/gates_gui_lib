@@ -21,6 +21,7 @@
 - [11장 - 응용 프로그램 틀](manual-11-application-frame-ko.md): 니모닉, 메뉴 막대, 키맵, 도구 막대, 상태 줄, 툴팁, 탭, 상태 저장
 - [12장 - 숫자, 묶음, 배치](manual-12-numbers-layouts-ko.md): 버블링, 미룬 호출, 스핀 상자, 슬라이더, 그룹 상자, 격자와 줄바꿈 배치
 - [13장 - 이미지와 네이티브 대화 상자](manual-13-images-dialogs-ko.md): 이미지, 아이콘, 파일·폴더·색·메시지 대화 상자
+- [14장 - API 참조](manual-14-api-reference-ko.md): 공개 함수 전부와 헤더의 설명(영어판으로 안내)
 
 ## 읽는 법
 

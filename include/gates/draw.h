@@ -67,6 +67,9 @@ void gates_draw_list_deinit(gates_draw_list_t *dl);
 /* Clears commands and the clip depth; keeps the allocation for reuse. */
 void gates_draw_list_reset(gates_draw_list_t *dl);
 
+/* Commands (logical units): a filled rect, a border `thickness` wide inside
+ * rect, a line (endpoints included), and a clip - pushed clips intersect,
+ * and a pop without a push is INVALID_STATE. */
 [[nodiscard]] gates_err_t gates_draw_rect(gates_draw_list_t *dl, gates_rect_t rect,
                                           gates_color_t color);
 [[nodiscard]] gates_err_t gates_draw_border(gates_draw_list_t *dl, gates_rect_t rect,
@@ -89,6 +92,7 @@ void gates_draw_list_reset(gates_draw_list_t *dl);
 /* Borrowed view of a TEXT command's bytes (valid until reset/deinit). */
 gates_str_t gates_draw_cmd_text(const gates_draw_list_t *dl, const gates_draw_cmd_t *cmd);
 
+/* The number of commands. */
 static inline gates_u32 gates_draw_list_len(const gates_draw_list_t *dl) {
     return dl == nullptr ? 0 : dl->len;
 }

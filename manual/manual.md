@@ -20,6 +20,7 @@ settings panels, inspectors, log viewers, build tools. Every chapter is one file
 - [Chapter 11 - The application frame](manual-11-application-frame.md): mnemonics, the menu bar, the keymap, toolbar, status bar, tooltips, tabs, saved state
 - [Chapter 12 - Numbers, groups and layouts](manual-12-numbers-layouts.md): bubbling, deferred calls, spin box, slider, group box, grid and wrap layouts
 - [Chapter 13 - Images and native dialogs](manual-13-images-dialogs.md): images, icons, file/folder/colour/message dialogs
+- [Chapter 14 - API reference](manual-14-api-reference.md): every public function with its header's comment, header by header (made from the headers)
 
 ## How to read it
 

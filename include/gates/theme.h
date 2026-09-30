@@ -57,13 +57,14 @@ typedef struct gates_system_colors_t {
  * the classic black high-contrast set). Borders and cues are wider. */
 void gates_theme_high_contrast(const gates_system_colors_t *sys, gates_theme_t *out);
 
+/* Readers with defaults: a null theme or 0 width gives 2; an unknown token
+ * gives a loud magenta. */
 static inline gates_i32 gates_theme_focus_width(const gates_theme_t *theme) {
     return theme != nullptr && theme->focus_width > 0 ? theme->focus_width : 2;
 }
 static inline gates_i32 gates_theme_error_width(const gates_theme_t *theme) {
     return theme != nullptr && theme->error_width > 0 ? theme->error_width : 2;
 }
-
 static inline gates_color_t gates_theme_color(const gates_theme_t *theme,
                                               gates_color_token_t token) {
     if (theme == nullptr || token >= GATES_COLOR_TOKEN_COUNT) {

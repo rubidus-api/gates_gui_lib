@@ -32,6 +32,7 @@ typedef struct gates_text_buffer gates_text_buffer_t;
 [[nodiscard]] gates_err_t gates_text_buffer_create(gates_allocator_t alloc, gates_text_buffer_t **out);
 void gates_text_buffer_destroy(gates_text_buffer_t *b);
 
+/* Bytes of text. */
 gates_u32 gates_text_buffer_length(const gates_text_buffer_t *b);
 /* Replaces [begin, end) with text (copied). INVALID_ARG for a bad range,
  * OUT_OF_BOUNDS past GATES_TEXT_BUFFER_MAX, NOMEM; on failure nothing changes.

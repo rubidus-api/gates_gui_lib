@@ -32,16 +32,20 @@ typedef enum gates_caret_move_t {
     GATES_CARET_END,
 } gates_caret_move_t;
 
+/* `alloc` {0} = the heap; `initial` is copied, the caret after it. */
 [[nodiscard]] gates_err_t gates_text_edit_init(gates_text_edit_t *ed, gates_allocator_t alloc,
                                                gates_str_t initial);
 void gates_text_edit_deinit(gates_text_edit_t *ed);
 
+/* The committed text (borrowed until the next change), the caret, and the
+ * selection [begin, end) - empty when the anchor is at the caret. */
 gates_str_t gates_text_edit_text(const gates_text_edit_t *ed);
 gates_u32 gates_text_edit_caret(const gates_text_edit_t *ed);
 bool gates_text_edit_has_selection(const gates_text_edit_t *ed);
 gates_u32 gates_text_edit_sel_begin(const gates_text_edit_t *ed);
 gates_u32 gates_text_edit_sel_end(const gates_text_edit_t *ed);
 
+/* Replaces all text (copied); caret and anchor at the end. */
 [[nodiscard]] gates_err_t gates_text_edit_set_text(gates_text_edit_t *ed, gates_str_t text);
 /* Ensures room for `total_bytes` of committed text, so a following insert up
  * to that size cannot fail. Nothing else changes. */
@@ -52,6 +56,8 @@ gates_u32 gates_text_edit_sel_end(const gates_text_edit_t *ed);
 [[nodiscard]] gates_err_t gates_text_edit_backspace(gates_text_edit_t *ed);
 [[nodiscard]] gates_err_t gates_text_edit_delete(gates_text_edit_t *ed);
 
+/* Left/Right by a code point, Home/End to the ends; `extend` keeps the
+ * anchor. An unextended Left/Right with a selection collapses it to that edge. */
 void gates_text_edit_move(gates_text_edit_t *ed, gates_caret_move_t how, bool extend);
 void gates_text_edit_select_all(gates_text_edit_t *ed);
 /* Clamped to a codepoint boundary. */

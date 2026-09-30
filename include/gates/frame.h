@@ -97,6 +97,7 @@ gates_i32 gates_menubar_highlighted(const gates_tree_t *tree, gates_node_t bar);
  * out and a ">>" button at the end lists their commands in a menu. Every
  * button's tooltip is its command's label and shortcut. */
 
+/* A toolbar in `parent` whose buttons run commands of `scope`. */
 [[nodiscard]] gates_err_t gates_toolbar_create(gates_tree_t *tree, gates_node_t parent,
                                                gates_node_t scope, gates_node_t *out_bar);
 /* Adds a button for command `id` (0 = a separator). */
@@ -114,6 +115,7 @@ gates_u32 gates_toolbar_shown(const gates_tree_t *tree, gates_node_t bar);
  * are not announced unless the program makes one a live region
  * (gates_node_set_live), so a clock does not chatter. */
 
+/* A status bar in `parent`; add segments with gates_statusbar_add. */
 [[nodiscard]] gates_err_t gates_statusbar_create(gates_tree_t *tree, gates_node_t parent,
                                                  gates_node_t *out_bar);
 /* Adds a segment (a label, text copied). grow > 0 takes a share of the spare
@@ -165,6 +167,7 @@ bool gates_tooltip_shown(const gates_tree_t *tree, gates_node_t *node, gates_u64
  * tab (the selected one checked; choosing one switches). Assistive technology
  * sees ">>" as a "More tabs" item after the titles. */
 
+/* An empty tabs node; add tabs with gates_tabs_add. */
 [[nodiscard]] gates_err_t gates_tabs_create(gates_tree_t *tree, gates_node_t parent,
                                             gates_node_t *out_tabs);
 /* Adds a tab with a title (copied, mnemonic markup) and returns its page. */

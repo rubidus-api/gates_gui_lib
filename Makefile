@@ -258,11 +258,15 @@ bench: lib-host
 	$(BUILD)/bench/bench_core $(BENCH_ITERS)
 
 # the manual. manual-sync copies every example file into the blocks that print it;
-# manual-check fails when a block, the Korean edition or an example build disagrees.
+# manual-check fails when a block, the Korean edition or an example build disagrees, when a
+# public function has no comment, or when the API reference (chapter 14) is not what the
+# headers make (sh tests/api_reference.sh write regenerates it).
 manual-sync:
 	sh tests/manual_check.sh sync
+	sh tests/api_reference.sh write
 
 manual-check: dist
+	sh tests/api_reference.sh check
 	CC=$(CC) CC_WIN=$(CC_WIN) sh tests/manual_check.sh check
 
 # headers, version, symbols, package layout, a consumer built from the package alone.

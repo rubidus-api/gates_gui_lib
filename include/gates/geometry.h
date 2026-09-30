@@ -29,10 +29,12 @@ typedef struct gates_vec2_t {
     float y;
 } gates_vec2_t;
 
+/* No area (w or h <= 0). */
 static inline bool gates_rect_is_empty(gates_rect_t r) {
     return r.w <= 0 || r.h <= 0;
 }
 
+/* The point is inside: left and top edges in, right and bottom out. */
 static inline bool gates_rect_contains(gates_rect_t r, gates_point_t p) {
     return p.x >= r.x && p.y >= r.y && p.x < r.x + r.w && p.y < r.y + r.h;
 }
@@ -79,6 +81,8 @@ static inline gates_i32 gates_logical(gates_i32 px, gates_u32 dpi) {
     return (gates_i32)q;
 }
 
+/* A logical rect in device pixels: its edges scale, so adjacent rects stay
+ * adjacent at any dpi. */
 static inline gates_rect_t gates_rect_px(gates_rect_t r, gates_u32 dpi) {
     gates_i32 x0 = gates_px(r.x, dpi), y0 = gates_px(r.y, dpi);
     return (gates_rect_t){ x0, y0, gates_px(r.x + r.w, dpi) - x0, gates_px(r.y + r.h, dpi) - y0 };

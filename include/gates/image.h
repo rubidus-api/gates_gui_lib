@@ -78,6 +78,7 @@ gates_size_t gates_image_pick_size(const gates_tree_t *tree, gates_image_id_t id
 
 /* -- the image node and icons ------------------------------------------------------ */
 
+/* An image node showing `image` (0 = nothing yet); gates_image_node_set changes it. */
 [[nodiscard]] gates_err_t gates_image_create(gates_tree_t *tree, gates_node_t parent, gates_image_id_t image,
                                              gates_node_t *out_node);
 [[nodiscard]] gates_err_t gates_image_node_set(gates_tree_t *tree, gates_node_t node, gates_image_id_t image);

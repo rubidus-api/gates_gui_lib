@@ -24,6 +24,7 @@ typedef proven_size_t gates_usize_t;
 typedef proven_err_t gates_err_t;
 #define GATES_OK PROVEN_OK
 
+/* Every gates call returns GATES_OK or a proven error. */
 static inline bool gates_is_ok(gates_err_t err) {
     return err == PROVEN_OK;
 }
@@ -34,6 +35,7 @@ typedef proven_u8str_view_t gates_str_t;
 /* The same for static initializers (option tables): { .label = GATES_STR_INIT("x") }. */
 #define GATES_STR_INIT(lit) PROVEN_LIT_INIT(lit)
 
+/* gates_str_t is a proven string view: these convert for free. */
 static inline gates_str_t gates_str_from_proven(proven_u8str_view_t v) { return v; }
 static inline proven_u8str_view_t gates_str_to_proven(gates_str_t s) { return s; }
 
@@ -48,10 +50,11 @@ typedef struct gates_node_t {
 
 #define GATES_NODE_NULL ((gates_node_t){ UINT32_MAX, 0u })
 
+/* The null handle (not whether a node is alive: gates_node_is_valid), and
+ * handle equality (index and generation). */
 static inline bool gates_node_is_null(gates_node_t n) {
     return n.index == UINT32_MAX;
 }
-
 static inline bool gates_node_eq(gates_node_t a, gates_node_t b) {
     return a.index == b.index && a.generation == b.generation;
 }

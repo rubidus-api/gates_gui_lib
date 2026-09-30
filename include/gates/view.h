@@ -253,6 +253,7 @@ bool gates_selection_range(const gates_selection_t *sel, gates_u32 index, gates_
  * scroll position and repaints. */
 [[nodiscard]] gates_err_t gates_view_model_changed(gates_tree_t *tree, gates_node_t view);
 
+/* The selected row's id, or 0 (multi-select: the focus row). */
 gates_item_id_t gates_view_selected(const gates_tree_t *tree, gates_node_t view);
 /* Silent. 0 clears; an id the model does not have is INVALID_ARG. */
 [[nodiscard]] gates_err_t gates_view_set_selected(gates_tree_t *tree, gates_node_t view,
@@ -342,6 +343,7 @@ typedef struct gates_log_desc_t {
     gates_usize_t max_bytes;     /* text bytes kept; 0 -> 1 MiB */
 } gates_log_desc_t;
 
+/* A read-only view of lines that follows the end until the person scrolls away. */
 [[nodiscard]] gates_err_t gates_log_create(gates_tree_t *tree, gates_node_t parent,
                                            const gates_log_desc_t *desc, gates_node_t *out_log);
 /* Appends one line (copied; CR, LF and TAB become spaces). OUT_OF_BOUNDS for
