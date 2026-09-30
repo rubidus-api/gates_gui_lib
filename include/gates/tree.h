@@ -131,8 +131,18 @@ bool gates_node_hidden(const gates_tree_t *tree, gates_node_t node);
  * choose its own. Dialogs and menus are not under the root: they start from
  * GATES_FONT_UI unless set on them. INVALID_ARG for other values. */
 [[nodiscard]] gates_err_t gates_node_set_font(gates_tree_t *tree, gates_node_t node, gates_i32 font);
-/* The effective font: the node's own, else its nearest ancestor's, else GATES_FONT_UI. */
+/* The effective font: the node's own face, else its nearest ancestor's, else
+ * GATES_FONT_UI - at the effective size (gates_font_sized; 0.10.0). */
 gates_i32 gates_node_font(const gates_tree_t *tree, gates_node_t node);
+/* Size (0.10.0), in percent of the platform's text size: GATES_FONT_SIZE_MIN
+ * to _MAX (GATES_FONT_SIZE_SMALL, _LARGE, _HEADING are usual ones), or 0 to
+ * take the parent's. Inherited like the face, and independent of it: a MONO
+ * node under a HEADING panel is mono at 150 %. Everything the node measures
+ * and draws follows it (text, line heights, rows, carets). INVALID_ARG out of
+ * range. */
+[[nodiscard]] gates_err_t gates_node_set_font_size(gates_tree_t *tree, gates_node_t node, gates_u32 percent);
+/* The effective size in percent (100 when neither the node nor an ancestor sets one). */
+gates_u32 gates_node_font_size(const gates_tree_t *tree, gates_node_t node);
 
 /* Counters for tests and diagnostics. */
 gates_u32 gates_tree_live_count(const gates_tree_t *tree);     /* valid nodes */

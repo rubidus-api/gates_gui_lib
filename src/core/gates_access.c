@@ -765,7 +765,7 @@ static gates_err_t item_info(gates_tree_t *tree, gates_u32 idx, gates_u64 item, 
                       (o->disabled || !node_on ? GATES_ACCESS_DISABLED : 0u);
         out->actions = o->disabled || !node_on ? 0u : GATES_ACCESS_SELECT;
         if (s->kind == GATES_NODE_RADIO) {
-            gates_i32 rh = gates_i_radio_row_h(tree->line_height > 0 ? tree->line_height : 16);
+            gates_i32 rh = gates_i_radio_row_h(gates_i_text_line_h(tree, idx));
             out->bounds = (gates_rect_t){ s->layout_rect.x, s->layout_rect.y + row * rh, s->layout_rect.w, rh };
         } else {
             gates_i32 li = gates_i_choice_list_find(tree, idx);
@@ -1420,7 +1420,7 @@ static void audit_node(gates_tree_t *tree, gates_u32 idx, issues_t *is, collect_
         /* Pointer targets: the node, or each row of a radio group. */
         gates_rect_t r = s->layout_rect;
         gates_i32 h = r.h;
-        if (s->kind == GATES_NODE_RADIO) h = gates_i_radio_row_h(tree->line_height > 0 ? tree->line_height : 16);
+        if (s->kind == GATES_NODE_RADIO) h = gates_i_radio_row_h(gates_i_text_line_h(tree, node.index));
         if (!gates_rect_is_empty(r) && (r.w < GATES_ACCESS_MIN_TARGET || h < GATES_ACCESS_MIN_TARGET)) {
             issue(is, GATES_RULE_TARGET_SIZE, node, 0);
         }
@@ -1579,7 +1579,7 @@ bool gates_access_text_rect(gates_tree_t *tree, gates_node_t node, gates_u32 sta
     if (end > len) end = len;
     if (end < start) end = start;
     gates_rect_t inner = gates_i_textbox_inner(tree, node.index);
-    gates_i32 lh = tree->line_height > 0 ? tree->line_height : 16;
+    gates_i32 lh = gates_i_text_line_h(tree, node.index); /* as paint lays the line */
     gates_i32 font = gates_i_font(tree, node.index);
     gates_i32 x0 = inner.x + gates_i_box_x(tree->text_backend, font, st, start) - st->view_x;
     gates_i32 x1 = inner.x + gates_i_box_x(tree->text_backend, font, st, end) - st->view_x;

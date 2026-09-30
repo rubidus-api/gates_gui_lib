@@ -226,11 +226,15 @@ static void on_command(gates_tree_t *tree, gates_command_id_t id, void *user) {
 }
 
 static gates_err_t open_about(app_t *a) {
-    gates_node_t content, text, ok;
+    gates_node_t content, heading, text, note, ok;
     TRY(gates_dialog_open(a->tree, &(gates_dialog_desc_t){ .title = cs("About the gallery") }, &a->about, &content));
+    TRY(gates_label_create(a->tree, content, cs("gates gallery"), &heading));
+    TRY(gates_node_set_font_size(a->tree, heading, GATES_FONT_SIZE_HEADING)); /* sizes (0.10.0) */
     char line[96];
     snprintf(line, sizeof line, "gates %s - a small retained GUI library in C23.", gates_version_string());
     TRY(gates_label_create(a->tree, content, cs(line), &text));
+    TRY(gates_label_create(a->tree, content, cs("MIT licensed. Every control here is drawn by gates itself."), &note));
+    TRY(gates_node_set_font_size(a->tree, note, GATES_FONT_SIZE_SMALL));
     gates_command_desc_t okc = { .id = CMD_ABOUT_OK, .label = cs("OK"), .role = GATES_COMMAND_DEFAULT,
                                  .enabled = true, .invoke = on_command, .user = a };
     TRY(gates_command_register(a->tree, a->about, &okc));

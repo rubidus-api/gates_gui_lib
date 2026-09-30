@@ -2,7 +2,9 @@
  *
  * Two faces: GATES_FONT_UI is the system message font (Segoe UI, Malgun
  * Gothic on Korean Windows - proportional), GATES_FONT_MONO a fixed-pitch face
- * (Consolas, D2Coding, Courier New). Advances are measured per code point at
+ * (Consolas, D2Coding, Courier New). A sized font (0.10.0) is the face at a
+ * percentage of its height, made on first use; up to GDI_FACES of them are
+ * kept (then the last is remade as needed). Advances are measured per code point at
  * the logical (96 dpi) size and cached; a character the face lacks is measured
  * in the fallback face GDI font linking draws it from. The backend never lets
  * GDI advance the pen: every glyph is placed at its logical offset through an
@@ -18,10 +20,17 @@
 
 #define GDI_MONO_HEIGHT 16
 #define GDI_SCRATCH_MAX_W 4096
-#define GDI_FACES 2
+#define GDI_FACES 16
+
+/* Where font linking finds what the UI face lacks (in preference order). */
+static const wchar_t *const k_fallbacks[] = { L"Malgun Gothic", L"Yu Gothic UI", L"Microsoft YaHei UI",
+                                              L"Microsoft JhengHei UI", L"Segoe UI Symbol" };
+#define GDI_FALLBACKS (sizeof k_fallbacks / sizeof k_fallbacks[0])
 
 typedef struct gdi_face_t {
     bool ready;
+    gates_font_t key;            /* face and size (gates_font_sized) */
+    HFONT fallback[GDI_FALLBACKS]; /* at this face's height, made when first needed */
     LOGFONTW lf;                 /* the face at 96 dpi */
     HFONT font;                  /* for measuring (96 dpi) */
     gates_text_metrics_t metrics;
@@ -45,10 +54,6 @@ typedef struct gdi_text_t {
 
 static gdi_text_t g_gdi;
 
-/* Where font linking finds what the UI face lacks (in preference order). */
-static const wchar_t *const k_fallbacks[] = { L"Malgun Gothic", L"Yu Gothic UI", L"Microsoft YaHei UI",
-                                              L"Microsoft JhengHei UI", L"Segoe UI Symbol" };
-static HFONT g_fallback[sizeof k_fallbacks / sizeof k_fallbacks[0]];
 
 /* -- faces --------------------------------------------------------------------------- */
 
@@ -97,12 +102,39 @@ static bool ensure_probe(void) {
     return g_gdi.probe != nullptr;
 }
 
+static void face_release(gdi_face_t *f) {
+    if (f->font != nullptr) DeleteObject(f->font); /* a stock font ignores it */
+    if (f->draw_font != nullptr) DeleteObject(f->draw_font);
+    for (unsigned i = 0; i < GDI_FALLBACKS; i++) {
+        if (f->fallback[i] != nullptr) DeleteObject(f->fallback[i]);
+    }
+    if (f->adv != nullptr) HeapFree(GetProcessHeap(), 0, f->adv);
+    *f = (gdi_face_t){0};
+}
+
 static gdi_face_t *face(gates_font_t font) {
-    gdi_face_t *f = &g_gdi.faces[font == GATES_FONT_MONO ? 1 : 0];
+    gates_font_t kind = gates_font_face(font) == GATES_FONT_MONO ? GATES_FONT_MONO : GATES_FONT_UI;
+    gates_u32 pct = gates_font_percent(font);
+    if (pct < GATES_FONT_SIZE_MIN) pct = GATES_FONT_SIZE_MIN;
+    if (pct > GATES_FONT_SIZE_MAX) pct = GATES_FONT_SIZE_MAX;
+    gates_font_t key = gates_font_sized(kind, pct);
+    gdi_face_t *f = nullptr;
+    for (unsigned i = 0; i < GDI_FACES && f == nullptr; i++) {
+        if (!g_gdi.faces[i].ready || g_gdi.faces[i].key == key) f = &g_gdi.faces[i];
+    }
+    if (f == nullptr) { /* all kept: remake the last one */
+        f = &g_gdi.faces[GDI_FACES - 1];
+        face_release(f);
+    }
     if (f->ready || !ensure_probe()) return f;
-    f->lf = font == GATES_FONT_MONO ? mono_logfont() : ui_logfont();
+    f->key = key;
+    f->lf = kind == GATES_FONT_MONO ? mono_logfont() : ui_logfont();
+    if (pct != 100u) {
+        LONG h = MulDiv(f->lf.lfHeight, (int)pct, 100);
+        f->lf.lfHeight = h != 0 ? h : (f->lf.lfHeight < 0 ? -1 : 1);
+    }
     f->font = CreateFontIndirectW(&f->lf);
-    if (f->font == nullptr) f->font = (HFONT)GetStockObject(font == GATES_FONT_MONO ? SYSTEM_FIXED_FONT : DEFAULT_GUI_FONT);
+    if (f->font == nullptr) f->font = (HFONT)GetStockObject(kind == GATES_FONT_MONO ? SYSTEM_FIXED_FONT : DEFAULT_GUI_FONT);
     HGDIOBJ old = SelectObject(g_gdi.probe, f->font);
     TEXTMETRICW tm;
     GetTextMetricsW(g_gdi.probe, &tm);
@@ -112,7 +144,7 @@ static gdi_face_t *face(gates_font_t font) {
     f->metrics = (gates_text_metrics_t){
         /* The average width is a sizing hint: a digit for the fixed face, the
          * face's own average for the proportional one. */
-        .advance = font == GATES_FONT_MONO ? digit_w : (tm.tmAveCharWidth > 0 ? tm.tmAveCharWidth : digit_w),
+        .advance = kind == GATES_FONT_MONO ? digit_w : (tm.tmAveCharWidth > 0 ? tm.tmAveCharWidth : digit_w),
         .ascent = tm.tmAscent,
         .descent = tm.tmDescent,
         .line_height = tm.tmHeight + tm.tmExternalLeading,
@@ -134,20 +166,20 @@ static bool has_glyph(wchar_t wc) {
 }
 
 /* The fallback face (at the face's height) that has the character, or null. */
-static HFONT fallback_for(const gdi_face_t *f, wchar_t wc) {
-    for (unsigned i = 0; i < sizeof k_fallbacks / sizeof k_fallbacks[0]; i++) {
-        if (g_fallback[i] == nullptr) {
+static HFONT fallback_for(gdi_face_t *f, wchar_t wc) {
+    for (unsigned i = 0; i < GDI_FALLBACKS; i++) {
+        if (f->fallback[i] == nullptr) {
             LOGFONTW lf = f->lf;
             wcsncpy(lf.lfFaceName, k_fallbacks[i], LF_FACESIZE - 1);
             lf.lfFaceName[LF_FACESIZE - 1] = L'\0';
             lf.lfPitchAndFamily = DEFAULT_PITCH;
-            g_fallback[i] = CreateFontIndirectW(&lf);
-            if (g_fallback[i] == nullptr) continue;
+            f->fallback[i] = CreateFontIndirectW(&lf);
+            if (f->fallback[i] == nullptr) continue;
         }
-        HGDIOBJ old = SelectObject(g_gdi.probe, g_fallback[i]);
+        HGDIOBJ old = SelectObject(g_gdi.probe, f->fallback[i]);
         bool has = has_glyph(wc);
         SelectObject(g_gdi.probe, old);
-        if (has) return g_fallback[i];
+        if (has) return f->fallback[i];
     }
     return nullptr;
 }

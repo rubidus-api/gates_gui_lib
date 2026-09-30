@@ -60,6 +60,7 @@ static void slot_reset_content(gates_node_slot_t *s) {
     s->kind = GATES_NODE_CUSTOM;
     s->state_index = GATES_NONE;
     s->font = -1; /* GATES_FONT_INHERIT */
+    s->font_size = 0;
     s->layout_kind = GATES_LAYOUT_NONE;
     s->grow = 0;
     s->align = GATES_ALIGN_STRETCH;
@@ -876,12 +877,47 @@ gates_err_t gates_node_set_font(gates_tree_t *tree, gates_node_t node, gates_i32
     return GATES_OK;
 }
 
+gates_err_t gates_node_set_font_size(gates_tree_t *tree, gates_node_t node, gates_u32 percent) {
+    if (tree == nullptr || !gates_i_valid(tree, node) ||
+        (percent != 0 && (percent < GATES_FONT_SIZE_MIN || percent > GATES_FONT_SIZE_MAX))) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    gates_node_slot_t *s = gates_i_slot(tree, node.index);
+    if (s->font_size != (gates_i16)percent) {
+        s->font_size = (gates_i16)percent;
+        gates_i_mark_dirty(tree, node.index, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
+    }
+    return GATES_OK;
+}
+
+static gates_u32 font_size_of(const gates_tree_t *tree, gates_u32 idx) {
+    for (gates_u32 p = idx; p != GATES_NONE; p = gates_i_slot(tree, p)->parent) {
+        gates_i16 z = gates_i_slot(tree, p)->font_size;
+        if (z != 0) return (gates_u32)z;
+    }
+    return 100u;
+}
+
+gates_u32 gates_node_font_size(const gates_tree_t *tree, gates_node_t node) {
+    return tree != nullptr && gates_i_valid(tree, node) ? font_size_of(tree, node.index) : 100u;
+}
+
 gates_i32 gates_i_font(const gates_tree_t *tree, gates_u32 idx) {
+    gates_i32 face = 0; /* GATES_FONT_UI */
     for (gates_u32 p = idx; p != GATES_NONE; p = gates_i_slot(tree, p)->parent) {
         gates_i8 f = gates_i_slot(tree, p)->font;
-        if (f >= 0) return f;
+        if (f >= 0) {
+            face = f;
+            break;
+        }
     }
-    return 0; /* GATES_FONT_UI */
+    return gates_font_sized(face, font_size_of(tree, idx));
+}
+
+gates_i32 gates_i_text_line_h(const gates_tree_t *tree, gates_u32 idx) {
+    const gates_text_backend_t *be = tree->text_backend;
+    if (be == nullptr || be->metrics == nullptr) return gates_i_line_h(tree, idx);
+    return be->metrics(be->ctx, gates_i_font(tree, idx)).line_height;
 }
 
 gates_i32 gates_node_font(const gates_tree_t *tree, gates_node_t node) {

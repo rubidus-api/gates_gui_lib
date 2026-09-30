@@ -62,10 +62,22 @@ Text uses one of two fonts (`gates_font_t` in `gates/text.h`):
 under it that does not choose its own; `GATES_FONT_INHERIT` goes back to the parent's, and
 `gates_node_font` reads the effective one. Set it on a panel to switch a whole area, or on one
 view for a log. Dialogs and menus are not under the window's root: they start from the UI font
-unless you set one on them. Sizes follow the system and are not chosen per node in 0.9.0.
+unless you set one on them.
+
+Sizes (0.10.0) are a percentage of the system's text size, so they still follow the
+person's Windows "Text size" setting. `gates_node_set_font_size(tree, node, percent)` sets one
+from `GATES_FONT_SIZE_MIN` (50) to `GATES_FONT_SIZE_MAX` (400); `GATES_FONT_SIZE_SMALL` (85),
+`GATES_FONT_SIZE_LARGE` (125) and `GATES_FONT_SIZE_HEADING` (150) are the usual ones, and 0 goes
+back to the parent's. The size is inherited like the face but separately from it: a MONO view
+inside a heading panel is mono at 150 %. Everything the node measures and draws follows it -
+text, line and row heights, carets, a text box's `cols`. `gates_node_font_size` reads the
+effective size, and `gates_node_font` returns face and size together (`gates_font_face`,
+`gates_font_percent`).
 
 ```c
-(void)gates_node_set_font(tree, log_view, GATES_FONT_MONO); /* aligned log lines */
+(void)gates_node_set_font(tree, log_view, GATES_FONT_MONO);            /* aligned log lines */
+(void)gates_node_set_font_size(tree, title, GATES_FONT_SIZE_HEADING); /* a page heading */
+(void)gates_node_set_font_size(tree, note, GATES_FONT_SIZE_SMALL);    /* small print */
 ```
 
 ## Drawing and text backends
@@ -76,5 +88,6 @@ which reports per font a line height, an average width (a sizing hint: a text bo
 and the advance of every character; a string's width is exactly the sum of its advances, and
 the backend draws each character at that offset. So layout, drawing, the caret and hit testing
 agree on every backend and at every scale. The builtin backend is fixed-pitch for both fonts,
-which keeps tests deterministic. An application can draw its own things in the window's paint
+which keeps tests deterministic (a size scales its 8 x 16 cell). A backend of your own reads the
+face with `gates_font_face(font)` and scales by `gates_font_percent(font)`. An application can draw its own things in the window's paint
 callback; it never reads widget state there.

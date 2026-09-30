@@ -421,7 +421,7 @@ static void geom(const gates_tree_t *tree, gates_u32 idx, struct gates_i_editor 
     const gates_text_backend_t *be = backend(tree);
     gates_i32 font = gates_i_font(tree, idx);
     gates_i32 zero = be != nullptr && be->glyph_advance != nullptr ? be->glyph_advance(be->ctx, font, '0')
-                                                                     : (tree->advance > 0 ? tree->advance : 8);
+                                                                     : gates_i_adv(tree, idx);
     gates_i32 gw = e->line_numbers ? (gates_i32)digits(g->lines) * zero + 2 * ED_PAD : 0;
     gates_i32 h = g->inner.h - 2 * ED_PAD, w = g->inner.w - gw - 2 * ED_PAD;
     bool vbar = e->wrap || (gates_i64)g->lines * g->row_h > h;
@@ -477,7 +477,7 @@ static void geom(const gates_tree_t *tree, gates_u32 idx, struct gates_i_editor 
 }
 
 static void geom_now(const gates_tree_t *tree, gates_u32 idx, struct gates_i_editor *e, ed_geom *g) {
-    geom(tree, idx, e, tree->line_height, g);
+    geom(tree, idx, e, gates_i_text_line_h(tree, idx), g); /* as paint measures the line */
 }
 
 static lay_t lay_of(const gates_tree_t *tree, gates_u32 idx, const ed_geom *g) {
@@ -1575,7 +1575,7 @@ bool gates_i_editor_wheel(gates_tree_t *tree, gates_u32 idx, gates_vec2_t wheel)
         e->top_row = top.row;
     }
     if (wheel.x != 0.0f) {
-        gates_i32 sx = g.scroll_x + (gates_i32)(wheel.x * (float)(4 * (tree->advance > 0 ? tree->advance : 8)));
+        gates_i32 sx = g.scroll_x + (gates_i32)(wheel.x * (float)(4 * gates_i_adv(tree, idx)));
         e->scroll_x = sx < 0 ? 0 : sx > g.max_x ? g.max_x : sx;
     }
     gates_i_mark_dirty(tree, idx, GATES_DIRTY_PAINT);

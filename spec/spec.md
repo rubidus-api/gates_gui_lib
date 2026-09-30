@@ -140,7 +140,8 @@ node per part.
   carets, selections and hit tests itself, identically on every backend. Rendering inside the
   assigned rect is the backend's.
 - **Fonts.** Two per node: UI (proportional, the default) and MONO (fixed pitch), inherited
-  by descendants.
+  by descendants; and a size in percent of the system's text size (50 to 400, 0.10.0),
+  inherited separately. A font value carries both (`gates_font_face`, `gates_font_percent`).
 - **Text box.** One line; selection, clipboard, undo (bounded: 64 entries and 16384 bytes by
   default), read-only, password (no copy, no undo, no input method, events carry no text), and a
   maximum length that asks: an edit past it is refused and kept as an offer

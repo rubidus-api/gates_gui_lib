@@ -1,6 +1,6 @@
 /* gates_gui_lib - builtin reference text backend.
  * Embedded 8x16 monospace cells (advances by the cell rule, 0.2.0): vendored public-domain font8x8 glyphs
- * (ASCII), each 8x8 row doubled to 16 px. Deterministic everywhere.
+ * (ASCII), each 8x8 row doubled to 16 px; a sized font scales the cell. Deterministic everywhere.
  * Platform-free. */
 #include <gates/text.h>
 
@@ -16,52 +16,66 @@
 
 /* -- backend --------------------------------------------------------------- */
 
+/* A sized font (0.10.0) scales the cell, nearest-neighbour: one face at any size. */
+static gates_i32 cell_w(gates_font_t font) {
+    gates_i32 w = gates_font_scale(font, CELL_W);
+    return w > 0 ? w : 1;
+}
+
+static gates_i32 cell_h(gates_font_t font) {
+    gates_i32 h = gates_font_scale(font, CELL_H);
+    return h > 0 ? h : 1;
+}
+
 static gates_text_metrics_t builtin_metrics(void *ctx, gates_font_t font) {
-    (void)ctx; (void)font; /* one built-in face and size */
+    (void)ctx; /* one built-in face */
+    gates_i32 h = cell_h(font), ascent = gates_font_scale(font, ASCENT);
     return (gates_text_metrics_t){
-        .advance = CELL_W, .ascent = ASCENT, .descent = DESCENT, .line_height = CELL_H,
+        .advance = cell_w(font), .ascent = ascent, .descent = h - ascent, .line_height = h,
     };
 }
 
 /* the reference backend keeps the cell rule for every font. */
 static gates_i32 builtin_advance(void *ctx, gates_font_t font, gates_u32 cp) {
-    (void)ctx; (void)font;
-    return (gates_i32)gates_text_cell_width(cp) * CELL_W;
+    (void)ctx;
+    return (gates_i32)gates_text_cell_width(cp) * cell_w(font);
 }
 
 static gates_size_t builtin_measure(void *ctx, gates_font_t font, gates_str_t text) {
-    (void)ctx; (void)font;
-    return (gates_size_t){ (gates_i32)gates_text_cells(text) * CELL_W, CELL_H };
+    (void)ctx;
+    return (gates_size_t){ (gates_i32)gates_text_cells(text) * cell_w(font), cell_h(font) };
 }
 
 static gates_u32 *pix_row(gates_pixels_t *px, gates_i32 y) {
     return (gates_u32 *)(void *)((gates_u8 *)px->ptr + (gates_usize_t)y * px->stride_bytes);
 }
 
-/* Blits one glyph cell (cells wide) at (x0,y0), clipped. Glyph rows are the
- * 8 font8x8 rows doubled; the replacement "box" is drawn for cp > 0x7E. */
+/* Blits one glyph cell (cells wide, cw x ch per cell) at (x0,y0), clipped.
+ * Glyph rows are the 8 font8x8 rows doubled, scaled to the cell; the
+ * replacement "box" is drawn for cp > 0x7E. */
 static void blit_cell(gates_pixels_t *px, gates_rect_t clip, gates_i32 x0, gates_i32 y0,
-                      gates_u32 cp, gates_i32 cells, gates_color_t color) {
-    for (gates_i32 y = 0; y < CELL_H; y++) {
+                      gates_u32 cp, gates_i32 cells, gates_i32 cw, gates_i32 ch, gates_color_t color) {
+    gates_i32 w = cells * cw;
+    for (gates_i32 y = 0; y < ch; y++) {
         gates_i32 ty = y0 + y;
         if (ty < clip.y || ty >= clip.y + clip.h) {
             continue;
         }
         gates_u32 *row = pix_row(px, ty);
-        for (gates_i32 x = 0; x < cells * CELL_W; x++) {
+        gates_i32 sy = y * CELL_H / ch;
+        for (gates_i32 x = 0; x < w; x++) {
             gates_i32 tx = x0 + x;
             if (tx < clip.x || tx >= clip.x + clip.w) {
                 continue;
             }
             bool on;
             if (cp <= 0x7E) {
-                gates_u8 bits = (gates_u8)font8x8_basic[cp][y / 2];
-                on = (bits >> (x & 7)) & 1u;
+                gates_u8 bits = (gates_u8)font8x8_basic[cp][sy / 2];
+                on = (bits >> ((x * CELL_W / cw) & 7)) & 1u;
             } else {
                 /* Replacement box: 1px outline inset by 1, across all cells. */
-                gates_i32 w = cells * CELL_W;
-                on = (y >= 1 && y <= CELL_H - 2 && x >= 1 && x <= w - 2)
-                     && (y == 1 || y == CELL_H - 2 || x == 1 || x == w - 2);
+                on = (y >= 1 && y <= ch - 2 && x >= 1 && x <= w - 2)
+                     && (y == 1 || y == ch - 2 || x == 1 || x == w - 2);
             }
             if (on) {
                 row[tx] = gates_pixel_pack(color);
@@ -73,7 +87,7 @@ static void blit_cell(gates_pixels_t *px, gates_rect_t clip, gates_i32 x0, gates
 static void builtin_draw(void *ctx, gates_pixels_t target, gates_rect_t rect,
                          gates_rect_t clip, gates_font_t font, gates_str_t text,
                          gates_color_t color) {
-    (void)ctx; (void)font;
+    (void)ctx;
     if (target.ptr == nullptr || color.a == 0) {
         return;
     }
@@ -83,6 +97,7 @@ static void builtin_draw(void *ctx, gates_pixels_t target, gates_rect_t rect,
     if (gates_rect_is_empty(bounds)) {
         return;
     }
+    gates_i32 cw = cell_w(font), ch = cell_h(font);
     gates_i32 pen_x = rect.x;
     gates_i32 pen_y = rect.y;
     gates_u32 i = 0;
@@ -93,8 +108,8 @@ static void builtin_draw(void *ctx, gates_pixels_t target, gates_rect_t rect,
         if (pen_x >= bounds.x + bounds.w) {
             break; /* fully right of the assigned area: clipped, never reflowed */
         }
-        blit_cell(&target, bounds, pen_x, pen_y, cp, cells, color);
-        pen_x += cells * CELL_W;
+        blit_cell(&target, bounds, pen_x, pen_y, cp, cells, cw, ch, color);
+        pen_x += cells * cw;
     }
 }
 

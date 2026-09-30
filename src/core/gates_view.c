@@ -273,7 +273,7 @@ static gates_i32 col_width(const struct gates_i_view *v, const view_geom_t *g, g
 }
 
 static void geom_now(gates_tree_t *tree, gates_u32 idx, struct gates_i_view *v, view_geom_t *g) {
-    geom(tree, idx, v, model_count(v), tree->line_height, g);
+    geom(tree, idx, v, model_count(v), gates_i_text_line_h(tree, idx), g);
 }
 
 /* -- creation and the public surface --------------------------------------------------------- */
@@ -526,7 +526,7 @@ gates_u32 gates_view_visible_rows(const gates_tree_t *tree, gates_node_t view) {
     struct gates_i_view *v = view_of(tree, view);
     if (v == nullptr) return 0;
     view_geom_t g;
-    geom(tree, view.index, v, model_count(v), tree->line_height, &g);
+    geom(tree, view.index, v, model_count(v), gates_i_text_line_h(tree, view.index), &g);
     return g.visible;
 }
 
@@ -565,7 +565,7 @@ gates_rect_t gates_view_part_rect(const gates_tree_t *tree, gates_node_t view,
     gates_rect_t none = { 0, 0, 0, 0 };
     if (v == nullptr) return none;
     view_geom_t g;
-    geom(tree, view.index, v, model_count(v), tree->line_height, &g);
+    geom(tree, view.index, v, model_count(v), gates_i_text_line_h(tree, view.index), &g);
     switch (part) {
     case GATES_VIEW_PART_BODY:
         return g.body;
@@ -1368,7 +1368,7 @@ bool gates_i_view_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event_t
     if (ev->alt || (ev->ctrl && !(v->multi && nav_key(ev->key)))) {
         return false;
     }
-    gates_i32 step = VIEW_STEP_CELLS * (tree->advance > 0 ? tree->advance : 8);
+    gates_i32 step = VIEW_STEP_CELLS * gates_i_adv(tree, idx);
     switch (ev->key) {
     case GATES_KEY_ENTER:
         activate(tree, idx, v);
@@ -1693,7 +1693,7 @@ bool gates_i_view_wheel(gates_tree_t *tree, gates_u32 idx, gates_vec2_t wheel) {
         scroll_rows(tree, idx, v, &g, (gates_i64)(-wheel.y * (float)VIEW_WHEEL_ROWS));
     }
     if (wheel.x != 0.0f) {
-        gates_i32 step = VIEW_STEP_CELLS * (tree->advance > 0 ? tree->advance : 8);
+        gates_i32 step = VIEW_STEP_CELLS * gates_i_adv(tree, idx);
         scroll_x_by(tree, idx, v, &g, (gates_i32)(wheel.x * (float)step));
     }
     return true;

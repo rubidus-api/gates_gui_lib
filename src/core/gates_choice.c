@@ -341,7 +341,7 @@ gates_i32 gates_i_radio_row_at(const gates_tree_t *tree, gates_u32 idx, gates_po
         return -1;
     }
     gates_i32 row = (p.y - s->layout_rect.y) /
-                    gates_i_radio_row_h(tree->line_height > 0 ? tree->line_height : 16);
+                    gates_i_radio_row_h(gates_i_text_line_h(tree, idx));
     return row < (gates_i32)st->opt_count ? row : -1;
 }
 

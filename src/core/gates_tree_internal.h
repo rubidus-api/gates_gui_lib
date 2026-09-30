@@ -21,6 +21,7 @@
 #include <gates/layout.h>
 #include <gates/image.h>
 #include <gates/task.h>
+#include <gates/text.h>
 
 /* One queued notification: kind/origin plus the source's handle. The payload
  * is read from the widget when the event is delivered (latest state). */
@@ -290,6 +291,7 @@ typedef struct gates_node_slot_t {
 
     /* Layout (container props + child props + results). */
     gates_i8 font;           /* a gates_font_t, or GATES_FONT_INHERIT (0.2.0) */
+    gates_i16 font_size;     /* percent, 0 = inherit (0.10.0) */
     gates_u8 layout_kind;    /* gates_layout_kind_i */
     gates_u8 grow;           /* child main-axis weight (0 = fixed) */
     gates_u8 align;          /* gates_align_i, child cross-axis */
@@ -563,6 +565,16 @@ gates_i32 gates_i_font(const gates_tree_t *tree, gates_u32 idx);
 static inline gates_i32 gates_i_slot_font(const gates_tree_t *tree, const gates_node_slot_t *s) {
     return gates_i_font(tree, (gates_u32)(s - tree->slots));
 }
+/* The tree's base line height and average width (from the last layout)
+ * scaled to a node's font size (0.10.0): rows, steps and sizing hints. */
+static inline gates_i32 gates_i_line_h(const gates_tree_t *tree, gates_u32 idx) {
+    return gates_font_scale(gates_i_font(tree, idx), tree->line_height > 0 ? tree->line_height : 16);
+}
+static inline gates_i32 gates_i_adv(const gates_tree_t *tree, gates_u32 idx) {
+    return gates_font_scale(gates_i_font(tree, idx), tree->advance > 0 ? tree->advance : 8);
+}
+/* A node's own line height from the text backend, as paint measures it. */
+gates_i32 gates_i_text_line_h(const gates_tree_t *tree, gates_u32 idx);
 /* Text box geometry (0.2.0): the x of a byte offset from the start of the
  * box's text, and the offset nearest to an x, in the box's font - a password
  * box by its stars. Everything that draws, hits or describes a text box uses

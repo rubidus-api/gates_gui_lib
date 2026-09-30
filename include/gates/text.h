@@ -13,13 +13,39 @@
 
 #include <gates/render.h>
 
-/* A font: which face a text uses (0.2.0). Sizes are a theme matter, not
- * chosen here. GATES_FONT_UI is the platform's UI face (proportional, the
- * default); GATES_FONT_MONO a fixed-pitch face for code, logs, aligned columns. */
+/* A font: which face a text uses (0.2.0), and at what size (0.10.0).
+ * GATES_FONT_UI is the platform's UI face (proportional, the default);
+ * GATES_FONT_MONO a fixed-pitch face for code, logs, aligned columns. The
+ * base size is the platform's (it follows the system text size); a font may
+ * carry a size in percent of it in its upper bits (GATES_FONT_SIZED), which
+ * the core sets from gates_node_set_font_size. A backend takes the face from
+ * gates_font_face and scales by gates_font_percent; a value without a size
+ * (0 or 1, as before 0.10.0) is 100 %. */
 typedef gates_i32 gates_font_t;
 #define GATES_FONT_UI      0
 #define GATES_FONT_MONO    1
 #define GATES_FONT_INHERIT (-1)    /* gates_node_set_font: take the parent's */
+
+/* Sizes, in percent of the base (0.10.0): the range and some usual ones. */
+#define GATES_FONT_SIZE_MIN     50u
+#define GATES_FONT_SIZE_MAX     400u
+#define GATES_FONT_SIZE_SMALL   85u   /* small print, captions */
+#define GATES_FONT_SIZE_LARGE   125u  /* emphasis, section heads */
+#define GATES_FONT_SIZE_HEADING 150u  /* page and dialog headings */
+
+/* A face at `percent` (100 gives the face alone). */
+static inline gates_font_t gates_font_sized(gates_font_t face, gates_u32 percent) {
+    return percent == 100u ? (face & 0xFF) : (gates_font_t)((gates_u32)(face & 0xFF) | (percent << 8));
+}
+static inline gates_font_t gates_font_face(gates_font_t font) { return font & 0xFF; }
+static inline gates_u32 gates_font_percent(gates_font_t font) {
+    gates_u32 p = (gates_u32)font >> 8;
+    return p != 0 ? p : 100u;
+}
+/* A length at the font's size: round-half-up(v * percent / 100). */
+static inline gates_i32 gates_font_scale(gates_font_t font, gates_i32 v) {
+    return (gates_i32)(((gates_i64)v * gates_font_percent(font) * 2 + 100) / 200);
+}
 
 typedef struct gates_text_metrics_t {
     gates_i32 advance;      /* average character width: a sizing hint (text box cols, steps) */

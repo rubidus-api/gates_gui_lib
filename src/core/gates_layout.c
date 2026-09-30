@@ -351,7 +351,7 @@ static gates_size_t wrap_lines(gates_tree_t *tree, gates_node_slot_t *s, gates_i
 
 /* A form at this content width puts labels above editors. */
 static bool form_stacked(const gates_tree_t *tree, const gates_node_slot_t *s, gates_i32 content_w) {
-    gates_i32 cells = GATES_FORM_MIN_EDITOR_CELLS * (tree->advance > 0 ? tree->advance : 8);
+    gates_i32 cells = GATES_FORM_MIN_EDITOR_CELLS * gates_i_adv(tree, (gates_u32)(s - tree->slots));
     return content_w < s->form_label_w + GATES_FORM_COLUMN_GAP + cells;
 }
 

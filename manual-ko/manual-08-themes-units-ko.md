@@ -59,10 +59,20 @@ int main(void) {
 정하지 않은 모든 것에도 적용된다. `GATES_FONT_INHERIT` 는 부모의 것으로 돌아가고,
 `gates_node_font` 는 실제로 쓰이는 글꼴을 읽는다. 패널에 정하면 한 구역 전체가 바뀌고, 뷰 하나에
 정하면 로그 하나가 바뀐다. 대화상자와 메뉴는 창의 루트 아래에 있지 않으므로, 따로 정하지 않으면
-UI 글꼴에서 시작한다. 크기는 시스템을 따르며, 0.9.0 에서는 노드마다 고르지 않는다.
+UI 글꼴에서 시작한다.
+
+크기(0.10.0)는 시스템 글자 크기의 백분율이라 사람이 고른 Windows "텍스트 크기"를 그대로 따른다.
+`gates_node_set_font_size(tree, node, percent)` 는 `GATES_FONT_SIZE_MIN`(50)부터 `GATES_FONT_SIZE_MAX`(400)
+사이로 크기를 정한다. 흔히 쓰는 값은 `GATES_FONT_SIZE_SMALL`(85), `GATES_FONT_SIZE_LARGE`(125),
+`GATES_FONT_SIZE_HEADING`(150)이고, 0 은 부모의 것으로 돌아간다. 크기는 글꼴처럼 물려받지만 글꼴과는
+따로다. 제목 패널 안의 MONO 뷰는 150 % 고정폭이다. 노드가 재고 그리는 모든 것이 그 크기를 따른다. 글,
+줄과 행의 높이, 캐럿, 텍스트 상자의 `cols` 가 그렇다. `gates_node_font_size` 는 실제 크기를 읽고,
+`gates_node_font` 는 글꼴과 크기를 함께 돌려준다(`gates_font_face`, `gates_font_percent`).
 
 ```c
-(void)gates_node_set_font(tree, log_view, GATES_FONT_MONO); /* aligned log lines */
+(void)gates_node_set_font(tree, log_view, GATES_FONT_MONO);            /* aligned log lines */
+(void)gates_node_set_font_size(tree, title, GATES_FONT_SIZE_HEADING); /* a page heading */
+(void)gates_node_set_font_size(tree, note, GATES_FONT_SIZE_SMALL);    /* small print */
 ```
 
 ## 그리기와 글자 백엔드
@@ -71,5 +81,6 @@ UI 글꼴에서 시작한다. 크기는 시스템을 따르며, 0.9.0 에서는 
 픽셀로 바꾼다. 글은 글자 백엔드(`gates/text.h`)를 거친다. 백엔드는 글꼴마다 줄 높이, 평균 글자 폭
 (크기 가늠용: 텍스트 상자의 `cols`), 글자마다의 폭을 알린다. 글줄의 폭은 글자 폭의 합과 정확히
 같고, 백엔드는 글자를 그 자리에 그린다. 그래서 어느 백엔드에서든, 어느 배율에서든 배치, 그리기,
-캐럿, 누른 자리가 서로 맞는다. 내장 백엔드는 두 글꼴 모두 고정폭이어서 시험이 결정적으로 돈다.
+캐럿, 누른 자리가 서로 맞는다. 내장 백엔드는 두 글꼴 모두 고정폭이어서 시험이 결정적으로 돈다(크기는 8 x 16 칸을 늘인다). 직접 만든 백엔드는
+`gates_font_face(font)` 로 글꼴을 읽고 `gates_font_percent(font)` 만큼 키운다.
 응용은 창의 그리기 콜백에서 제 것을 더 그릴 수 있다. 거기서 위젯 상태를 읽지는 않는다.
