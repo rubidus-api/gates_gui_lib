@@ -72,6 +72,9 @@ static void slot_reset_content(gates_node_slot_t *s) {
     s->split_ratio = 500;          /* centered until set */
     s->split_vertical = 0;
     s->scroll_offset = 0;
+    s->scroll_sideways = 0;
+    s->scroll_x = 0;
+    s->scroll_x_arranged = 0;
     s->content_size = (gates_size_t){ 0, 0 };
     s->dirty = 0;
     s->user_data = nullptr;

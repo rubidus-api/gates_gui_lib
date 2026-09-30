@@ -544,6 +544,23 @@ static void test_sideways_bars(void) {
     gates_tree_destroy(x.t);
 }
 
+static void test_sideways_slot_reuse(void) {
+    /* A node made in a destroyed node's slot starts plain. */
+    gates_tree_t *t = nullptr;
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &t));
+    gates_node_t a = GATES_NODE_NULL, b = GATES_NODE_NULL;
+    GT_ASSERT_OK(gates_panel_create(t, gates_tree_root(t), &a));
+    GT_ASSERT_OK(gates_layout_set(t, a, GATES_LAYOUT_KIND_SCROLL));
+    GT_ASSERT_OK(gates_layout_set_scroll_sideways(t, a, true));
+    GT_ASSERT_OK(gates_node_destroy(t, a));
+    GT_ASSERT_OK(gates_tree_flush_destroys(t));
+    GT_ASSERT_OK(gates_panel_create(t, gates_tree_root(t), &b));
+    GT_ASSERT(b.index == a.index);
+    GT_ASSERT(!gates_layout_scroll_sideways(t, b));
+    GT_ASSERT(gates_layout_scroll_x(t, b) == 0);
+    gates_tree_destroy(t);
+}
+
 static void test_sideways_stale_rects(void) {
     /* The offset changed since the last layout: focus moves use where things are now. */
     side_t x = make_side(true);
@@ -579,5 +596,6 @@ int main(void) {
     test_sideways_focus_and_access();
     test_sideways_bars();
     test_sideways_stale_rects();
+    test_sideways_slot_reuse();
     return gt_report("test_scroll");
 }
