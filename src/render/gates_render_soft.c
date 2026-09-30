@@ -90,6 +90,7 @@ static void draw_image(soft_ctx_t *ctx, gates_rect_t dst, const struct gates_ima
     if (im == nullptr || im->w <= 0 || im->h <= 0 || gates_rect_is_empty(r) || dst.w <= 0 || dst.h <= 0) {
         return;
     }
+    im = gates_i_image_pick(im, dst.w, dst.h); /* 0.10.0: the pixel set for this scale */
     for (gates_i32 y = r.y; y < r.y + r.h; y++) {
         gates_u32 *row = row_at(&ctx->px, y);
         /* source y in 1/256ths: ((y - dst.y) + 0.5) * h / dst.h - 0.5 */

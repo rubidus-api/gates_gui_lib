@@ -415,25 +415,43 @@ static gates_err_t page_inputs(app_t *a, gates_node_t page) {
 }
 
 /* Pictures (0.5.0): generated images, WIC decoding, native dialogs. */
-static gates_image_id_t make_image(gates_tree_t *t, int w, int h, int kind, gates_color_t c) {
+static gates_u8 *draw_image(int w, int h, int kind, gates_color_t c) {
     gates_u8 *px = malloc((size_t)w * (size_t)h * 4);
-    if (px == nullptr) return 0;
+    if (px == nullptr) return nullptr;
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
             gates_u8 *p = px + (y * w + x) * 4;
             if (kind == 0) { /* a soft gradient picture */
                 p[0] = (gates_u8)(40 + 180 * x / w); p[1] = (gates_u8)(90 + 120 * y / h); p[2] = 200; p[3] = 255;
-            } else {         /* an icon: a ring, a filled circle, or a square */
-                int dx = 2 * x - w + 1, dy = 2 * y - h + 1, r2 = dx * dx + dy * dy, R = w - 2;
-                bool on = kind == 1 ? (r2 <= R * R && r2 >= (R - 5) * (R - 5)) : kind == 2 ? r2 <= R * R
-                                                                                            : (x > 1 && y > 1 && x < w - 2 && y < h - 2);
+            } else {         /* an icon: a ring, a filled circle, or a square (lines scale with it) */
+                int dx = 2 * x - w + 1, dy = 2 * y - h + 1, r2 = dx * dx + dy * dy, R = w - 2, ring = 5 * w / 16;
+                int m = 2 * w / 16;
+                bool on = kind == 1 ? (r2 <= R * R && r2 >= (R - ring) * (R - ring)) : kind == 2 ? r2 <= R * R
+                                                                                              : (x >= m && y >= m && x < w - m && y < h - m);
                 p[0] = c.r; p[1] = c.g; p[2] = c.b; p[3] = on ? 255 : 0;
             }
         }
     }
+    return px;
+}
+
+static gates_image_id_t make_image(gates_tree_t *t, int w, int h, int kind, gates_color_t c) {
+    gates_u8 *px = draw_image(w, h, kind, c);
+    if (px == nullptr) return 0;
     gates_image_id_t id = 0;
     (void)gates_image_add_rgba(t, w, h, px, 0, &id);
     free(px);
+    return id;
+}
+
+/* An icon drawn at 16, 24 and 32 pixels, so it stays crisp at 150 % and 200 % (0.10.0). */
+static gates_image_id_t make_icon(gates_tree_t *t, int kind, gates_color_t c) {
+    gates_image_id_t id = make_image(t, 16, 16, kind, c);
+    for (int w = 24; id != 0 && w <= 32; w += 8) {
+        gates_u8 *px = draw_image(w, w, kind, c);
+        if (px != nullptr) (void)gates_image_add_variant_rgba(t, id, w, w, px, 0);
+        free(px);
+    }
     return id;
 }
 
@@ -806,7 +824,7 @@ static gates_err_t page_data(app_t *a, gates_node_t page) {
         snprintf(a->items[i].name, sizeof a->items[i].name, "%s", names[i]);
         snprintf(a->items[i].file, sizeof a->items[i].file, "%s", files[i]);
     }
-    a->file_icon = make_image(t, 16, 16, 3, GATES_RGB(90, 120, 170));
+    a->file_icon = make_icon(t, 3, GATES_RGB(90, 120, 170));
     gates_node_t split, row;
     TRY(gates_layout_set_child_grow(t, page, 1));
     TRY(gates_panel_create(t, page, &split));
@@ -1049,10 +1067,10 @@ static gates_err_t build(app_t *a) {
     for (size_t i = 0; i < sizeof tb / sizeof tb[0]; i++) TRY(gates_toolbar_add(t, tools, tb[i]));
     TRY(gates_node_set_access_name(t, tools, cs("Tools")));
     gates_color_t ink = GATES_RGB(60, 90, 140);
-    TRY(gates_command_set_icon(t, root, CMD_SAVE, make_image(t, 16, 16, 3, ink)));
-    TRY(gates_command_set_icon(t, root, CMD_LIGHT, make_image(t, 16, 16, 1, GATES_RGB(230, 170, 0))));
-    TRY(gates_command_set_icon(t, root, CMD_DARK, make_image(t, 16, 16, 2, GATES_RGB(70, 70, 90))));
-    TRY(gates_command_set_icon(t, root, CMD_ABOUT, make_image(t, 16, 16, 1, ink)));
+    TRY(gates_command_set_icon(t, root, CMD_SAVE, make_icon(t, 3, ink)));
+    TRY(gates_command_set_icon(t, root, CMD_LIGHT, make_icon(t, 1, GATES_RGB(230, 170, 0))));
+    TRY(gates_command_set_icon(t, root, CMD_DARK, make_icon(t, 2, GATES_RGB(70, 70, 90))));
+    TRY(gates_command_set_icon(t, root, CMD_ABOUT, make_icon(t, 1, ink)));
 
     TRY(gates_tabs_create(t, root, &a->tabs));
     TRY(gates_layout_set_child_grow(t, a->tabs, 1));

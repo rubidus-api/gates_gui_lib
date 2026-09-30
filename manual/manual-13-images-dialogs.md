@@ -14,6 +14,16 @@ An image's natural size is its pixel size in logical units, so a 32 x 16 picture
 units and scales with the window like text: at 150 % it is drawn on 48 x 24 pixels, smoothed
 (bilinear). Supply larger pixels when a picture must stay sharp at large scales.
 
+An image can carry those larger pixels itself (0.10.0). `gates_image_add_variant_rgba(tree, id,
+w, h, rgba, stride)` adds the same picture at another pixel size - a 16-unit icon drawn at 24 and
+32 pixels, say - and `gates_image_load_variant_file` / `_memory` decode one. The natural size
+stays the first set's. Whenever the image is drawn, the renderer takes the smallest set that
+covers the device pixels it fills, else the largest: at 100 % the 16-pixel set, at 150 % the
+24, at 200 % the 32. A set must have the picture's shape (its height within a pixel of
+w x natural h / natural w); one as wide as a set added before replaces it.
+`gates_image_variant_count`, `gates_image_variant_size` and `gates_image_pick_size` tell what an
+image holds and which set a size would use.
+
 `gates_image_create(tree, parent, id, &node)` shows an image. `gates_image_node_set_size` gives
 it another size; the picture then keeps its aspect ratio, centred. An image with an accessible
 name (`gates_node_set_access_name`) is an Image to screen readers; without one it is decoration

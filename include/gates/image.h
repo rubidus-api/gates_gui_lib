@@ -13,7 +13,14 @@
  * without one it is decoration and left out. Icons are drawn at 16 x 16 units:
  * on buttons (left of the label; a button with an icon and no text needs an
  * access name), on commands (menus draw it in the gutter, toolbars left of the
- * label or alone with gates_toolbar_set_icons_only). Platform-free. */
+ * label or alone with gates_toolbar_set_icons_only).
+ *
+ * Variants (0.10.0). An image may hold more pixel sets of the same picture -
+ * a 16-unit icon drawn at 16, 24 and 32 pixels, say. Its natural size stays
+ * the first set's; whenever it is drawn, the renderer takes the smallest set
+ * that covers the device pixels it fills, else the largest, so icons stay
+ * crisp at 150 % and 200 % and any image drawn larger than its natural size
+ * gains too. Platform-free. */
 #ifndef GATES_IMAGE_H
 #define GATES_IMAGE_H
 
@@ -50,6 +57,24 @@ void gates_tree_set_image_decoder(gates_tree_t *tree, const gates_image_decoder_
 [[nodiscard]] gates_err_t gates_image_load_file(gates_tree_t *tree, gates_str_t path, gates_image_id_t *out_id);
 [[nodiscard]] gates_err_t gates_image_load_memory(gates_tree_t *tree, const void *bytes, gates_usize_t size,
                                                   gates_image_id_t *out_id);
+
+/* Adds a pixel set to image `id` (0.10.0): the same picture at another size,
+ * copied like gates_image_add_rgba. Its h must be within one pixel of
+ * w * (natural h) / (natural w), and its width not the natural one
+ * (INVALID_ARG otherwise); a set as wide as one added before replaces it.
+ * NOT_FOUND for an unknown id. The load forms decode like the ones above. */
+[[nodiscard]] gates_err_t gates_image_add_variant_rgba(gates_tree_t *tree, gates_image_id_t id, gates_i32 w,
+                                                       gates_i32 h, const gates_u8 *rgba, gates_u32 stride);
+[[nodiscard]] gates_err_t gates_image_load_variant_file(gates_tree_t *tree, gates_image_id_t id, gates_str_t path);
+[[nodiscard]] gates_err_t gates_image_load_variant_memory(gates_tree_t *tree, gates_image_id_t id,
+                                                          const void *bytes, gates_usize_t size);
+/* Pixel sets, the natural one first then the others by width (0 for an
+ * unknown id), and the size of one ({0, 0} past the end). */
+gates_u32 gates_image_variant_count(const gates_tree_t *tree, gates_image_id_t id);
+gates_size_t gates_image_variant_size(const gates_tree_t *tree, gates_image_id_t id, gates_u32 index);
+/* The pixel size of the set drawn into `device` pixels ({0, 0} for an unknown
+ * id): what a renderer of its own should use too. */
+gates_size_t gates_image_pick_size(const gates_tree_t *tree, gates_image_id_t id, gates_size_t device);
 
 /* -- the image node and icons ------------------------------------------------------ */
 

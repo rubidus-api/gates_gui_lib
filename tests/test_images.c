@@ -328,6 +328,148 @@ static void test_command_icons(void) {
     gates_tree_destroy(t);
 }
 
+/* -- pixel sets for other scales (0.10.0) ------------------------------------------------ */
+
+static gates_u8 *fill(gates_i32 w, gates_i32 h, gates_u8 r, gates_u8 g, gates_u8 b) {
+    gates_u8 *px = malloc((size_t)w * (size_t)h * 4);
+    for (gates_i32 i = 0; i < w * h; i++) {
+        px[i * 4] = r; px[i * 4 + 1] = g; px[i * 4 + 2] = b; px[i * 4 + 3] = 255;
+    }
+    return px;
+}
+
+static gates_err_t add_variant(gates_tree_t *t, gates_image_id_t id, gates_i32 w, gates_i32 h, gates_u8 r, gates_u8 g,
+                               gates_u8 b) {
+    gates_u8 *px = fill(w, h, r, g, b);
+    gates_err_t err = gates_image_add_variant_rgba(t, id, w, h, px, 0);
+    free(px);
+    return err;
+}
+
+/* The colour at device pixel (x, y) of an image drawn at `r` (logical) and dpi. */
+static gates_color_t drawn(gates_tree_t *t, gates_image_id_t id, gates_rect_t r, gates_u32 dpi, gates_i32 x, gates_i32 y) {
+    static gates_u32 buf[64 * 64];
+    for (int i = 0; i < 64 * 64; i++) buf[i] = gates_pixel_pack(GATES_RGB(0, 0, 0));
+    gates_draw_list_t dl;
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    GT_ASSERT_OK(gates_draw_image(&dl, r, gates_tree_image(t, id)));
+    GT_ASSERT_OK(gates_render_soft_scaled(&dl, (gates_pixels_t){ .ptr = buf, .w = 64, .h = 64, .stride_bytes = 256 },
+                                          be, dpi));
+    gates_draw_list_deinit(&dl);
+    return at(buf, 64, x, y);
+}
+
+static void test_variants(void) {
+    gates_tree_t *t;
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &t));
+    gates_image_id_t icon = solid(t, 16, 16, 255, 0, 0, 255); /* red at 16 */
+    GT_ASSERT(gates_image_variant_count(t, icon) == 1);
+    GT_ASSERT(gates_image_variant_size(t, icon, 0).w == 16 && gates_image_variant_size(t, icon, 1).w == 0);
+    /* Refused: another picture's shape, the natural width, bad pixels, unknown ids. */
+    GT_ASSERT(add_variant(t, icon, 32, 30, 0, 0, 255) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(add_variant(t, icon, 32, 34, 0, 0, 255) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(add_variant(t, icon, 16, 16, 0, 0, 255) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(add_variant(t, 999, 32, 32, 0, 0, 255) == PROVEN_ERR_NOT_FOUND);
+    GT_ASSERT(add_variant(t, 0, 32, 32, 0, 0, 255) == PROVEN_ERR_NOT_FOUND);
+    gates_u8 one[4] = {0};
+    GT_ASSERT(gates_image_add_variant_rgba(t, icon, 0, 0, one, 0) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_image_add_variant_rgba(t, icon, 1, 1, nullptr, 0) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_image_add_variant_rgba(nullptr, icon, 1, 1, one, 0) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_image_variant_count(t, icon) == 1);
+    /* Blue at 32, green at 24; kept by width; the natural size stays 16. */
+    GT_ASSERT_OK(add_variant(t, icon, 32, 32, 0, 0, 255));
+    GT_ASSERT_OK(add_variant(t, icon, 24, 24, 0, 255, 0));
+    GT_ASSERT(gates_image_variant_count(t, icon) == 3);
+    GT_ASSERT(gates_image_variant_size(t, icon, 0).w == 16);
+    GT_ASSERT(gates_image_variant_size(t, icon, 1).w == 24 && gates_image_variant_size(t, icon, 2).h == 32);
+    GT_ASSERT(gates_image_size(t, icon).w == 16);
+    /* Picked: the smallest that covers, else the largest. */
+    GT_ASSERT(gates_image_pick_size(t, icon, (gates_size_t){ 16, 16 }).w == 16);
+    GT_ASSERT(gates_image_pick_size(t, icon, (gates_size_t){ 10, 10 }).w == 16);
+    GT_ASSERT(gates_image_pick_size(t, icon, (gates_size_t){ 20, 20 }).w == 24);
+    GT_ASSERT(gates_image_pick_size(t, icon, (gates_size_t){ 24, 24 }).w == 24);
+    GT_ASSERT(gates_image_pick_size(t, icon, (gates_size_t){ 24, 25 }).w == 32);
+    GT_ASSERT(gates_image_pick_size(t, icon, (gates_size_t){ 32, 32 }).w == 32);
+    GT_ASSERT(gates_image_pick_size(t, icon, (gates_size_t){ 40, 40 }).w == 32);
+    GT_ASSERT(gates_image_pick_size(t, 999, (gates_size_t){ 40, 40 }).w == 0);
+    /* The renderer draws that set: red at 100 %, green at 150 %, blue at 200 %. */
+    gates_rect_t r = { 1, 1, 16, 16 };
+    gates_color_t c = drawn(t, icon, r, 96, 5, 5);
+    GT_ASSERT(c.r == 255 && c.g == 0 && c.b == 0);
+    c = drawn(t, icon, r, 144, 8, 8);
+    GT_ASSERT(c.r == 0 && c.g == 255 && c.b == 0);
+    c = drawn(t, icon, r, 192, 10, 10);
+    GT_ASSERT(c.r == 0 && c.g == 0 && c.b == 255);
+    c = drawn(t, icon, r, 288, 10, 10); /* 300 %: past the largest, the largest */
+    GT_ASSERT(c.b == 255);
+    c = drawn(t, icon, (gates_rect_t){ 0, 0, 8, 8 }, 96, 3, 3); /* smaller than natural: the natural */
+    GT_ASSERT(c.r == 255);
+    /* The same width again replaces that set; a smaller one goes first after the natural. */
+    GT_ASSERT_OK(add_variant(t, icon, 24, 24, 255, 255, 0));
+    GT_ASSERT(gates_image_variant_count(t, icon) == 3);
+    c = drawn(t, icon, r, 144, 8, 8);
+    GT_ASSERT(c.r == 255 && c.g == 255 && c.b == 0);
+    GT_ASSERT_OK(add_variant(t, icon, 8, 8, 255, 255, 255));
+    GT_ASSERT(gates_image_variant_count(t, icon) == 4);
+    GT_ASSERT(gates_image_variant_size(t, icon, 0).w == 16 && gates_image_variant_size(t, icon, 1).w == 8);
+    GT_ASSERT(gates_image_variant_size(t, icon, 2).w == 24 && gates_image_variant_size(t, icon, 3).w == 32);
+    GT_ASSERT(gates_image_pick_size(t, icon, (gates_size_t){ 6, 6 }).w == 8);
+    GT_ASSERT_OK(add_variant(t, icon, 48, 48, 1, 1, 1));
+    GT_ASSERT(gates_image_variant_size(t, icon, 4).w == 48);
+    /* A wide picture: h within one pixel of the shape. */
+    gates_image_id_t wide = solid(t, 100, 75, 9, 9, 9, 255);
+    GT_ASSERT_OK(add_variant(t, wide, 133, 100, 0, 0, 255));
+    GT_ASSERT_OK(add_variant(t, wide, 150, 113, 0, 0, 255)); /* 112.5 */
+    GT_ASSERT(add_variant(t, wide, 200, 152, 0, 0, 255) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(add_variant(t, wide, 200, 148, 0, 0, 255) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT_OK(add_variant(t, wide, 200, 151, 0, 0, 255));                    /* 150 + 1 */
+    GT_ASSERT(add_variant(t, wide, 133, 101, 0, 0, 255) == PROVEN_ERR_INVALID_ARG); /* 99.75 + 1.25 */
+    /* A new set repaints (the picture may look different at this scale). */
+    gates_tree_clear_dirty(t, GATES_TREE_DIRTY_PAINT);
+    GT_ASSERT_OK(add_variant(t, wide, 400, 300, 0, 0, 255));
+    GT_ASSERT((gates_tree_dirty(t) & GATES_TREE_DIRTY_PAINT) != 0);
+    /* Decoded sets. */
+    GT_ASSERT(gates_image_load_variant_memory(t, icon, "IMG 64 64", 9) == PROVEN_ERR_UNSUPPORTED);
+    dec_t d = {0};
+    gates_tree_set_image_decoder(t, &(gates_image_decoder_t){ .ctx = &d, .decode = test_decode });
+    GT_ASSERT_OK(gates_image_load_variant_memory(t, icon, "IMG 64 64", 9));
+    GT_ASSERT(gates_image_variant_size(t, icon, 5).w == 64);
+    GT_ASSERT(gates_image_load_variant_memory(t, icon, "IMG 64 60", 9) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_image_load_variant_memory(t, 999, "IMG 64 64", 9) == PROVEN_ERR_NOT_FOUND);
+    GT_ASSERT(gates_image_load_variant_memory(t, 0, "IMG 64 64", 9) == PROVEN_ERR_NOT_FOUND);
+    GT_ASSERT(gates_image_load_variant_file(t, 0, GATES_STR("icon.png")) == PROVEN_ERR_NOT_FOUND);
+    GT_ASSERT(gates_image_load_memory(t, "IMG 2 2", 7, nullptr) == PROVEN_ERR_INVALID_ARG);
+    gates_image_id_t tiny = solid(t, 3, 2, 0, 0, 0, 255);
+    GT_ASSERT(gates_image_load_variant_file(t, tiny, GATES_STR("same.png")) == PROVEN_ERR_INVALID_ARG); /* 3 x 2 again */
+    GT_ASSERT(gates_image_load_variant_file(t, tiny, GATES_STR("x.bad")) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(d.calls == 4); /* an unknown id is refused before decoding */
+    GT_ASSERT(gates_image_variant_count(t, 999) == 0);
+    /* A button's icon at 200 %: the 32-pixel set. */
+    gates_node_t btn;
+    GT_ASSERT_OK(gates_button_create(t, gates_tree_root(t), GATES_STR(""), nullptr, nullptr, &btn));
+    GT_ASSERT_OK(gates_button_set_icon(t, btn, icon));
+    layout(t);
+    gates_draw_list_t dl;
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    GT_ASSERT_OK(gates_paint_tree(t, &dl, theme, be));
+    static gates_u32 big[2 * VW * 2 * VH];
+    gates_pixels_t target = { .ptr = big, .w = 2 * VW, .h = 2 * VH, .stride_bytes = 2 * VW * 4 };
+    GT_ASSERT_OK(gates_render_soft_scaled(&dl, target, be, 192));
+    bool blue = false;
+    for (gates_u32 i = 0; i < gates_draw_list_len(&dl); i++) {
+        const gates_draw_cmd_t *cmd = gates_draw_list_at(&dl, i);
+        if (cmd->kind != GATES_DRAW_IMAGE) continue;
+        gates_rect_t d2 = gates_rect_px(cmd->rect, 192);
+        gates_color_t m = at(big, 2 * VW, d2.x + d2.w / 2, d2.y + d2.h / 2);
+        blue = d2.w == 32 && m.b == 255 && m.r == 0;
+    }
+    GT_ASSERT(blue);
+    gates_draw_list_deinit(&dl);
+    /* Removing the image frees every set (ASan). */
+    GT_ASSERT_OK(gates_image_remove(t, wide));
+    gates_tree_destroy(t);
+}
+
 int main(void) {
     be = gates_text_backend_builtin();
     theme = gates_theme_light();
@@ -335,5 +477,6 @@ int main(void) {
     test_render();
     test_node_and_icons();
     test_command_icons();
+    test_variants();
     return gt_report("test_images");
 }

@@ -20,18 +20,47 @@ static gates_i_image_slot *slot_of(const gates_tree_t *tree, gates_u32 id) {
 }
 
 static void image_free(gates_allocator_t a, struct gates_image *im) {
-    if (im == nullptr) return;
-    if (im->px != nullptr) a.free_fn(a.ctx, im->px);
-    a.free_fn(a.ctx, im);
+    while (im != nullptr) {
+        struct gates_image *next = im->variant;
+        if (im->px != nullptr) a.free_fn(a.ctx, im->px);
+        a.free_fn(a.ctx, im);
+        im = next;
+    }
+}
+
+static bool bad_pixels(gates_i32 w, gates_i32 h, const gates_u8 *rgba, gates_u32 stride) {
+    return rgba == nullptr || w <= 0 || h <= 0 || w > IMAGE_MAX_SIDE || h > IMAGE_MAX_SIDE ||
+           (stride != 0 && stride < (gates_u32)w * 4u);
+}
+
+/* A pixel set of its own, copied from straight-alpha RGBA8. */
+static gates_err_t image_new(gates_allocator_t a, gates_i32 w, gates_i32 h, const gates_u8 *rgba, gates_u32 stride,
+                             struct gates_image **out) {
+    if (stride == 0) stride = (gates_u32)w * 4u;
+    proven_result_mem_mut_t ri = a.alloc_fn(a.ctx, sizeof(struct gates_image), alignof(struct gates_image));
+    if (!proven_is_ok(ri.err)) return ri.err;
+    struct gates_image *im = (struct gates_image *)ri.value.ptr;
+    proven_result_mem_mut_t rp = a.alloc_fn(a.ctx, (gates_usize_t)w * (gates_usize_t)h * 4u, alignof(gates_u32));
+    if (!proven_is_ok(rp.err)) {
+        a.free_fn(a.ctx, im);
+        return rp.err;
+    }
+    *im = (struct gates_image){ .w = w, .h = h, .px = (gates_u32 *)rp.value.ptr };
+    for (gates_i32 y = 0; y < h; y++) {
+        const gates_u8 *src = rgba + (gates_usize_t)y * stride;
+        for (gates_i32 x = 0; x < w; x++) {
+            im->px[y * w + x] = gates_pixel_pack(GATES_RGBA(src[x * 4], src[x * 4 + 1], src[x * 4 + 2], src[x * 4 + 3]));
+        }
+    }
+    *out = im;
+    return GATES_OK;
 }
 
 gates_err_t gates_image_add_rgba(gates_tree_t *tree, gates_i32 w, gates_i32 h, const gates_u8 *rgba,
                                  gates_u32 stride, gates_image_id_t *out_id) {
-    if (tree == nullptr || out_id == nullptr || rgba == nullptr || w <= 0 || h <= 0 || w > IMAGE_MAX_SIDE ||
-        h > IMAGE_MAX_SIDE || (stride != 0 && stride < (gates_u32)w * 4u)) {
+    if (tree == nullptr || out_id == nullptr || bad_pixels(w, h, rgba, stride)) {
         return PROVEN_ERR_INVALID_ARG;
     }
-    if (stride == 0) stride = (gates_u32)w * 4u;
     gates_allocator_t a = tree->alloc;
     gates_i_image_slot *free_slot = nullptr;
     for (gates_u32 i = 0; i < tree->image_count && free_slot == nullptr; i++) {
@@ -48,25 +77,63 @@ gates_err_t gates_image_add_rgba(gates_tree_t *tree, gates_i32 w, gates_i32 h, c
         tree->images = (gates_i_image_slot *)r.value.ptr;
         tree->image_cap = cap;
     }
-    proven_result_mem_mut_t ri = a.alloc_fn(a.ctx, sizeof(struct gates_image), alignof(struct gates_image));
-    if (!proven_is_ok(ri.err)) return ri.err;
-    struct gates_image *im = (struct gates_image *)ri.value.ptr;
-    proven_result_mem_mut_t rp = a.alloc_fn(a.ctx, (gates_usize_t)w * (gates_usize_t)h * 4u, alignof(gates_u32));
-    if (!proven_is_ok(rp.err)) {
-        a.free_fn(a.ctx, im);
-        return rp.err;
-    }
-    *im = (struct gates_image){ .w = w, .h = h, .px = (gates_u32 *)rp.value.ptr };
-    for (gates_i32 y = 0; y < h; y++) {
-        const gates_u8 *src = rgba + (gates_usize_t)y * stride;
-        for (gates_i32 x = 0; x < w; x++) {
-            im->px[y * w + x] = gates_pixel_pack(GATES_RGBA(src[x * 4], src[x * 4 + 1], src[x * 4 + 2], src[x * 4 + 3]));
-        }
-    }
+    struct gates_image *im = nullptr;
+    gates_err_t err = image_new(a, w, h, rgba, stride, &im);
+    if (!gates_is_ok(err)) return err;
     if (free_slot == nullptr) free_slot = &tree->images[tree->image_count++];
     *free_slot = (gates_i_image_slot){ .id = ++tree->next_image_id, .image = im };
     *out_id = free_slot->id;
     return GATES_OK;
+}
+
+gates_err_t gates_image_add_variant_rgba(gates_tree_t *tree, gates_image_id_t id, gates_i32 w, gates_i32 h,
+                                         const gates_u8 *rgba, gates_u32 stride) {
+    if (tree == nullptr || bad_pixels(w, h, rgba, stride)) return PROVEN_ERR_INVALID_ARG;
+    gates_i_image_slot *s = slot_of(tree, id);
+    if (s == nullptr) return PROVEN_ERR_NOT_FOUND;
+    struct gates_image *base = s->image;
+    /* The same picture: h within a pixel of w * base.h / base.w; not the base's own size. */
+    gates_i64 off = 2 * (gates_i64)h * base->w - 2 * (gates_i64)w * base->h;
+    if (off > 2 * (gates_i64)base->w || off < -2 * (gates_i64)base->w || w == base->w) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    struct gates_image *im = nullptr;
+    gates_err_t err = image_new(tree->alloc, w, h, rgba, stride, &im);
+    if (!gates_is_ok(err)) return err;
+    struct gates_image **at = &base->variant;
+    while (*at != nullptr && (*at)->w < w) at = &(*at)->variant;
+    if (*at != nullptr && (*at)->w == w) { /* the same width again: replaces it */
+        im->variant = (*at)->variant;
+        (*at)->variant = nullptr;
+        image_free(tree->alloc, *at);
+    } else {
+        im->variant = *at;
+    }
+    *at = im;
+    gates_i_mark_dirty(tree, GATES_NONE, GATES_DIRTY_PAINT);
+    return GATES_OK;
+}
+
+gates_u32 gates_image_variant_count(const gates_tree_t *tree, gates_image_id_t id) {
+    const gates_i_image_slot *s = tree != nullptr ? slot_of(tree, id) : nullptr;
+    gates_u32 n = 0;
+    for (const struct gates_image *c = s != nullptr ? s->image : nullptr; c != nullptr; c = c->variant) n++;
+    return n;
+}
+
+gates_size_t gates_image_variant_size(const gates_tree_t *tree, gates_image_id_t id, gates_u32 index) {
+    const gates_i_image_slot *s = tree != nullptr ? slot_of(tree, id) : nullptr;
+    for (const struct gates_image *c = s != nullptr ? s->image : nullptr; c != nullptr; c = c->variant) {
+        if (index-- == 0) return (gates_size_t){ c->w, c->h };
+    }
+    return (gates_size_t){ 0, 0 };
+}
+
+gates_size_t gates_image_pick_size(const gates_tree_t *tree, gates_image_id_t id, gates_size_t device) {
+    const gates_i_image_slot *s = tree != nullptr ? slot_of(tree, id) : nullptr;
+    if (s == nullptr) return (gates_size_t){ 0, 0 };
+    const struct gates_image *c = gates_i_image_pick(s->image, device.w, device.h);
+    return (gates_size_t){ c->w, c->h };
 }
 
 gates_err_t gates_image_remove(gates_tree_t *tree, gates_image_id_t id) {
@@ -103,25 +170,44 @@ void gates_tree_set_image_decoder(gates_tree_t *tree, const gates_image_decoder_
     tree->decoder = tree->has_decoder ? *decoder : (gates_image_decoder_t){0};
 }
 
-static gates_err_t load(gates_tree_t *tree, gates_str_t src, bool is_file, gates_image_id_t *out_id) {
-    if (tree == nullptr || out_id == nullptr || (src.size > 0 && src.ptr == nullptr)) return PROVEN_ERR_INVALID_ARG;
+/* Decodes a file or bytes into a new image, or a pixel set of image `variant_of`. */
+static gates_err_t decode(gates_tree_t *tree, gates_str_t src, bool is_file, gates_image_id_t variant_of,
+                          gates_image_id_t *out_id) {
+    if (tree == nullptr || (out_id == nullptr && variant_of == 0) || (src.size > 0 && src.ptr == nullptr)) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
     if (!tree->has_decoder) return PROVEN_ERR_UNSUPPORTED;
+    if (variant_of != 0 && slot_of(tree, variant_of) == nullptr) return PROVEN_ERR_NOT_FOUND;
     gates_u8 *px = nullptr;
     gates_i32 w = 0, h = 0;
     gates_err_t err = tree->decoder.decode(tree->decoder.ctx, src, is_file, tree->alloc, &px, &w, &h);
     if (gates_is_ok(err)) {
-        err = gates_image_add_rgba(tree, w, h, px, 0, out_id);
+        err = variant_of != 0 ? gates_image_add_variant_rgba(tree, variant_of, w, h, px, 0)
+                              : gates_image_add_rgba(tree, w, h, px, 0, out_id);
     }
     if (px != nullptr) tree->alloc.free_fn(tree->alloc.ctx, px);
     return err;
 }
 
+static gates_str_t bytes_of(const void *bytes, gates_usize_t size) {
+    return (gates_str_t){ .ptr = (const gates_u8 *)bytes, .size = size };
+}
+
 gates_err_t gates_image_load_file(gates_tree_t *tree, gates_str_t path, gates_image_id_t *out_id) {
-    return load(tree, path, true, out_id);
+    return decode(tree, path, true, 0, out_id);
 }
 
 gates_err_t gates_image_load_memory(gates_tree_t *tree, const void *bytes, gates_usize_t size, gates_image_id_t *out_id) {
-    return load(tree, (gates_str_t){ .ptr = (const gates_u8 *)bytes, .size = size }, false, out_id);
+    return decode(tree, bytes_of(bytes, size), false, 0, out_id);
+}
+
+gates_err_t gates_image_load_variant_file(gates_tree_t *tree, gates_image_id_t id, gates_str_t path) {
+    return id != 0 ? decode(tree, path, true, id, nullptr) : PROVEN_ERR_NOT_FOUND;
+}
+
+gates_err_t gates_image_load_variant_memory(gates_tree_t *tree, gates_image_id_t id, const void *bytes,
+                                            gates_usize_t size) {
+    return id != 0 ? decode(tree, bytes_of(bytes, size), false, id, nullptr) : PROVEN_ERR_NOT_FOUND;
 }
 
 /* -- drawing ------------------------------------------------------------------------------- */

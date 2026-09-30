@@ -63,6 +63,9 @@ Consequences a program can rely on:
 - All sizes and positions in the API are logical units (1/96 inch). The window scales at its
   boundary to the monitor's DPI, a program zoom (`gates_window_set_zoom`) and the Windows "Text
   size" setting; the core never sees device pixels.
+- An image's natural size is its pixel size in logical units. An image may hold more pixel sets
+  of the same picture (0.10.0); the renderer draws the smallest set that covers the device
+  pixels, else the largest.
 - Colours come from semantic tokens (`gates/theme.h`) through the active theme: light, dark or
   high contrast, following the system by default. Theme text reaches 4.5:1 contrast on its
   background; borders and cues 3:1; focus and error cues are at least 2 units thick.
