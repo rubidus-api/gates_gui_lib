@@ -566,6 +566,28 @@ static gates_err_t page_progress(app_t *a, gates_node_t page) {
     TRY(tip(a, a->progress, "Progress in tenths"));
     TRY(gates_separator_create(t, page, &sep));
     TRY(gates_label_create(t, page, cs("A separator above; the status bar below keeps the time."), &l));
+    /* A scroll area that scrolls sideways too (0.10.0): a row of steps wider than the page. */
+    gates_node_t area, row, step;
+    TRY(gates_panel_create(t, page, &area));
+    TRY(gates_layout_set(t, area, GATES_LAYOUT_KIND_SCROLL));
+    TRY(gates_layout_set_scroll_sideways(t, area, true));
+    TRY(gates_layout_set_child_grow(t, area, 1));
+    TRY(gates_node_set_automation_id(t, area, cs("progress.steps")));
+    TRY(gates_node_set_access_name(t, area, cs("Steps")));
+    TRY(tip(a, area, "Scrolls sideways: Shift+wheel, the bottom bar, or Tab through the steps"));
+    TRY(gates_panel_create(t, area, &row));
+    TRY(gates_layout_set(t, row, GATES_LAYOUT_KIND_ROW));
+    TRY(gates_layout_set_gap(t, row, 6));
+    for (int i = 1; i <= 16; i++) {
+        char name[24];
+        snprintf(name, sizeof name, "Step %d of 16", i);
+        TRY(gates_button_create(t, row, cs(name), nullptr, nullptr, &step));
+    }
+    for (int i = 1; i <= 12; i++) {
+        char line[48];
+        snprintf(line, sizeof line, "Line %d under the steps", i);
+        TRY(gates_label_create(t, area, cs(line), &l));
+    }
     return GATES_OK;
 }
 
