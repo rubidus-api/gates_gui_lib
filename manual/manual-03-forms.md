@@ -24,7 +24,8 @@ stable when rows are hidden or reordered. `gates_form_editor` gives the editor o
 `required` adds a marker to the label and tells assistive technology the field is required;
 `help` is a line under the editor; `gates_form_set_error` shows a message under the field in the
 error colour and marks a text box invalid - an empty message clears it. A narrow form puts each
-label above its editor instead of beside it.
+label above its editor instead of beside it, and is as tall as those stacked rows, so what
+follows it moves down rather than being covered.
 
 <!-- example: manual/examples/ex_04_form.c -->
 ```c

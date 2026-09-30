@@ -116,7 +116,13 @@ int main(void) {
   the application changes its flattened rows and calls `gates_view_model_changed`. gates never
   walks rows it does not show.
 - A log (`gates_log_create`) owns its lines: append text, keep a line and byte limit, drop the
-  oldest, and follow the end while the person has not scrolled away.
+  oldest, and follow the end while the person has not scrolled away. Scrolling away or back
+  reports GATES_EVENT_FOLLOW_CHANGED (`ev->result` 1 while following), so a status line can say
+  so without watching the pointer.
+
+Every view also answers typing: the letters typed select the next row whose first shown cell
+starts with them (a pause of a second starts over; the same letter again steps through such
+rows). Ctrl+C puts the selected row's shown cells on the clipboard, separated by tabs.
 
 ## Cells people can change
 
@@ -128,7 +134,9 @@ with a `paint` function draws its cells itself, clipped to each cell.
 A column marked `editable` lets a person change the selected row's cell, and the model says yes
 or no through its `set_cell` function. F2 or a double click opens a text box over the cell with
 the model's text selected; Enter commits, Escape cancels, and moving focus away commits. Space,
-or a click on the box, toggles a check column. When `set_cell` returns an error the editor stays
+or a click on the box, toggles a check column. Which column F2 and Space use follows the table's
+current column - the cell last pressed, or moved with Ctrl+Left and Ctrl+Right, outlined in the
+selected row - when it is an editable column of the right kind, else the first such column. When `set_cell` returns an error the editor stays
 open and is marked invalid (after focus has left, the edit is dropped instead). After a change
 the view reads the model again and sends CELL_EDITED with the row (`ev->item`) and the column
 (`ev->result`). The program can do the same with `gates_view_edit` and `gates_view_end_edit`.

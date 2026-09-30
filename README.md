@@ -3,7 +3,7 @@
 # Gates GUI Library
 
 A small retained-mode GUI library in C23 for tool-style Windows programs - settings panels,
-inspectors, log viewers, file browsers, build tools. Version **0.7.0** (the latest release is 0.2.0).
+inspectors, log viewers, file browsers, build tools. Version **0.8.0**.
 
 | | |
 |---|---|
@@ -49,7 +49,7 @@ What you get:
   Automation provider, so Narrator and automation tools can read and use every control; an
   audit of enforced rules (names, 24 x 24 targets, keyboard reach, contrast, focus cues).
 
-It is not a browser engine, a game UI or a pixel-exact drawing kit. Version 0.7.0 has one
+It is not a browser engine, a game UI or a pixel-exact drawing kit. Version 0.8.0 has one
 backend: Win32 with a software renderer. The core is platform-free C23 and runs its tests
 anywhere.
 
@@ -95,7 +95,7 @@ int main(void) {
 Build it with mingw-w64 against the SDK:
 
 ```sh
-x86_64-w64-mingw32-gcc -std=c23 -O2 -Igates-0.7.0/include hello.c -Lgates-0.7.0/lib/win64 \
+x86_64-w64-mingw32-gcc -std=c23 -O2 -Igates-0.8.0/include hello.c -Lgates-0.8.0/lib/win64 \
     -lgates -lproven -lgdi32 -luser32 -limm32 -ldwmapi -ladvapi32 -luiautomationcore \
     -lole32 -loleaut32 -luuid -mwindows -o hello.exe
 ```
@@ -133,9 +133,14 @@ headless use on any system.
 
 ## Status
 
-0.7.0 adds a multi-line text editor over a gap buffer: it paints only the lines it shows, wraps,
-numbers lines, highlights through the program's styler, finds, indents, composes with input
-methods at the caret and reads by line to screen readers. 0.6.0 added data controls: table cells
+0.8.0 rounds out what came before: Shift+click, word and line clicks and row-wise Home/End in
+the editor and text boxes, spin arrows that repeat and a wheel for focused numbers, grid rows
+that grow, type-ahead, row copy and a current column in tables, a follow event for logs,
+several files from one open dialog, forms that measure their stacked height, and error
+reporting for input through the window. 0.7.0 added a multi-line text editor over a gap
+buffer: it paints only the lines it shows, wraps, numbers lines, highlights through the
+program's styler, finds, indents, composes with input methods at the caret and reads by line to
+screen readers. 0.6.0 added data controls: table cells
 that show check boxes, progress bars and icons and can be edited in place, columns people hide and reorder from a header menu, a property grid, an undo
 stack for the program's own data, and background tasks with progress and Cancel. 0.5.0 added
 images and icons (PNG, JPEG and more through Windows Imaging Component) and the native file,

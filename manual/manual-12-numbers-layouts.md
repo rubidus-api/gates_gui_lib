@@ -28,7 +28,9 @@ GATES_EVENT_VALUE_CHANGED with `ev->value`; `gates_range_set_value` changes the 
 and `gates_range_set` changes the limits.
 
 `gates_spin_create` makes a text box with up/down arrows. Up and Down step, PgUp and PgDn page,
-and the arrows step with a click; Left, Right, Home and End stay with the text. While typed text
+and the arrows step with a click and repeat while held; Left, Right, Home and End stay with
+the text. The wheel steps a spin box or slider only while it has focus - unfocused, it scrolls
+the page, so reading a form never changes a value by accident. While typed text
 is not a number in range the box is marked invalid; Enter or leaving the box commits it, and
 text that is still not a number in range goes back to the value. `gates_spin_box` returns the
 text box, for a label's target or a width.
@@ -130,8 +132,9 @@ toggle reports VALUE_CHANGED on the group with `ev->checked` = expanded;
 default): each column as wide as its widest child, each row as tall as its tallest, children
 centred in their row and filling the cell's width unless their align asks for their own width.
 `gates_layout_set_grid_column_grow` gives spare width to columns - the usual choice is labels
-in a fixed column and fields in a growing one - and `gates_layout_set_child_span` lets a child
-cover several columns. `GATES_LAYOUT_KIND_WRAP` places children left to right at their own size
+in a fixed column and fields in a growing one - `gates_layout_set_grid_row_grow` gives spare
+height to rows (the first `GATES_GRID_MAX_GROW_ROWS`), and `gates_layout_set_child_span` lets a
+child cover several columns. `GATES_LAYOUT_KIND_WRAP` places children left to right at their own size
 and starts a new line when the next does not fit, like words on a page; its height follows the
 width it is given. The gap applies both ways in both.
 
@@ -189,8 +192,9 @@ int main(void) {
 
 ## Accessibility
 
-A spin box is a Spinner with a RangeValue in its integer units, and its text box is an edit
-named after it; a slider is a Slider with a RangeValue. Screen readers and automation can set
+A spin box is a Spinner with a RangeValue in the units it shows (1.25 for a scaled value of 125,
+with the step and page as its small and large change), and its text box is an edit named after
+it; a slider is a Slider with a RangeValue. Screen readers and automation can set
 either value; it is clamped into the range and reported like a person's change. A group box is
 a Group named by its title; a collapsible one has ExpandCollapse, and its title's focus is the
 group's.

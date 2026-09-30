@@ -78,6 +78,9 @@ a node that could not be created leaves nothing half-built behind. The codes are
 `PROVEN_ERR_INVALID_ARG` (a bad or stale argument), `PROVEN_ERR_INVALID_STATE` (not now: a
 disabled control, a closed dialog), `PROVEN_ERR_NOMEM`, `PROVEN_ERR_OUT_OF_BOUNDS` (a limit).
 Out of memory is an ordinary answer, not a crash: the reference applications handle it.
+Input that cannot fail loudly (a key, a click) records its failure for `gates_input_take_error`;
+a window's `on_input_error` callback hears it after each input turn, and the reference
+applications show it in their status line.
 
 ## Events and safe points
 

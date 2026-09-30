@@ -82,7 +82,7 @@ int main(void) {
 
 파일, 폴더, 색을 고르는 일과 예/아니오를 묻는 일은 플랫폼에 맡기는 것이 가장 좋다. 사람들은 그 대화 상자를 알고, 그것은 플랫폼의 키보드 지원, 화면 낭독기 지원, 최근 위치를 함께 가져온다. Windows에서는 다음과 같다.
 
-- `gates_window_open_file`, `gates_window_save_file`, `gates_window_choose_folder`는 `gates_file_dialog_t`(제목, `"Pictures|*.png;*.jpg|All files|*.*"` 같은 필터, 시작 폴더, 저장할 때의 추천 이름)를 받아 고른 경로를 UTF-8로 버퍼에 적는다. 저장 대화 상자는 덮어쓰기 전에 묻는다.
+- `gates_window_open_file`, `gates_window_save_file`, `gates_window_choose_folder`는 `gates_file_dialog_t`(제목, `"Pictures|*.png;*.jpg|All files|*.*"` 같은 필터, 시작 폴더, 저장할 때의 추천 이름)를 받아 고른 경로를 UTF-8로 버퍼에 적는다. 저장 대화 상자는 덮어쓰기 전에 묻는다. `gates_window_open_files`는 파일 여러 개를 고르게 한다. 버퍼에서 경로마다 NUL 바이트로 끝나고, `count`가 몇 개인지 알려 준다.
 - `gates_window_choose_color`는 한 색에서 시작해 고른 색을 답한다.
 - `gates_window_message`는 확인, 확인/취소, 예/아니오, 예/아니오/취소 버튼과 정보, 경고, 오류, 질문 아이콘으로 메시지를 보이고 답을 돌려준다(Escape와 닫기 상자는 취소로 답한다).
 

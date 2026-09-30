@@ -257,4 +257,5 @@ int main(void) {
 ```
 
 움직임을 보이기 전에 `gates_window_reduced_motion` 을 묻는다. 사람이 애니메이션 효과를 꺼 두었으면
-끝 상태를 바로 보인다.
+끝 상태를 바로 보인다. app_settings 의 "applying" 단계가 그렇게 한다. 타이머가 진행 막대를 채우거나,
+막대가 곧바로 가득 찬다.

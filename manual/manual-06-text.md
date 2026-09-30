@@ -5,7 +5,8 @@ Headers: `gates/widget.h` (text box), `gates/text_edit.h`, `gates/clipboard.h`, 
 
 ## The text box
 
-A text box edits one line of UTF-8 text. The person types, selects with Shift and the pointer,
+A text box edits one line of UTF-8 text. The person types, selects with Shift and the pointer
+(Shift+click extends, a double click takes a word, a triple click all of it),
 moves by character and to the start or end (Home, End), copies, cuts and pastes (Ctrl+C, Ctrl+X, Ctrl+V), and undoes and
 redoes (Ctrl+Z, Ctrl+Y). Each successful edit queues TEXT_CHANGED with the committed text; the
 program's own `gates_textbox_set_text` is silent and clears the undo history. Under every text
@@ -79,7 +80,7 @@ A read-only or password box turns the IME off while it has focus. For a program 
 text itself - tests, automation - `gates_input_commit` delivers text as an IME would, and
 `gates_input_preedit` shows a composition.
 
-## Unicode limits in 0.7.0
+## Unicode limits in 0.8.0
 
 - Text is UTF-8 everywhere; invalid input is refused, never repaired silently.
 - Every character has its own advance, taken from the font: text is proportional in the UI
@@ -105,7 +106,8 @@ paste do nothing.
 
 `gates_editor_create` (gates/editor.h) makes a multi-line editor over a text buffer. It paints only
 the lines it shows, so a long file costs what the window costs. Arrows, Home/End, PageUp/PageDown
-and Ctrl with them move the caret (Shift selects), Enter keeps the text's own line ending, Tab
+and Ctrl with them move the caret (Shift selects; Shift+click extends, a double click takes a
+word, a triple click the line with its break), Enter keeps the text's own line ending, Tab
 moves focus unless the description asks for tabs to be typed, and Ctrl+A/C/X/V/Z/Y work as
 everywhere. A person's edits are undoable - a typing or deleting run is one step - and
 `gates_editor_modified` tells whether the text differs from what was set or saved. The program
@@ -163,7 +165,8 @@ int main(void) {
 ```
 
 The description turns on soft wrap (rows break after the last blank that fits; Up and Down then
-move by rows), a line number gutter and auto-indent. When Tab types tabs, Tab and Shift+Tab
+move by rows, Home and End go to the row's start and end before the line's, and a caret at the
+end of a row stays drawn there), a line number gutter and auto-indent. When Tab types tabs, Tab and Shift+Tab
 indent and unindent the selected lines and Ctrl+Tab moves focus on, so the keyboard is never
 trapped. Highlighting is the program's: `gates_editor_set_styles` maps style bytes to colours,
 and a styler (`gates_editor_set_styler`) is asked, just before painting, to style the lines about
@@ -171,8 +174,9 @@ to show whose styles are stale - an edit makes its line stale again - so style w
 view, not the length of the text. `gates_editor_find` selects the next match; marks
 (`gates_editor_mark_add`) keep a place while the text around it changes.
 An input method composes at the caret, drawn underlined in the text; the result arrives as one
-edit. Screen readers read the editor's text by character, word and line, with one rectangle per
-row for a range (`gates_access_text_rects`).
+edit. Screen readers read the editor's text by character, word and line - a line as shown, a
+wrapped row (`gates_access_text_line`); a paragraph is a text line - with one rectangle per row
+for a range (`gates_access_text_rects`).
 
 <!-- example: manual/examples/ex_06_highlight.c -->
 ```c

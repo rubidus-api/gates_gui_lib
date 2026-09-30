@@ -76,6 +76,8 @@ gates 에 등록한 콜백과 `user` 포인터(처리기, 모델, 명령 함수)
 `PROVEN_ERR_INVALID_ARG`(틀렸거나 낡은 인자), `PROVEN_ERR_INVALID_STATE`(지금은 안 됨: 꺼진 컨트롤,
 닫힌 대화상자), `PROVEN_ERR_NOMEM`, `PROVEN_ERR_OUT_OF_BOUNDS`(한도)가 있다. 메모리 부족은 충돌이
 아니라 평범한 대답이며, 참조 응용들은 이를 처리한다.
+크게 실패를 알릴 수 없는 입력(키, 클릭)은 그 실패를 `gates_input_take_error` 에 남긴다. 창의
+`on_input_error` 콜백은 입력 한 차례가 끝날 때마다 그것을 듣고, 참조 응용들은 상태 줄에 보인다.
 
 ## 이벤트와 안전한 시점
 

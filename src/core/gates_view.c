@@ -762,7 +762,7 @@ gates_err_t gates_i_view_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
                                                        g.body.w, g.row_h },
                                    gates_theme_focus_width(theme),
                                    gates_theme_color(theme, GATES_COLOR_FOCUS_RING)));
-        gates_i32 cc = -1; /* the current cell, inside the row's ring (0.8.0) */
+        gates_i32 cc = -1; /* the current cell, inside the row's ring, in the selection's text colour (0.8.0) */
         for (gates_u32 c = 0; v->cur_col != 0 && c < v->ncol; c++) {
             if (v->cols[c].id == v->cur_col && !v->cols[c].hidden) cc = (gates_i32)c;
         }
@@ -770,7 +770,7 @@ gates_err_t gates_i_view_paint(const gates_tree_t *tree, gates_u32 idx, gates_dr
             gates_i32 fw = gates_theme_focus_width(theme);
             TRY_DRAW(gates_draw_border(dl, (gates_rect_t){ col_left(v, &g, (gates_u32)cc) + fw, g.body.y + sel_k * g.row_h + fw,
                                                            v->cols[cc].width - 2 * fw, g.row_h - 2 * fw },
-                                       1, gates_theme_color(theme, GATES_COLOR_FOCUS_RING)));
+                                       1, gates_theme_color(theme, GATES_COLOR_SELECTION_FG))); /* on the selection */
         }
     }
     TRY_DRAW(gates_draw_clip_pop(dl));

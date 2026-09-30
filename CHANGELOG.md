@@ -4,6 +4,51 @@ All notable changes to this project will be documented in this file.
 
 This project follows Keep a Changelog.
 
+## [0.8.0] - 2026-09-30
+
+Backlog follow-ups across input, controls and the Windows backend.
+
+### Added
+
+- Pointer events carry the modifier keys (`shift`, `ctrl`, `alt` in `gates_pointer_event_t`);
+  Windows fills them and reports a third quick press as `clicks` 3.
+- Text boxes and the editor: Shift+click extends the selection, a double click selects a word
+  and a triple click selects all (text box) or the line with its break (editor).
+- Editor with wrap: Home and End go to the row's start and end before the line's, and a caret at
+  a row's end stays drawn there (Up/Down into a shorter row, End, a press right of a row).
+- `gates_access_text_line`: the shown row holding an offset; the Windows UIA Line unit follows
+  wrapped rows (Paragraph stays the text line).
+- Spin boxes: an arrow held down repeats after a pause while the pointer stays on it; the wheel
+  steps a focused spin box or slider (unfocused, it scrolls the page).
+- `gates_layout_set_grid_row_grow`: spare height to GRID rows by weight (the first
+  `GATES_GRID_MAX_GROW_ROWS`).
+- Access info carries `range_step`, `range_page` and `range_scale`; UIA RangeValue reads a
+  scaled spin box as shown (1.25) with the step and page as small and large change.
+- Views: type-ahead (the next row whose first shown cell starts with the letters typed), Ctrl+C
+  copies the selected row's shown cells (tab-separated), and a current column (Ctrl+Left/Right
+  or the cell pressed, outlined) that F2 and Space use.
+- Log views report GATES_EVENT_FOLLOW_CHANGED when a person's scrolling starts or stops
+  following; ctl_log and app_logview use it.
+- `gates_window_open_files`: several files from one open dialog (the gallery's Pictures page).
+- Window callbacks gain `on_input_error`, called with `gates_input_take_error` after each input
+  turn; the reference applications show it.
+- A press on a scroll area's track pages it.
+
+### Changed
+
+- A FORM that stacks its rows (narrow) measures the stacked height, so what follows it is no
+  longer covered (a second layout pass when stacking changes, as for WRAP).
+- Menu separators are short rows; hit testing and accessibility rectangles follow them.
+- Windows: a window is shown when `gates_app_run` starts, so its first frame already has the
+  program's UI; leftover events continue on a timer instead of a self-posted message.
+- app_settings: the required-field progress bar became an applying step that animates, or not
+  when Windows is set to reduce motion.
+- Examples compare handles with `gates_node_eq`; code comments are ASCII.
+
+### Fixed
+
+- The UIA RangeValue change event of a spin box reported the value minus the minimum.
+
 ## [0.7.0] - 2026-09-30
 
 The multi-line editor (plan-0022, RFC-0006).

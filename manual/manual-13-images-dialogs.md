@@ -101,7 +101,8 @@ reader support and recent places. On Windows:
 - `gates_window_open_file`, `gates_window_save_file` and `gates_window_choose_folder` take a
   `gates_file_dialog_t` (a title, filters such as `"Pictures|*.png;*.jpg|All files|*.*"`, a
   starting folder, and for saving a suggested name) and write the chosen path, in UTF-8, to your
-  buffer. A save dialog asks before overwriting.
+  buffer. A save dialog asks before overwriting. `gates_window_open_files` lets the person pick
+  several files: each path ends with a NUL byte in the buffer, and `count` says how many.
 - `gates_window_choose_color` starts from a colour and answers with the chosen one.
 - `gates_window_message` shows a message with OK, OK/Cancel, Yes/No or Yes/No/Cancel and an
   information, warning, error or question icon, and returns the answer (Escape and the close

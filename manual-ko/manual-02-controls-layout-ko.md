@@ -4,7 +4,7 @@
 
 ## 컨트롤 표
 
-컨트롤은 저마다 노드 하나다. 아래 표가 0.7.0 의 유한한 컨트롤 전부다. 사람이 그것으로 하는 일,
+컨트롤은 저마다 노드 하나다. 아래 표가 0.8.0 의 유한한 컨트롤 전부다. 사람이 그것으로 하는 일,
 키, 프로그램이 받는 이벤트, 화면 읽기 프로그램이 듣는 것(9장)을 적었다.
 
 | 컨트롤 | 만들기 | 사람은 | 키 | 이벤트 | 접근성으로는 |
@@ -13,21 +13,21 @@
 | 이름표 | `gates_label_create` | 글을 읽는다 | - | - | 텍스트 |
 | 버튼 | `gates_button_create` | 동작 하나를 청한다 | Space(뗄 때), Enter | ACTIVATED | 버튼(Invoke) |
 | 체크박스 | `gates_checkbox_create` | 선택 사항을 켜고 끈다 | Space | VALUE_CHANGED | 체크박스(Toggle) |
-| 텍스트 상자 | `gates_textbox_create` | 한 줄을 입력한다 | 편집 키, Ctrl+C/X/V/Z/Y, IME | TEXT_CHANGED, PREEDIT_CHANGED, LIMIT_EXCEEDED | 편집(Value, Text) |
-| 편집기 | `gates_editor_create` | 여러 줄을 쓴다 | 편집 키, Ctrl+화살표, PageUp/PageDown, Ctrl+C/X/V/Z/Y, IME; 청하면 Tab | TEXT_CHANGED, SELECTION_CHANGED, PREEDIT_CHANGED | 편집(Value, 줄 단위 Text)(6장) |
+| 텍스트 상자 | `gates_textbox_create` | 한 줄을 입력한다 | 편집 키, Ctrl+C/X/V/Z/Y, IME; 두 번 누르면 단어, 세 번 누르면 전부, Shift+클릭은 넓힌다 | TEXT_CHANGED, PREEDIT_CHANGED, LIMIT_EXCEEDED | 편집(Value, Text) |
+| 편집기 | `gates_editor_create` | 여러 줄을 쓴다 | 편집 키, Ctrl+화살표, PageUp/PageDown, Ctrl+C/X/V/Z/Y, IME; 청하면 Tab; 두 번 누르면 단어, 세 번 누르면 줄, Shift+클릭은 넓힌다 | TEXT_CHANGED, SELECTION_CHANGED, PREEDIT_CHANGED | 편집(Value, 줄 단위 Text)(6장) |
 | 라디오 그룹 | `gates_radio_create` | 몇 개 중 하나를 고른다 | 화살표, Home, End, Space | VALUE_CHANGED(result = 선택지 id) | 라디오 버튼의 그룹 |
 | 선택 상자 | `gates_choice_create` | 목록에서 하나를 고른다 | Space, Enter, Alt+Down 으로 열기; 화살표, Enter, Escape | VALUE_CHANGED | 콤보 상자(Selection, Expand) |
 | 진행 막대 | `gates_progress_create` | 일이 얼마나 되었는지 본다 | - | - | 진행 막대(백분율) |
 | 구분선 | `gates_separator_create` | 나뉨을 본다 | - | - | 구분선 |
-| 뷰 | `gates_view_create`, `gates_log_create` | 목록·표·트리·로그에서 고른다 | 화살표, PageUp/PageDown, Home, End, Enter; 트리는 Left/Right; 고칠 수 있는 열에서 F2, Space | SELECTION_CHANGED, ACTIVATED, SORT_REQUESTED, EXPAND_REQUESTED, CELL_EDITED | 목록, 표, 트리(5장) |
+| 뷰 | `gates_view_create`, `gates_log_create` | 목록·표·트리·로그에서 고른다 | 화살표, PageUp/PageDown, Home, End, Enter; 트리는 Left/Right; 글자를 치면 그 줄로 간다; Ctrl+C 는 줄을 복사한다; Ctrl+Left/Right 는 F2 와 Space 가 쓰는 열을 고른다 | SELECTION_CHANGED, ACTIVATED, SORT_REQUESTED, EXPAND_REQUESTED, CELL_EDITED | 목록, 표, 트리(5장) |
 | 폼 | `gates_form_create` | 이름표 달린 필드를 채운다 | - | 편집기들의 이벤트 | 필드의 그룹(3장) |
 | 속성 격자 | `gates_propgrid_create` | 레코드의 형식 있는 필드를 고친다 | Tab, 편집기들의 키 | VALUE_CHANGED(result = 속성 id) | 이름 붙은 편집기의 그룹(5장) |
 | 대화상자, 메뉴 | `gates_dialog_open`, `gates_menu_open` | 한 번 답한다, 명령을 고른다 | Enter, Escape, 화살표 | DIALOG_CLOSED, MENU_CLOSED | 창, 메뉴(4장) |
 | 메뉴 막대 | `gates_menubar_create` | 메뉴에서 명령을 고른다 | F10 또는 Alt, 화살표, 글자, Escape | MENU_CLOSED, 명령 | 메뉴 막대(11장) |
 | 도구 막대 | `gates_toolbar_create` | 한 번 클릭으로 명령을 실행한다 | 화살표, Space, Enter | 명령 | 도구 막대(11장) |
 | 상태 줄 | `gates_statusbar_create` | 프로그램의 상태를 읽는다 | - | - | 상태 줄(11장) |
-| 스핀 상자 | `gates_spin_create` | 숫자를 입력하거나 한 칸씩 바꾼다 | Up/Down, PgUp/PgDn, Enter | VALUE_CHANGED(value) | 스피너(RangeValue)(12장) |
-| 슬라이더 | `gates_slider_create` | 트랙을 따라 숫자를 끈다 | 화살표, PgUp/PgDn, Home, End | VALUE_CHANGED(value) | 슬라이더(RangeValue)(12장) |
+| 스핀 상자 | `gates_spin_create` | 숫자를 입력하거나 한 칸씩 바꾼다 | Up/Down, PgUp/PgDn, Enter; 화살표를 누르고 있으면 되풀이; 포커스가 있을 때 휠 | VALUE_CHANGED(value) | 스피너(RangeValue)(12장) |
+| 슬라이더 | `gates_slider_create` | 트랙을 따라 숫자를 끈다 | 화살표, PgUp/PgDn, Home, End; 포커스가 있을 때 휠 | VALUE_CHANGED(value) | 슬라이더(RangeValue)(12장) |
 | 그룹 상자 | `gates_group_create` | 컨트롤 묶음을 보고 접는다 | 제목에서 Space, Enter | VALUE_CHANGED(checked = 펼침) | 그룹(ExpandCollapse)(12장) |
 | 이미지 | `gates_image_create` | 그림을 본다 | - | - | 이름이 있으면 이미지(13장) |
 | 탭 | `gates_tabs_create` | 페이지 사이를 오간다 | 화살표, Ctrl+Tab, Ctrl+PgUp/PgDn | VALUE_CHANGED(result = 번호) | 탭(Selection)(11장) |
@@ -52,7 +52,7 @@ Tab 과 Shift+Tab 은 켜져 있고 보이는 컨트롤을 트리 차례대로 �
 | `GATES_LAYOUT_KIND_ROW` | 왼쪽에서 오른쪽으로, 저마다 가로줄만큼 높게 |
 | `GATES_LAYOUT_KIND_STACK` | 겹쳐서, 활성인 하나만 보인다(쪽) |
 | `GATES_LAYOUT_KIND_SPLIT` | 두 칸과 사람이 끄는 손잡이 |
-| `GATES_LAYOUT_KIND_SCROLL` | 휠과 스크롤 막대가 있는 창구 안의 세로줄 |
+| `GATES_LAYOUT_KIND_SCROLL` | 휠과 스크롤 막대가 있는 창구 안의 세로줄(트랙을 누르면 한 쪽씩) |
 | `GATES_LAYOUT_KIND_FORM` | 줄마다 이름표 옆에 편집기(3장) |
 | `GATES_LAYOUT_KIND_ABSOLUTE` | 프로그램이 준 사각형에 |
 

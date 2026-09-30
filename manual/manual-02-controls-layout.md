@@ -4,7 +4,7 @@ Headers: `gates/widget.h`, `gates/layout.h`, `gates/geometry.h`.
 
 ## The control matrix
 
-Every control is one node. The table is the whole finite set in 0.7.0: what the person does
+Every control is one node. The table is the whole finite set in 0.8.0: what the person does
 with it, the keys, the events the program receives, and what a screen reader hears (chapter 9).
 
 | Control | Create | The person | Keys | Events | Accessible as |
@@ -13,21 +13,21 @@ with it, the keys, the events the program receives, and what a screen reader hea
 | label | `gates_label_create` | reads text | - | - | text |
 | button | `gates_button_create` | asks for one action | Space (on release), Enter | ACTIVATED | button (Invoke) |
 | check box | `gates_checkbox_create` | turns an option on or off | Space | VALUE_CHANGED | check box (Toggle) |
-| text box | `gates_textbox_create` | types one line | editing keys, Ctrl+C/X/V/Z/Y, the IME | TEXT_CHANGED, PREEDIT_CHANGED, LIMIT_EXCEEDED | edit (Value, Text) |
-| editor | `gates_editor_create` | writes many lines | editing keys, Ctrl+arrows, PageUp/PageDown, Ctrl+C/X/V/Z/Y, the IME; Tab when asked | TEXT_CHANGED, SELECTION_CHANGED, PREEDIT_CHANGED | edit (Value, Text by line) (chapter 6) |
+| text box | `gates_textbox_create` | types one line | editing keys, Ctrl+C/X/V/Z/Y, the IME; double click a word, triple click all, Shift+click extends | TEXT_CHANGED, PREEDIT_CHANGED, LIMIT_EXCEEDED | edit (Value, Text) |
+| editor | `gates_editor_create` | writes many lines | editing keys, Ctrl+arrows, PageUp/PageDown, Ctrl+C/X/V/Z/Y, the IME; Tab when asked; double click a word, triple click a line, Shift+click extends | TEXT_CHANGED, SELECTION_CHANGED, PREEDIT_CHANGED | edit (Value, Text by line) (chapter 6) |
 | radio group | `gates_radio_create` | picks one of a few | arrows, Home, End, Space | VALUE_CHANGED (result = option id) | group of radio buttons |
 | choice | `gates_choice_create` | picks one from a list | Space, Enter, Alt+Down open; arrows, Enter, Escape | VALUE_CHANGED | combo box (Selection, Expand) |
 | progress | `gates_progress_create` | sees how far work has come | - | - | progress bar (percent) |
 | separator | `gates_separator_create` | sees a division | - | - | separator |
-| view | `gates_view_create`, `gates_log_create` | chooses in a list, table, tree or log | arrows, PageUp/PageDown, Home, End, Enter; tree: Left/Right; F2, Space in editable columns | SELECTION_CHANGED, ACTIVATED, SORT_REQUESTED, EXPAND_REQUESTED, CELL_EDITED | list, table, tree (chapter 5) |
+| view | `gates_view_create`, `gates_log_create` | chooses in a list, table, tree or log | arrows, PageUp/PageDown, Home, End, Enter; tree: Left/Right; typing jumps to a row; Ctrl+C copies the row; Ctrl+Left/Right pick the column F2 and Space use | SELECTION_CHANGED, ACTIVATED, SORT_REQUESTED, EXPAND_REQUESTED, CELL_EDITED | list, table, tree (chapter 5) |
 | form | `gates_form_create` | fills labelled fields | - | the editors' events | group of fields (chapter 3) |
 | property grid | `gates_propgrid_create` | edits a record's typed fields | Tab, the editors' keys | VALUE_CHANGED (result = property id) | groups of named editors (chapter 5) |
 | dialog, menu | `gates_dialog_open`, `gates_menu_open` | answers once, picks a command | Enter, Escape, arrows | DIALOG_CLOSED, MENU_CLOSED | window, menu (chapter 4) |
 | menu bar | `gates_menubar_create` | picks a command from a menu | F10 or Alt, arrows, letters, Escape | MENU_CLOSED, commands | menu bar (chapter 11) |
 | toolbar | `gates_toolbar_create` | runs a command with one click | arrows, Space, Enter | commands | tool bar (chapter 11) |
 | status bar | `gates_statusbar_create` | reads the state of the program | - | - | status bar (chapter 11) |
-| spin box | `gates_spin_create` | types or steps a number | Up/Down, PgUp/PgDn, Enter | VALUE_CHANGED (value) | spinner (RangeValue) (chapter 12) |
-| slider | `gates_slider_create` | drags a number along a track | arrows, PgUp/PgDn, Home, End | VALUE_CHANGED (value) | slider (RangeValue) (chapter 12) |
+| spin box | `gates_spin_create` | types or steps a number | Up/Down, PgUp/PgDn, Enter; an arrow held repeats; the wheel when focused | VALUE_CHANGED (value) | spinner (RangeValue) (chapter 12) |
+| slider | `gates_slider_create` | drags a number along a track | arrows, PgUp/PgDn, Home, End; the wheel when focused | VALUE_CHANGED (value) | slider (RangeValue) (chapter 12) |
 | group box | `gates_group_create` | sees (and folds) a set of controls | Space, Enter on the title | VALUE_CHANGED (checked = expanded) | group (ExpandCollapse) (chapter 12) |
 | image | `gates_image_create` | sees a picture | - | - | image when named (chapter 13) |
 | tabs | `gates_tabs_create` | switches between pages | arrows, Ctrl+Tab, Ctrl+PgUp/PgDn | VALUE_CHANGED (result = index) | tab (Selection) (chapter 11) |
@@ -53,7 +53,7 @@ children. The program chooses the container's kind (`gates_layout_set`):
 | `GATES_LAYOUT_KIND_ROW` | left to right, each as tall as the row |
 | `GATES_LAYOUT_KIND_STACK` | on top of each other; only the active one shows (pages) |
 | `GATES_LAYOUT_KIND_SPLIT` | two panes and a handle the person drags |
-| `GATES_LAYOUT_KIND_SCROLL` | a column in a viewport, with wheel and scroll bar |
+| `GATES_LAYOUT_KIND_SCROLL` | a column in a viewport, with wheel and scroll bar (a press on the track pages) |
 | `GATES_LAYOUT_KIND_FORM` | label beside editor, row by row (chapter 3) |
 | `GATES_LAYOUT_KIND_ABSOLUTE` | at rectangles the program gives |
 

@@ -261,4 +261,5 @@ int main(void) {
 ```
 
 Before animating, ask `gates_window_reduced_motion`: when the person has turned animation effects
-off, show the end state instead.
+off, show the end state instead. app_settings does this with its "applying" step: a timer fills
+a progress bar, or the bar is simply full.

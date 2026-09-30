@@ -14,7 +14,7 @@
 
 둘 다 범위 안의 정수를 고친다(`gates_range_t`: `min`, `max`, `step`, `page`, `value`). 소수 양은 `scale`을 쓴다. scale 100이면 값 125가 `1.25`로 보이므로 돈과 치수가 부동 소수점 반올림을 만나지 않는다. 사람이 바꾸면 `ev->value`를 담은 GATES_EVENT_VALUE_CHANGED가 오고, `gates_range_set_value`는 값을 조용히 바꾸며 `gates_range_set`은 한계를 바꾼다.
 
-`gates_spin_create`는 위아래 화살표가 달린 글상자를 만든다. Up과 Down이 한 칸, PgUp과 PgDn이 한 쪽씩 움직이고, 화살표는 클릭으로 한 칸 움직인다. Left, Right, Home, End는 글자에 남는다. 입력한 글자가 범위 안의 숫자가 아닌 동안 상자는 잘못됨으로 표시되고, Enter나 상자를 떠나는 것이 그 글자를 확정한다. 그때도 범위 안의 숫자가 아니면 값으로 되돌아간다. `gates_spin_box`는 글상자를 돌려준다(레이블의 대상이나 너비에 쓴다).
+`gates_spin_create`는 위아래 화살표가 달린 글상자를 만든다. Up과 Down이 한 칸, PgUp과 PgDn이 한 쪽씩 움직이고, 화살표는 클릭으로 한 칸 움직이고 누르고 있으면 되풀이한다. Left, Right, Home, End는 글자에 남는다. 휠은 스핀 상자나 슬라이더에 포커스가 있을 때만 값을 바꾼다. 포커스가 없으면 쪽을 스크롤하므로, 폼을 읽다가 값이 뜻하지 않게 바뀌는 일은 없다. 입력한 글자가 범위 안의 숫자가 아닌 동안 상자는 잘못됨으로 표시되고, Enter나 상자를 떠나는 것이 그 글자를 확정한다. 그때도 범위 안의 숫자가 아니면 값으로 되돌아간다. `gates_spin_box`는 글상자를 돌려준다(레이블의 대상이나 너비에 쓴다).
 
 `gates_slider_create`는 손잡이가 있는 트랙을 가로나 세로로 만든다(세로는 위가 더 크다). 화살표가 한 칸, PgUp과 PgDn이 한 쪽, Home과 End가 끝으로 가고, 손잡이를 끌면 온 칸 단위로 움직이며, 트랙을 누르면 포인터 쪽으로 한 쪽 간다. `gates_slider_set_ticks`는 n칸마다 눈금을 그린다.
 
@@ -99,7 +99,7 @@ int main(void) {
 
 ## 격자와 줄바꿈 배치
 
-`GATES_LAYOUT_KIND_GRID`는 자식을 `gates_layout_set_grid` 개의 열로 된 행에 놓는다(기본 두 열). 열은 가장 넓은 자식만큼 넓고, 행은 가장 높은 자식만큼 높으며, 자식은 행 안에서 세로 가운데에 놓이고 정렬이 자기 너비를 청하지 않으면 칸의 너비를 채운다. `gates_layout_set_grid_column_grow`는 남는 너비를 열에 나눠 준다. 흔히 레이블은 고정 열에, 필드는 늘어나는 열에 둔다. `gates_layout_set_child_span`은 자식이 여러 열을 덮게 한다. `GATES_LAYOUT_KIND_WRAP`는 자식을 제 크기로 왼쪽에서 오른쪽으로 놓고, 다음 자식이 들어가지 않으면 종이 위의 낱말처럼 새 줄을 시작한다. 그 높이는 받은 너비를 따른다. 두 배치 모두 간격은 두 방향에 쓰인다.
+`GATES_LAYOUT_KIND_GRID`는 자식을 `gates_layout_set_grid` 개의 열로 된 행에 놓는다(기본 두 열). 열은 가장 넓은 자식만큼 넓고, 행은 가장 높은 자식만큼 높으며, 자식은 행 안에서 세로 가운데에 놓이고 정렬이 자기 너비를 청하지 않으면 칸의 너비를 채운다. `gates_layout_set_grid_column_grow`는 남는 너비를 열에 나눠 준다. 흔히 레이블은 고정 열에, 필드는 늘어나는 열에 둔다. `gates_layout_set_grid_row_grow`는 남는 높이를 행(처음 `GATES_GRID_MAX_GROW_ROWS` 개)에 나눠 준다. `gates_layout_set_child_span`은 자식이 여러 열을 덮게 한다. `GATES_LAYOUT_KIND_WRAP`는 자식을 제 크기로 왼쪽에서 오른쪽으로 놓고, 다음 자식이 들어가지 않으면 종이 위의 낱말처럼 새 줄을 시작한다. 그 높이는 받은 너비를 따른다. 두 배치 모두 간격은 두 방향에 쓰인다.
 
 <!-- example: manual/examples/ex_12_layouts.c -->
 ```c
@@ -155,4 +155,4 @@ int main(void) {
 
 ## 접근성
 
-스핀 상자는 정수 단위의 RangeValue가 있는 Spinner이고, 그 글상자는 스핀 상자의 이름을 가진 편집기이다. 슬라이더는 RangeValue가 있는 Slider이다. 화면 낭독기와 자동화는 어느 쪽 값이든 정할 수 있으며, 그 값은 범위 안으로 맞춰지고 사람의 변경처럼 알려진다. 그룹 상자는 제목을 이름으로 가진 Group이다. 접을 수 있는 그룹에는 ExpandCollapse가 있고, 그 제목의 초점은 그룹의 초점이다.
+스핀 상자는 보이는 단위의 RangeValue(값 125에 배율 100이면 1.25, 작은·큰 변화는 칸과 쪽)가 있는 Spinner이고, 그 글상자는 스핀 상자의 이름을 가진 편집기이다. 슬라이더는 RangeValue가 있는 Slider이다. 화면 낭독기와 자동화는 어느 쪽 값이든 정할 수 있으며, 그 값은 범위 안으로 맞춰지고 사람의 변경처럼 알려진다. 그룹 상자는 제목을 이름으로 가진 Group이다. 접을 수 있는 그룹에는 ExpandCollapse가 있고, 그 제목의 초점은 그룹의 초점이다.
