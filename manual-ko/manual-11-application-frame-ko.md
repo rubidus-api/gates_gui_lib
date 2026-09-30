@@ -218,7 +218,7 @@ int main(void) {
 
 `gates_tabs_create(tree, parent, &tabs)`는 페이지 위에 제목이 늘어선 띠를 만들고, `gates_tabs_add(tree, tabs, title, &page)`를 부를 때마다 탭 하나가 더해지며 그 페이지를 돌려준다. 페이지는 컨트롤을 담는 세로 패널이다. 한 번에 한 페이지만 보이고, 다른 페이지의 컨트롤은 포인터, 키보드, 보조 기술이 닿지 않는다.
 
-띠 전체가 Tab 정지 위치 하나이다. Left, Right, Home, End는 곧바로 고르고, Ctrl+Tab과 Ctrl+Shift+Tab(또는 Ctrl+PgDn과 Ctrl+PgUp)은 탭 안 어디서나 바꾸며 끝에서 처음으로 돌아간다. 클릭은 고르고 띠에 초점을 주며, 제목의 니모닉은 그 탭을 고른다. 초점이 사라지는 페이지에 있었으면 새 페이지의 첫 컨트롤로, 없으면 띠로 옮겨 간다. 사람이 바꾸면 탭 노드에 GATES_EVENT_VALUE_CHANGED가 오고 `result`는 새 번호이다. `gates_tabs_set_selected`는 조용히 바꾼다. 이 판에서 들어가지 않는 제목은 오른쪽 끝에서 잘린다.
+띠 전체가 Tab 정지 위치 하나이다. Left, Right, Home, End는 곧바로 고르고, Ctrl+Tab과 Ctrl+Shift+Tab(또는 Ctrl+PgDn과 Ctrl+PgUp)은 탭 안 어디서나 바꾸며 끝에서 처음으로 돌아간다. 클릭은 고르고 띠에 초점을 주며, 제목의 니모닉은 그 탭을 고른다. 초점이 사라지는 페이지에 있었으면 새 페이지의 첫 컨트롤로, 없으면 띠로 옮겨 간다. 사람이 바꾸면 탭 노드에 GATES_EVENT_VALUE_CHANGED가 오고 `result`는 새 번호이다. `gates_tabs_set_selected`는 조용히 바꾼다. 제목이 다 들어가지 않으면 띠는 온전한 제목만, 늘 고른 탭을 포함해 보이고 `>>` 버튼을 둔다. 그 버튼을 누르거나 띠에서 Alt+Down 을 누르면 고른 탭에 표시가 된 모든 탭의 메뉴가 열린다.
 
 ## 배치 기억하기
 

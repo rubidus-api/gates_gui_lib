@@ -5,6 +5,8 @@
 #include <gates/widget.h>
 #include <gates/layout.h>
 #include <gates/ui.h>
+#include <gates/overlay.h>
+#include <gates/command.h>
 #include "gates_tree_internal.h"
 
 #include <string.h>
@@ -68,6 +70,7 @@ gates_err_t gates_tabs_create(gates_tree_t *tree, gates_node_t parent, gates_nod
     gates_err_t err = make_node(tree, GATES_NODE_NULL, GATES_NODE_TABS, &tabs);
     if (gates_is_ok(err)) {
         state_at(tree, tabs.index)->tabs = tb;
+        tb->self = tabs;
         tb = nullptr;
         err = gates_layout_set(tree, tabs, GATES_LAYOUT_KIND_COLUMN);
     }
@@ -244,16 +247,70 @@ gates_size_t gates_i_tabstrip_measure(const gates_tree_t *tree, const gates_node
     return (gates_size_t){ w, h < GATES_ACCESS_MIN_TARGET ? GATES_ACCESS_MIN_TARGET : h };
 }
 
+static const gates_str_t MORE = { .ptr = (const gates_u8 *)">>", .size = 2 };
+
+static gates_i32 more_w(const gates_text_backend_t *be, gates_i32 font) {
+    return be->measure(be->ctx, font, MORE).w + 2 * TAB_PAD_X;
+}
+
+/* The titles shown (0.10.0): whole titles [*first, *end), always the selected
+ * one - from the first title while the selected one fits, else ending at it.
+ * When they do not all fit, *room is the width left of the ">>" button. */
+static bool shown_range(const gates_tree_t *tree, gates_u32 strip, gates_u32 *first, gates_u32 *end, gates_i32 *room) {
+    const gates_text_backend_t *be = tree->text_backend;
+    gates_u32 tabs = owner_of(tree, strip);
+    gates_rect_t r = gates_i_slot(tree, strip)->layout_rect;
+    *first = *end = 0;
+    *room = r.w;
+    if (be == nullptr || tabs == GATES_NONE) return false;
+    gates_i32 font = gates_i_font(tree, strip);
+    gates_u32 n = gates_i_tabs_count(tree, tabs), sel = gates_i_tabs_selected(tree, tabs);
+    gates_i32 total = 0;
+    for (gates_u32 i = 0; i < n; i++) total += title_w(be, font, gates_i_tabs_title(tree, tabs, i));
+    if (total <= r.w || n == 0) {
+        *end = n;
+        return false;
+    }
+    *room = r.w - more_w(be, font);
+    if (sel >= n) sel = n - 1;
+    gates_i32 w = 0;
+    for (gates_u32 i = 0; i <= sel; i++) w += title_w(be, font, gates_i_tabs_title(tree, tabs, i));
+    gates_u32 f = 0;
+    while (f < sel && w > *room) w -= title_w(be, font, gates_i_tabs_title(tree, tabs, f++));
+    gates_u32 e = sel + 1;
+    while (e < n) {
+        gates_i32 tw = title_w(be, font, gates_i_tabs_title(tree, tabs, e));
+        if (w + tw > *room) break;
+        w += tw;
+        e++;
+    }
+    *first = f;
+    *end = e;
+    return true;
+}
+
 gates_rect_t gates_i_tab_rect(const gates_tree_t *tree, gates_u32 strip, gates_u32 index) {
     const gates_text_backend_t *be = tree->text_backend;
     gates_u32 tabs = owner_of(tree, strip);
     if (be == nullptr || tabs == GATES_NONE || index >= gates_i_tabs_count(tree, tabs)) return (gates_rect_t){0};
+    gates_u32 first, end;
+    gates_i32 room;
+    (void)shown_range(tree, strip, &first, &end, &room);
+    if (index < first || index >= end) return (gates_rect_t){0}; /* not shown: reached through ">>" */
     gates_rect_t r = gates_i_slot(tree, strip)->layout_rect;
     gates_i32 font = gates_i_font(tree, strip);
     gates_i32 x = r.x;
-    for (gates_u32 i = 0; i < index; i++) x += title_w(be, font, gates_i_tabs_title(tree, tabs, i));
+    for (gates_u32 i = first; i < index; i++) x += title_w(be, font, gates_i_tabs_title(tree, tabs, i));
     gates_rect_t t = { x, r.y, title_w(be, font, gates_i_tabs_title(tree, tabs, index)), r.h };
-    return gates_rect_intersect(t, r); /* cut at the right edge */
+    return gates_rect_intersect(t, (gates_rect_t){ r.x, r.y, room, r.h }); /* one title wider than all */
+}
+
+gates_rect_t gates_i_tabstrip_more_rect(const gates_tree_t *tree, gates_u32 strip) {
+    gates_u32 first, end;
+    gates_i32 room;
+    if (!shown_range(tree, strip, &first, &end, &room)) return (gates_rect_t){0};
+    gates_rect_t r = gates_i_slot(tree, strip)->layout_rect;
+    return (gates_rect_t){ r.x + room, r.y, r.w - room, r.h };
 }
 
 gates_i32 gates_i_tab_at(const gates_tree_t *tree, gates_u32 strip, gates_point_t p) {
@@ -297,6 +354,18 @@ gates_err_t gates_i_tabstrip_paint(const gates_tree_t *tree, gates_u32 strip, ga
         if (gates_is_ok(err) && on && tree->focus == strip) {
             gates_rect_t ring = { box.x + 2, box.y + 2, box.w - 4, box.h - 4 };
             err = gates_draw_border(dl, ring, gates_theme_focus_width(theme), gates_theme_color(theme, GATES_COLOR_FOCUS_RING));
+        }
+    }
+    gates_rect_t mr = gates_i_tabstrip_more_rect(tree, strip);
+    if (gates_is_ok(err) && !gates_rect_is_empty(mr)) { /* ">>": the rest of the titles (0.10.0) */
+        gates_rect_t box = { mr.x, mr.y + 2, mr.w, mr.h - 3 };
+        err = gates_draw_rect(dl, box, gates_theme_color(theme, GATES_COLOR_CONTROL_BG));
+        if (gates_is_ok(err)) err = gates_draw_border(dl, box, 1, line);
+        if (gates_is_ok(err)) {
+            gates_i32 tw = text->measure(text->ctx, font, MORE).w;
+            err = gates_draw_text(dl, (gates_rect_t){ box.x + (box.w - tw) / 2, box.y + (box.h - m.line_height) / 2, tw,
+                                                      m.line_height },
+                                  MORE, font, gates_theme_color(theme, GATES_COLOR_PANEL_FG));
         }
     }
     gates_err_t pop = gates_draw_clip_pop(dl);
@@ -358,6 +427,11 @@ static void pick(gates_tree_t *tree, gates_u32 tabs, gates_u32 index) {
 }
 
 bool gates_i_tabstrip_key(gates_tree_t *tree, gates_u32 strip, const gates_key_event_t *ev) {
+    if (ev->alt && !ev->ctrl && !ev->shift && ev->key == GATES_KEY_DOWN) { /* the list of every tab */
+        gates_err_t err = gates_i_tabs_open_list(tree, strip);
+        if (!gates_is_ok(err)) tree->input_error = err;
+        return true;
+    }
     if (ev->ctrl || ev->alt) return false;
     gates_u32 tabs = owner_of(tree, strip);
     gates_u32 n = gates_i_tabs_count(tree, tabs), sel = gates_i_tabs_selected(tree, tabs);
@@ -390,7 +464,53 @@ bool gates_i_tabs_ctrl_key(gates_tree_t *tree, const gates_key_event_t *ev) {
     return false;
 }
 
+/* The list of every tab (0.10.0): a menu of commands in the strip's own scope,
+ * one per tab (id = index + 1, the selected one checked); choosing one switches. */
+static void on_tab_command(gates_tree_t *tree, gates_command_id_t id, void *user) {
+    gates_i_tabs *tb = user;
+    if (gates_i_valid(tree, tb->self)) pick(tree, tb->self.index, (gates_u32)id - 1);
+}
+
+gates_err_t gates_i_tabs_open_list(gates_tree_t *tree, gates_u32 strip) {
+    gates_u32 tabs = owner_of(tree, strip);
+    if (tabs == GATES_NONE) return PROVEN_ERR_INVALID_ARG;
+    gates_i_tabs *tb = state_at(tree, tabs)->tabs;
+    gates_u32 n = gates_i_tabs_count(tree, tabs), sel = gates_i_tabs_selected(tree, tabs);
+    if (n == 0) return GATES_OK;
+    gates_node_t scope = gates_i_handle(tree, strip);
+    for (gates_u32 k = 0; k < n; k++) {
+        gates_str_t title = gates_i_tabs_title(tree, tabs, k);
+        gates_err_t err;
+        if (gates_command_exists(tree, scope, k + 1)) {
+            err = gates_command_set_label(tree, scope, k + 1, title);
+            if (gates_is_ok(err)) err = gates_command_set_checked(tree, scope, k + 1, k == sel);
+        } else {
+            gates_command_desc_t d = { .id = k + 1, .label = title, .enabled = true, .checked = k == sel,
+                                       .invoke = on_tab_command, .user = tb };
+            err = gates_command_register(tree, scope, &d);
+        }
+        if (!gates_is_ok(err)) return err;
+    }
+    gates_allocator_t a = tree->alloc;
+    proven_result_mem_mut_t r = a.alloc_fn(a.ctx, n * sizeof(gates_command_id_t), alignof(gates_command_id_t));
+    if (!proven_is_ok(r.err)) return r.err;
+    gates_command_id_t *ids = (gates_command_id_t *)r.value.ptr;
+    for (gates_u32 k = 0; k < n; k++) ids[k] = k + 1;
+    gates_rect_t at = gates_i_tabstrip_more_rect(tree, strip);
+    if (gates_rect_is_empty(at)) at = gates_i_slot(tree, strip)->layout_rect;
+    gates_node_t menu;
+    gates_err_t err = gates_menu_open(tree, (gates_point_t){ at.x, at.y + at.h }, scope, ids, n, &menu);
+    a.free_fn(a.ctx, ids);
+    return err;
+}
+
 void gates_i_tabstrip_press(gates_tree_t *tree, gates_u32 strip, gates_point_t p) {
+    if (gates_rect_contains(gates_i_tabstrip_more_rect(tree, strip), p)) {
+        gates_tree_set_focus(tree, gates_i_handle(tree, strip));
+        gates_err_t err = gates_i_tabs_open_list(tree, strip);
+        if (!gates_is_ok(err)) tree->input_error = err;
+        return;
+    }
     gates_i32 t = gates_i_tab_at(tree, strip, p);
     if (t < 0) return;
     gates_tree_set_focus(tree, gates_i_handle(tree, strip));

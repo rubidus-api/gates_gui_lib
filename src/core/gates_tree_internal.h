@@ -862,7 +862,10 @@ typedef struct gates_i_tabs {
     gates_i_tab_title *titles;
     gates_u32 count;
     gates_u32 cap;
+    gates_node_t self;           /* the tabs node (the overflow list's commands find it) */
 } gates_i_tabs;
+gates_rect_t gates_i_tabstrip_more_rect(const gates_tree_t *tree, gates_u32 strip);
+gates_err_t gates_i_tabs_open_list(gates_tree_t *tree, gates_u32 strip);
 void gates_i_tabs_free(gates_tree_t *tree, gates_widget_state_t *st);
 gates_u32 gates_i_tabs_count(const gates_tree_t *tree, gates_u32 tabs);
 gates_str_t gates_i_tabs_title(const gates_tree_t *tree, gates_u32 tabs, gates_u32 index);

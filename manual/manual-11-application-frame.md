@@ -279,8 +279,9 @@ Ctrl+Shift+Tab (or Ctrl+PgDn and Ctrl+PgUp) switch from anywhere inside the tabs
 around; a click selects and focuses the strip; a title's mnemonic selects its tab. When the
 focus was on the page that goes away, it moves to the first control of the new page, or to the
 strip when there is none. A person's switch reports GATES_EVENT_VALUE_CHANGED on the tabs node
-with `result` the new index; `gates_tabs_set_selected` changes it silently. Titles that do not
-fit are cut at the right edge in this version.
+with `result` the new index; `gates_tabs_set_selected` changes it silently. When the titles do
+not fit, the strip shows whole titles - always the selected one - and a `>>` button; a press on
+it, or Alt+Down on the strip, opens a menu of every tab with the selected one checked.
 
 ## Keeping the arrangement
 

@@ -157,7 +157,11 @@ bool gates_tooltip_shown(const gates_tree_t *tree, gates_node_t *node, gates_u64
  * the page that goes away, it moves into the new page (its first control), or
  * to the strip. A person's switch queues GATES_EVENT_VALUE_CHANGED on the tabs
  * node (ev->result = the new index); the program's gates_tabs_set_selected is
- * silent. Titles that do not fit are cut off at the right edge in this version. */
+ * silent. Titles that do not fit (0.10.0): the strip shows whole titles, always
+ * the selected one (from the first title while it fits, else ending at it),
+ * and a ">>" button - a press, or Alt+Down on the strip - opens a menu of every
+ * tab (the selected one checked; choosing one switches). Assistive technology
+ * sees ">>" as a "More tabs" item after the titles. */
 
 [[nodiscard]] gates_err_t gates_tabs_create(gates_tree_t *tree, gates_node_t parent,
                                             gates_node_t *out_tabs);

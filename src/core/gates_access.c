@@ -454,7 +454,10 @@ gates_u64 gates_access_item_count(gates_tree_t *tree, gates_node_t node) {
     if (s->kind == GATES_NODE_RADIO || s->kind == GATES_NODE_CHOICE) return st->opt_count;
     if (s->kind == GATES_NODE_VIEW) return gates_i_view_item_count(tree, node.index);
     if (s->kind == GATES_NODE_MENUBAR) return st->mbar != nullptr ? st->mbar->count : 0;
-    if (s->kind == GATES_NODE_TABSTRIP) return s->parent != GATES_NONE ? gates_i_tabs_count(tree, s->parent) : 0;
+    if (s->kind == GATES_NODE_TABSTRIP) { /* the titles, then ">>" while they overflow (0.10.0) */
+        if (s->parent == GATES_NONE) return 0;
+        return gates_i_tabs_count(tree, s->parent) + (gates_rect_is_empty(gates_i_tabstrip_more_rect(tree, node.index)) ? 0u : 1u);
+    }
     if (s->kind == GATES_NODE_TOOLBAR && st->tbar != nullptr) {
         gates_u64 n = 0;
         for (gates_u32 k = 0; k < st->tbar->count; k++) n += st->tbar->ids[k] != 0 ? 1u : 0u;
@@ -485,7 +488,7 @@ gates_u64 gates_access_item_at(gates_tree_t *tree, gates_node_t node, gates_u64 
         return st->mbar != nullptr && index < st->mbar->count ? index + 1 : 0; /* titles 1..n */
     }
     if (s->kind == GATES_NODE_TABSTRIP) {
-        return s->parent != GATES_NONE && index < gates_i_tabs_count(tree, s->parent) ? index + 1 : 0;
+        return index < gates_access_item_count(tree, node) ? index + 1 : 0; /* titles 1..n, ">>" n + 1 */
     }
     if (s->kind == GATES_NODE_TOOLBAR && st->tbar != nullptr) { /* entry + 1; ">>" is count + 1 */
         gates_u64 k = 0;
@@ -683,6 +686,9 @@ gates_access_ref_t gates_access_at_point(gates_tree_t *tree, gates_point_t p) {
     } else if (s->kind == GATES_NODE_TABSTRIP) {
         gates_i32 k = gates_i_tab_at(tree, idx, p);
         if (k >= 0) return (gates_access_ref_t){ n, (gates_u64)k + 1 };
+        if (gates_rect_contains(gates_i_tabstrip_more_rect(tree, idx), p)) {
+            return (gates_access_ref_t){ n, (gates_u64)gates_i_tabs_count(tree, s->parent) + 1 };
+        }
     }
     return (gates_access_ref_t){ n, 0 };
 }
@@ -793,6 +799,15 @@ static gates_err_t item_info(gates_tree_t *tree, gates_u32 idx, gates_u64 item, 
         out->bounds = gates_i_menu_row_rect(tree, idx, (gates_u32)row);
         out->set_size = gates_access_item_count(tree, gates_i_handle(tree, idx));
         out->set_position = (gates_u64)item_pos(tree, gates_i_handle(tree, idx), item) + 1;
+    } else if (s->kind == GATES_NODE_TABSTRIP && s->parent != GATES_NONE &&
+               item == (gates_u64)gates_i_tabs_count(tree, s->parent) + 1) { /* ">>" (0.10.0) */
+        gates_rect_t mr = gates_i_tabstrip_more_rect(tree, idx);
+        if (gates_rect_is_empty(mr)) return PROVEN_ERR_INVALID_ARG;
+        gates_u32 at = put(b, cstr("More tabs"));
+        bind(b, &out->name, at, 9);
+        out->role = GATES_ROLE_BUTTON;
+        out->actions = node_on ? GATES_ACCESS_INVOKE : 0u;
+        out->bounds = mr;
     } else if (s->kind == GATES_NODE_TABSTRIP) {
         gates_u32 tabs = s->parent;
         if (tabs == GATES_NONE || item == 0 || item > gates_i_tabs_count(tree, tabs)) return PROVEN_ERR_INVALID_ARG;
@@ -1176,6 +1191,14 @@ gates_err_t gates_access_invoke(gates_tree_t *tree, gates_node_t node, gates_u64
             return PROVEN_ERR_INVALID_ARG;
         }
         return gates_i_toolbar_activate(tree, node.index, (gates_u32)item - 1);
+    }
+    if (k == GATES_NODE_TABSTRIP && item != 0) { /* ">>": the list of every tab */
+        gates_u32 tabs = gates_i_slot(tree, node.index)->parent;
+        if (tabs == GATES_NONE || item != (gates_u64)gates_i_tabs_count(tree, tabs) + 1 ||
+            gates_rect_is_empty(gates_i_tabstrip_more_rect(tree, node.index))) {
+            return PROVEN_ERR_INVALID_ARG;
+        }
+        return gates_i_tabs_open_list(tree, node.index);
     }
     if (k == GATES_NODE_MENUBAR && item != 0) {
         return gates_access_expand(tree, node, item,

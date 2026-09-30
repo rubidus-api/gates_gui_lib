@@ -1390,6 +1390,110 @@ static gates_rect_t tab_rect(tabs_app_t *a, gates_u32 i) {
     return gates_is_ok(gates_access_info(a->t, a->strip, (gates_u64)i + 1, &info)) ? info.bounds : (gates_rect_t){0};
 }
 
+/* A title's box and the ">>" box, as assistive technology sees them (empty when not shown). */
+static gates_rect_t tab_box(gates_tree_t *t, gates_node_t strip, gates_u32 k) {
+    gates_access_info_t i;
+    if (!gates_is_ok(gates_access_info(t, strip, (gates_u64)k + 1, &i)) || (i.states & GATES_ACCESS_OFFSCREEN)) {
+        return (gates_rect_t){0};
+    }
+    return i.bounds;
+}
+static gates_rect_t more_box(gates_tree_t *t, gates_node_t strip, gates_u32 tabs) {
+    gates_access_info_t i;
+    return gates_is_ok(gates_access_info(t, strip, (gates_u64)tabs + 1, &i)) ? i.bounds : (gates_rect_t){0};
+}
+
+/* 0.10.0: titles that do not fit - the selected one always shows, ">>" lists them all. */
+static void test_tabs_overflow(void) {
+    tabs_app_t a;
+    make_tabs(&a);
+    gates_tree_t *t = a.t;
+    GT_ASSERT(gates_rect_is_empty(more_box(t, a.strip, gates_tabs_count(t, a.tabs))));   /* three fit */
+    GT_ASSERT(gates_access_item_count(t, a.strip) == 3);
+    for (int i = 0; i < 9; i++) {
+        char title[32];
+        int n = snprintf(title, sizeof title, "Long page title %d", i + 4);
+        gates_node_t page;
+        GT_ASSERT_OK(gates_tabs_add(t, a.tabs, (gates_str_t){ .ptr = (const gates_u8 *)title, .size = (gates_usize_t)n }, &page));
+    }
+    GT_ASSERT_OK(gates_layout_run(t, (gates_size_t){ 4000, VH }, be)); /* natural widths first */
+    gates_i32 natural[12];
+    for (gates_u32 k = 0; k < 12; k++) natural[k] = tab_box(t, a.strip, k).w;
+    layout(t);
+    gates_rect_t sr = gates_node_layout_rect(t, a.strip), mr = more_box(t, a.strip, gates_tabs_count(t, a.tabs));
+    GT_ASSERT(!gates_rect_is_empty(mr) && mr.x + mr.w == sr.x + sr.w);
+    GT_ASSERT(!gates_rect_is_empty(tab_box(t, a.strip, 0)));
+    GT_ASSERT(gates_rect_is_empty(tab_box(t, a.strip, 11))); /* not shown */
+    for (gates_u32 k = 0; k < 12; k++) { /* whole titles only, left of ">>" */
+        gates_rect_t r = tab_box(t, a.strip, k);
+        if (!gates_rect_is_empty(r)) GT_ASSERT(r.x + r.w <= mr.x && r.w == natural[k]); /* never cut */
+    }
+    /* Selecting the last shows it (the strip ends at it); the first goes out of view. */
+    gates_tree_set_focus(t, a.strip);
+    GT_ASSERT(key(t, GATES_KEY_END));
+    GT_ASSERT(gates_tabs_selected(t, a.tabs) == 11);
+    GT_ASSERT(!gates_rect_is_empty(tab_box(t, a.strip, 11)));
+    GT_ASSERT(gates_rect_is_empty(tab_box(t, a.strip, 0)));
+    gates_rect_t last = tab_box(t, a.strip, 11);
+    GT_ASSERT(last.x + last.w <= mr.x); /* whole, left of the button */
+    GT_ASSERT(key(t, GATES_KEY_HOME) && !gates_rect_is_empty(tab_box(t, a.strip, 0)));
+    /* ">>" is painted, and a press on it opens a menu of every tab, the selected one checked. */
+    gates_draw_list_t dl;
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    GT_ASSERT_OK(gates_paint_tree(t, &dl, theme, be));
+    char buf[2048];
+    draw_texts(&dl, buf, sizeof buf);
+    GT_ASSERT(strstr(buf, ">>") != nullptr);
+    gates_draw_list_deinit(&dl);
+    (void)changes(&a, nullptr); /* End and Home were switches too */
+    click_at(t, (gates_point_t){ mr.x + mr.w / 2, mr.y + mr.h / 2 });
+    GT_ASSERT(gates_tree_overlay_count(t) == 1);
+    gates_node_t menu = gates_access_last_child(t, (gates_access_ref_t){ gates_tree_root(t), 0 }).node;
+    GT_ASSERT(gates_node_kind(t, menu) == GATES_NODE_MENU && gates_access_item_count(t, menu) == 12);
+    gates_access_info_t info;
+    GT_ASSERT_OK(gates_access_info(t, menu, 1, &info));
+    GT_ASSERT(info.states & GATES_ACCESS_CHECKED);
+    GT_ASSERT_OK(gates_access_info(t, menu, 9, &info));
+    GT_ASSERT(seq(info.name, GATES_STR("Long page title 9")) && !(info.states & GATES_ACCESS_CHECKED));
+    GT_ASSERT_OK(gates_access_invoke(t, menu, 9)); /* choose "Long page title 9" */
+    dispatch(t);
+    GT_ASSERT(gates_tabs_selected(t, a.tabs) == 8 && gates_tree_overlay_count(t) == 0);
+    GT_ASSERT(!gates_rect_is_empty(tab_box(t, a.strip, 8)));
+    GT_ASSERT(changes(&a, nullptr) == 1); /* reported as a person's switch */
+    /* Alt+Down on the strip opens it from the keyboard; the list follows renamed titles. */
+    GT_ASSERT_OK(gates_tabs_set_title(t, a.tabs, 0, GATES_STR("Renamed")));
+    gates_tree_set_focus(t, a.strip);
+    gates_key_event_t ad = { .key = GATES_KEY_DOWN, .down = true, .alt = true };
+    GT_ASSERT(gates_input_key(t, &ad));
+    GT_ASSERT(gates_tree_overlay_count(t) == 1);
+    menu = gates_access_last_child(t, (gates_access_ref_t){ gates_tree_root(t), 0 }).node;
+    GT_ASSERT_OK(gates_access_info(t, menu, 1, &info));
+    GT_ASSERT(seq(info.name, GATES_STR("Renamed")) && !(info.states & GATES_ACCESS_CHECKED));
+    GT_ASSERT_OK(gates_access_info(t, menu, 9, &info));
+    GT_ASSERT(info.states & GATES_ACCESS_CHECKED);
+    GT_ASSERT(key(t, GATES_KEY_ESCAPE));
+    dispatch(t);
+    /* Accessibility: ">>" is an item, "More tabs", that opens the list; hit testing finds it. */
+    mr = more_box(t, a.strip, gates_tabs_count(t, a.tabs));
+    GT_ASSERT(gates_access_item_count(t, a.strip) == 13);
+    GT_ASSERT_OK(gates_access_info(t, a.strip, 13, &info));
+    GT_ASSERT(info.role == GATES_ROLE_BUTTON && seq(info.name, GATES_STR("More tabs")) && (info.actions & GATES_ACCESS_INVOKE));
+    gates_access_ref_t hit = gates_access_at_point(t, (gates_point_t){ mr.x + 2, mr.y + mr.h / 2 });
+    GT_ASSERT(gates_node_eq(hit.node, a.strip) && hit.item == 13);
+    GT_ASSERT_OK(gates_access_invoke(t, a.strip, 13));
+    GT_ASSERT(gates_tree_overlay_count(t) == 1);
+    GT_ASSERT(key(t, GATES_KEY_ESCAPE));
+    dispatch(t);
+    GT_ASSERT(gates_access_invoke(t, a.strip, 14) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_access_invoke(t, a.strip, 5) == PROVEN_ERR_INVALID_ARG); /* titles are selected, not invoked */
+    /* Wide again: everything fits, no ">>", no item. */
+    GT_ASSERT_OK(gates_layout_run(t, (gates_size_t){ 4000, VH }, be));
+    GT_ASSERT(gates_rect_is_empty(more_box(t, a.strip, gates_tabs_count(t, a.tabs))) && gates_access_item_count(t, a.strip) == 12);
+    GT_ASSERT(gates_access_invoke(t, a.strip, 13) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_access_info(t, a.strip, 13, &info) == PROVEN_ERR_INVALID_ARG);
+    gates_tree_destroy(t);
+}
+
 static void test_tabs(void) {
     tabs_app_t a;
     make_tabs(&a);
@@ -1670,6 +1774,7 @@ int main(void) {
     test_tooltip_changes();
     test_tooltip_without_clock();
     test_tabs();
+    test_tabs_overflow();
     test_state();
     test_allocation_failure();
     return gt_report("test_frame");
