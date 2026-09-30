@@ -60,6 +60,7 @@ typedef struct uia_el_t {
     gates_window_t *win;             /* null once the window is gone */
     gates_u64 serial;
     gates_access_ref_t ref;
+    gates_u32 cell;                  /* a table row's cell (0.10.0): its shown column + 1; 0 = none */
     bool is_root;
     bool gone;                       /* its node was destroyed: disconnected */
     uia_snap_t snap;
@@ -120,8 +121,9 @@ static HRESULT el_info(uia_el_t *e, gates_access_info_t *out) {
     if (e->gone || !on_ui_thread(e->win) || gates_tree_serial(e->win->tree) != e->serial) {
         return UIA_E_ELEMENTNOTAVAILABLE;
     }
-    return gates_is_ok(gates_access_info(e->win->tree, e->ref.node, e->ref.item, out))
-               ? S_OK : UIA_E_ELEMENTNOTAVAILABLE;
+    gates_err_t err = e->cell != 0 ? gates_access_cell_info(e->win->tree, e->ref.node, e->ref.item, e->cell, out)
+                                   : gates_access_info(e->win->tree, e->ref.node, e->ref.item, out);
+    return gates_is_ok(err) ? S_OK : UIA_E_ELEMENTNOTAVAILABLE;
 }
 
 static uia_snap_t snap_of(const gates_access_info_t *i) {
@@ -179,11 +181,11 @@ static ULONG el_release(uia_el_t *e) {
 
 /* The provider for ref (one object per element while clients hold it), with
  * a reference for the caller; null for the null reference or no memory. */
-static uia_el_t *el_get(gates_window_t *win, gates_access_ref_t ref) {
+static uia_el_t *el_get_cell(gates_window_t *win, gates_access_ref_t ref, gates_u32 cell) {
     if (win == nullptr || win->hwnd == nullptr || ref_null(ref)) return nullptr;
     gates_u64 serial = gates_tree_serial(win->tree);
     for (uia_el_t *e = win->uia_els; e != nullptr; e = e->next) {
-        if (!e->gone && e->serial == serial && ref_eq(e->ref, ref)) {
+        if (!e->gone && e->serial == serial && ref_eq(e->ref, ref) && e->cell == cell) {
             el_addref(e);
             return e;
         }
@@ -209,7 +211,8 @@ static uia_el_t *el_get(gates_window_t *win, gates_access_ref_t ref) {
     e->win = win;
     e->serial = serial;
     e->ref = ref;
-    e->is_root = ref.item == 0 && gates_node_eq(ref.node, gates_tree_root(win->tree));
+    e->cell = cell;
+    e->is_root = cell == 0 && ref.item == 0 && gates_node_eq(ref.node, gates_tree_root(win->tree));
     gates_access_info_t info;
     if (SUCCEEDED(el_info(e, &info))) {
         e->snap = snap_of(&info);
@@ -218,6 +221,10 @@ static uia_el_t *el_get(gates_window_t *win, gates_access_ref_t ref) {
     e->next = win->uia_els;
     win->uia_els = e;
     return e;
+}
+
+static uia_el_t *el_get(gates_window_t *win, gates_access_ref_t ref) {
+    return el_get_cell(win, ref, 0);
 }
 
 static HRESULT el_qi(uia_el_t *e, REFIID riid, void **out) {
@@ -308,8 +315,10 @@ static HRESULT acted(uia_el_t *e, gates_err_t err) {
 static bool has_pattern(const gates_access_info_t *i, PATTERNID p) {
     switch (p) {
     case UIA_InvokePatternId:         return (i->actions & GATES_ACCESS_INVOKE) != 0;
-    case UIA_TogglePatternId:         return i->role == GATES_ROLE_CHECK_BOX;
-    case UIA_ValuePatternId:          return i->role == GATES_ROLE_EDIT || i->role == GATES_ROLE_COMBO_BOX;
+    case UIA_TogglePatternId:         return i->role == GATES_ROLE_CHECK_BOX ||
+                                             (i->role == GATES_ROLE_CELL && (i->states & GATES_ACCESS_CHECKABLE) != 0);
+    case UIA_ValuePatternId:          return i->role == GATES_ROLE_EDIT || i->role == GATES_ROLE_COMBO_BOX ||
+                                             (i->role == GATES_ROLE_CELL && (i->states & GATES_ACCESS_CHECKABLE) == 0 && !i->has_range);
     case UIA_RangeValuePatternId:     return i->has_range;
     case UIA_SelectionPatternId:      return i->role == GATES_ROLE_RADIO_GROUP || i->role == GATES_ROLE_COMBO_BOX ||
                                              i->role == GATES_ROLE_LIST || i->role == GATES_ROLE_TABLE ||
@@ -319,7 +328,7 @@ static bool has_pattern(const gates_access_info_t *i, PATTERNID p) {
                                              i->role == GATES_ROLE_TAB_ITEM;
     case UIA_ExpandCollapsePatternId: return (i->states & GATES_ACCESS_EXPANDABLE) != 0;
     case UIA_GridPatternId:           return i->role == GATES_ROLE_TABLE;
-    case UIA_GridItemPatternId:       return i->role == GATES_ROLE_ROW;
+    case UIA_GridItemPatternId:       return i->role == GATES_ROLE_CELL; /* cells are the grid's items (0.10.0) */
     case UIA_ScrollPatternId:         return (i->actions & GATES_ACCESS_SCROLL) != 0;
     case UIA_WindowPatternId:         return i->role == GATES_ROLE_DIALOG;
     case UIA_TextPatternId:
@@ -431,7 +440,15 @@ static HRESULT STDMETHODCALLTYPE simple_property(IRawElementProviderSimple *This
     }
     switch (id) {
     case UIA_ControlTypePropertyId:
-        if (!e->is_root) v_i4(out, control_type(i.role)); /* the root: the host window's */
+        if (!e->is_root) {
+            int ct = control_type(i.role);
+            if (i.role == GATES_ROLE_CELL) {
+                ct = (i.states & GATES_ACCESS_CHECKABLE) != 0 ? UIA_CheckBoxControlTypeId
+                   : i.has_range                              ? UIA_ProgressBarControlTypeId
+                                                              : UIA_EditControlTypeId;
+            }
+            v_i4(out, ct); /* the root: the host window's */
+        }
         break;
     case UIA_NamePropertyId:
         if (i.name.size > 0) v_str(out, i.name);        /* the root: the window title */
@@ -539,6 +556,22 @@ static HRESULT STDMETHODCALLTYPE frag_navigate(IRawElementProviderFragment *This
     if (FAILED(hr)) return hr;
     gates_tree_t *t = e->win->tree;
     gates_access_ref_t to;
+    gates_u32 nc = e->cell == 0 && e->ref.item != 0 ? gates_access_cell_count(t, e->ref.node, e->ref.item) : 0;
+    if (e->cell != 0) { /* a cell (0.10.0): its row, and the cells beside it */
+        gates_u32 n = gates_access_cell_count(t, e->ref.node, e->ref.item);
+        switch (dir) {
+        case NavigateDirection_Parent:          *out = as_frag(el_get(e->win, e->ref)); return S_OK;
+        case NavigateDirection_NextSibling:     if (e->cell < n) *out = as_frag(el_get_cell(e->win, e->ref, e->cell + 1)); return S_OK;
+        case NavigateDirection_PreviousSibling: if (e->cell > 1) *out = as_frag(el_get_cell(e->win, e->ref, e->cell - 1)); return S_OK;
+        case NavigateDirection_FirstChild:
+        case NavigateDirection_LastChild:       return S_OK;
+        default:                                return E_INVALIDARG;
+        }
+    }
+    if (nc > 0 && (dir == NavigateDirection_FirstChild || dir == NavigateDirection_LastChild)) { /* a table row's cells */
+        *out = as_frag(el_get_cell(e->win, e->ref, dir == NavigateDirection_FirstChild ? 1 : nc));
+        return S_OK;
+    }
     switch (dir) {
     case NavigateDirection_Parent:          to = e->is_root ? (gates_access_ref_t){ GATES_NODE_NULL, 0 }
                                                              : gates_access_parent(t, e->ref); break;
@@ -562,11 +595,12 @@ static HRESULT STDMETHODCALLTYPE frag_runtime_id(IRawElementProviderFragment *Th
     HRESULT hr = el_info(e, &i);
     if (FAILED(hr)) return hr;
     if (e->is_root) return S_OK; /* UIA makes the root's from the window handle */
-    SAFEARRAY *sa = SafeArrayCreateVector(VT_I4, 0, 5);
+    LONG np = e->cell != 0 ? 6 : 5;
+    SAFEARRAY *sa = SafeArrayCreateVector(VT_I4, 0, (ULONG)np);
     if (sa == nullptr) return E_OUTOFMEMORY;
-    int parts[5] = { UiaAppendRuntimeId, (int)e->ref.node.index, (int)e->ref.node.generation,
-                     (int)(e->ref.item & 0xffffffffu), (int)(e->ref.item >> 32) };
-    for (LONG k = 0; k < 5; k++) SafeArrayPutElement(sa, &k, &parts[k]);
+    int parts[6] = { UiaAppendRuntimeId, (int)e->ref.node.index, (int)e->ref.node.generation,
+                     (int)(e->ref.item & 0xffffffffu), (int)(e->ref.item >> 32), (int)e->cell };
+    for (LONG k = 0; k < np; k++) SafeArrayPutElement(sa, &k, &parts[k]);
     *out = sa;
     return S_OK;
 }
@@ -645,7 +679,9 @@ static HRESULT STDMETHODCALLTYPE root_from_point(IRawElementProviderFragmentRoot
     POINT pt = { (LONG)x, (LONG)y };
     ScreenToClient(e->win->hwnd, &pt);
     gates_point_t p = { gates_logical(pt.x, e->win->dpi), gates_logical(pt.y, e->win->dpi) };
-    *out = as_frag(el_get(e->win, gates_access_at_point(e->win->tree, p)));
+    gates_access_ref_t at = gates_access_at_point(e->win->tree, p);
+    gates_u32 cell = at.item != 0 ? gates_access_cell_at(e->win->tree, at.node, p) : 0; /* a table's cell */
+    *out = as_frag(el_get_cell(e->win, at, cell));
     return S_OK;
 }
 
@@ -684,6 +720,7 @@ static HRESULT STDMETHODCALLTYPE toggle_toggle(IToggleProvider *This) {
     gates_access_info_t i;
     HRESULT hr = el_info(e, &i);
     if (FAILED(hr)) return hr;
+    if (e->cell != 0) return acted(e, gates_access_cell_toggle(e->win->tree, e->ref.node, e->ref.item, e->cell));
     return acted(e, gates_access_toggle(e->win->tree, e->ref.node));
 }
 
@@ -715,8 +752,9 @@ static HRESULT STDMETHODCALLTYPE value_set(IValueProvider *This, LPCWSTR text) {
     char *buf = HeapAlloc(GetProcessHeap(), 0, (SIZE_T)n);
     if (buf == nullptr) return E_OUTOFMEMORY;
     WideCharToMultiByte(CP_UTF8, 0, text, -1, buf, n, nullptr, nullptr);
-    gates_err_t err = gates_access_set_value(e->win->tree, e->ref.node,
-                                             (gates_str_t){ .ptr = (const gates_u8 *)buf, .size = (size_t)n - 1 });
+    gates_str_t v = { .ptr = (const gates_u8 *)buf, .size = (size_t)n - 1 };
+    gates_err_t err = e->cell != 0 ? gates_access_cell_set_value(e->win->tree, e->ref.node, e->ref.item, e->cell, v)
+                                   : gates_access_set_value(e->win->tree, e->ref.node, v);
     HeapFree(GetProcessHeap(), 0, buf);
     return acted(e, err);
 }
@@ -975,7 +1013,7 @@ static const IExpandCollapseProviderVtbl expand_vtbl = {
     expand_qi, expand_addref, expand_release, expand_expand, expand_collapse, expand_state,
 };
 
-/* -- Grid, GridItem (tables: a row is one grid item spanning the columns) ---------------- */
+/* -- Grid, GridItem (tables: the cells are the grid's items, 0.10.0) ---------------- */
 
 /* The shown row at model position `row`, or 0. */
 static gates_u64 shown_row(gates_tree_t *t, gates_node_t node, gates_u64 row) {
@@ -998,7 +1036,7 @@ static HRESULT STDMETHODCALLTYPE grid_item(IGridProvider *This, int row, int col
     if (row < 0 || column < 0 || (gates_u32)column >= (i.column_count > 0 ? i.column_count : 1)) return E_INVALIDARG;
     gates_u64 id = shown_row(e->win->tree, e->ref.node, (gates_u64)row);
     if (id == 0) return E_INVALIDARG; /* only shown rows are elements */
-    *out = as_simple(el_get(e->win, (gates_access_ref_t){ e->ref.node, id }));
+    *out = as_simple(el_get_cell(e->win, (gates_access_ref_t){ e->ref.node, id }, (gates_u32)column + 1));
     return S_OK;
 }
 
@@ -1037,8 +1075,7 @@ static HRESULT griditem_get(IGridItemProvider *This, int *out, int which) {
     HRESULT hr = el_info(e, &i);
     if (FAILED(hr)) return hr;
     gates_u64 row = i.set_position > 0 ? i.set_position - 1 : 0;
-    *out = which == 0 ? (row > 0x7FFFFFFF ? 0x7FFFFFFF : (int)row)
-         : which == 1 ? 0 : which == 2 ? 1 : (int)(i.column_count > 0 ? i.column_count : 1);
+    *out = which == 0 ? (row > 0x7FFFFFFF ? 0x7FFFFFFF : (int)row) : which == 1 ? (int)i.column : 1; /* a cell */
     return S_OK;
 }
 
@@ -1063,14 +1100,22 @@ static const IGridItemProviderVtbl griditem_vtbl = {
     griditem_row, griditem_column, griditem_rowspan, griditem_colspan, griditem_grid,
 };
 
-/* -- Scroll (vertical: views and scroll areas) ------------------------------------------------- */
+/* -- Scroll (views and scroll areas; sideways for wide tables, 0.10.0) ------------------------- */
 
 static HRESULT STDMETHODCALLTYPE scroll_scroll(IScrollProvider *This, enum ScrollAmount h, enum ScrollAmount v) {
     uia_el_t *e = EL_OF(This, scroll);
     gates_access_info_t i;
     HRESULT hr = el_info(e, &i);
     if (FAILED(hr)) return hr;
-    if (h != ScrollAmount_NoAmount) return UIA_E_INVALIDOPERATION; /* nothing scrolls sideways here */
+    if (h != ScrollAmount_NoAmount) { /* sideways: a wide table (0.10.0) */
+        gates_u32 pos = 0, page = 0;
+        if (!gates_access_hscroll_info(e->win->tree, e->ref.node, &pos, &page)) return UIA_E_INVALIDOPERATION;
+        gates_i64 step = h == ScrollAmount_LargeDecrement || h == ScrollAmount_LargeIncrement ? page : page / 10 + 1;
+        gates_i64 to = (gates_i64)pos + (h == ScrollAmount_LargeDecrement || h == ScrollAmount_SmallDecrement ? -step : step);
+        to = to < 0 ? 0 : to > GATES_ACCESS_SCROLL_MAX ? GATES_ACCESS_SCROLL_MAX : to;
+        hr = acted(e, gates_access_hscroll_to(e->win->tree, e->ref.node, (gates_u32)to));
+        if (FAILED(hr) || v == ScrollAmount_NoAmount) return hr;
+    }
     if (v == ScrollAmount_NoAmount) return S_OK;
     gates_i32 amount = v == ScrollAmount_LargeDecrement || v == ScrollAmount_SmallDecrement ? -1 : 1;
     bool page = v == ScrollAmount_LargeDecrement || v == ScrollAmount_LargeIncrement;
@@ -1082,7 +1127,12 @@ static HRESULT STDMETHODCALLTYPE scroll_set(IScrollProvider *This, double h, dou
     gates_access_info_t i;
     HRESULT hr = el_info(e, &i);
     if (FAILED(hr)) return hr;
-    if (h != (double)UIA_ScrollPatternNoScroll) return UIA_E_INVALIDOPERATION;
+    if (h != (double)UIA_ScrollPatternNoScroll) {
+        if (h < 0.0 || h > 100.0) return E_INVALIDARG;
+        hr = acted(e, gates_access_hscroll_to(e->win->tree, e->ref.node,
+                                              (gates_u32)(h * (double)GATES_ACCESS_SCROLL_MAX / 100.0 + 0.5)));
+        if (FAILED(hr)) return hr;
+    }
     if (v == (double)UIA_ScrollPatternNoScroll) return S_OK;
     if (v < 0.0 || v > 100.0) return E_INVALIDARG;
     return acted(e, gates_access_scroll_to(e->win->tree, e->ref.node,
@@ -1102,24 +1152,31 @@ static HRESULT scroll_get(IScrollProvider *This, double *out, bool view_size) {
     return S_OK;
 }
 
-static HRESULT STDMETHODCALLTYPE scroll_hpct(IScrollProvider *This, double *out) {
-    (void)This;
+static HRESULT hscroll_get(IScrollProvider *This, double *out, bool view_size) {
+    uia_el_t *e = EL_OF(This, scroll);
     if (out == nullptr) return E_POINTER;
-    *out = (double)UIA_ScrollPatternNoScroll;
+    gates_access_info_t i;
+    HRESULT hr = el_info(e, &i);
+    if (FAILED(hr)) return hr;
+    gates_u32 pos = 0, page = GATES_ACCESS_SCROLL_MAX;
+    bool can = gates_access_hscroll_info(e->win->tree, e->ref.node, &pos, &page);
+    *out = !can ? (view_size ? 100.0 : (double)UIA_ScrollPatternNoScroll)
+                : (double)(view_size ? page : pos) * 100.0 / (double)GATES_ACCESS_SCROLL_MAX;
     return S_OK;
 }
+
+static HRESULT STDMETHODCALLTYPE scroll_hpct(IScrollProvider *This, double *out) { return hscroll_get(This, out, false); }
 static HRESULT STDMETHODCALLTYPE scroll_vpct(IScrollProvider *This, double *out) { return scroll_get(This, out, false); }
-static HRESULT STDMETHODCALLTYPE scroll_hsize(IScrollProvider *This, double *out) {
-    (void)This;
-    if (out == nullptr) return E_POINTER;
-    *out = 100.0;
-    return S_OK;
-}
+static HRESULT STDMETHODCALLTYPE scroll_hsize(IScrollProvider *This, double *out) { return hscroll_get(This, out, true); }
 static HRESULT STDMETHODCALLTYPE scroll_vsize(IScrollProvider *This, double *out) { return scroll_get(This, out, true); }
 static HRESULT STDMETHODCALLTYPE scroll_hcan(IScrollProvider *This, WINBOOL *out) {
-    (void)This;
+    uia_el_t *e = EL_OF(This, scroll);
     if (out == nullptr) return E_POINTER;
-    *out = FALSE;
+    gates_access_info_t i;
+    HRESULT hr = el_info(e, &i);
+    if (FAILED(hr)) return hr;
+    gates_u32 pos, page;
+    *out = gates_access_hscroll_info(e->win->tree, e->ref.node, &pos, &page);
     return S_OK;
 }
 static HRESULT STDMETHODCALLTYPE scroll_vcan(IScrollProvider *This, WINBOOL *out) {

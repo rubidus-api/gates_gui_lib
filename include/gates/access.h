@@ -71,6 +71,7 @@ typedef enum gates_role_t {
     GATES_ROLE_SLIDER,           /* slider (RangeValue) */
     GATES_ROLE_IMAGE,            /* a named image (0.5.0); unnamed ones are not exposed */
     GATES_ROLE_TOOLTIP,          /* the tooltip shown now: an item of the root (0.10.0) */
+    GATES_ROLE_CELL,             /* a table row's cell (0.10.0): gates_access_cell_info */
 } gates_role_t;
 
 /* The shown tooltip is item GATES_ACCESS_TOOLTIP_ITEM of the root, after the
@@ -93,6 +94,7 @@ typedef enum gates_role_t {
 #define GATES_ACCESS_MODAL       0x1000u
 #define GATES_ACCESS_BUSY        0x2000u   /* a loading row */
 #define GATES_ACCESS_MULTISELECT 0x4000u   /* a view whose rows select together (0.9.0) */
+#define GATES_ACCESS_CHECKABLE   0x8000u   /* a cell with a check box (CHECKED says its state) (0.10.0) */
 
 /* Action bits. */
 #define GATES_ACCESS_INVOKE      0x01u
@@ -145,6 +147,9 @@ typedef struct gates_access_info_t {
      * letter alone), and the shortcut of the node's command ("Ctrl+N"). */
     gates_str_t access_key;
     gates_str_t accelerator;
+    /* A cell (0.10.0): its column among the shown ones, from 0; set_position
+     * and set_size are its row's. */
+    gates_u32 column;
 } gates_access_info_t;
 
 /* Fills *out for (node, item). INVALID_ARG when the node is gone (a stale
@@ -167,6 +172,23 @@ typedef struct gates_access_ref_t {
     gates_node_t node;
     gates_u64 item;              /* 0 = the node itself */
 } gates_access_ref_t;
+
+/* Cells of a table row (0.10.0), a level below the items: cell 1..count are
+ * the row's shown columns in display order (a platform adapter makes them the
+ * row's children). gates_access_cell_at finds the cell under a point of the
+ * row gates_access_at_point returned (0 = none). Name
+ * and value are the cell's text, the description its column's label; a check
+ * cell is CHECKABLE (CHECKED when set), a progress cell has a range (0-1000,
+ * read as a percent); an editable cell accepts TOGGLE (check) or SET_VALUE
+ * (text), which go through the model's set_cell like a person's edit and
+ * report CELL_EDITED. Bounds are the cell's, OFFSCREEN when scrolled out. */
+gates_u32 gates_access_cell_count(gates_tree_t *tree, gates_node_t node, gates_u64 item);
+gates_u32 gates_access_cell_at(gates_tree_t *tree, gates_node_t node, gates_point_t p);
+[[nodiscard]] gates_err_t gates_access_cell_info(gates_tree_t *tree, gates_node_t node, gates_u64 item, gates_u32 cell,
+                                                 gates_access_info_t *out);
+[[nodiscard]] gates_err_t gates_access_cell_toggle(gates_tree_t *tree, gates_node_t node, gates_u64 item, gates_u32 cell);
+[[nodiscard]] gates_err_t gates_access_cell_set_value(gates_tree_t *tree, gates_node_t node, gates_u64 item,
+                                                      gates_u32 cell, gates_str_t text);
 
 gates_access_ref_t gates_access_parent(gates_tree_t *tree, gates_access_ref_t ref);
 gates_access_ref_t gates_access_first_child(gates_tree_t *tree, gates_access_ref_t ref);
@@ -242,6 +264,9 @@ bool gates_access_text_line(gates_tree_t *tree, gates_node_t node, gates_u32 off
 #define GATES_ACCESS_SCROLL_MAX 10000u
 bool gates_access_scroll_info(gates_tree_t *tree, gates_node_t node, gates_u32 *pos, gates_u32 *page);
 [[nodiscard]] gates_err_t gates_access_scroll_to(gates_tree_t *tree, gates_node_t node, gates_u32 pos);
+/* Sideways, for a table wider than its view (0.10.0): the same units. */
+bool gates_access_hscroll_info(gates_tree_t *tree, gates_node_t node, gates_u32 *pos, gates_u32 *page);
+[[nodiscard]] gates_err_t gates_access_hscroll_to(gates_tree_t *tree, gates_node_t node, gates_u32 pos);
 /* By `amount` lines (rows), or pages when `page`; negative goes up. */
 [[nodiscard]] gates_err_t gates_access_scroll_by(gates_tree_t *tree, gates_node_t node, gates_i32 amount,
                                                  bool page);

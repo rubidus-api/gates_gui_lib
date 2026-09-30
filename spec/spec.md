@@ -197,7 +197,9 @@ node per part.
   own text, an item's label or first cell. A form field's error and help are its description.
   Automation ids are explicit or derived and meant to be stable across runs.
 - Actions go through the input paths: the same events, commands, limits and refusals as input.
-- Views expose the rows shown now plus the selected row as items; editors expose text by
+- Views expose the rows shown now plus the selected row as items, and a table row's cells below
+  them (text, column label, check state, progress, and toggling or setting a value through the
+  model as a person's edit would); editors expose text by
   character, word, line (a shown row) and paragraph (a text line); ranges and values are read in
   the units shown.
 - **Enforced rules** (`gates_access_audit`; `GATES_ACCESS_STRICT=1` makes the Windows window

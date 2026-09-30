@@ -1140,7 +1140,9 @@ gates_err_t gates_access_info(gates_tree_t *tree, gates_node_t node, gates_u64 i
         break;
     case GATES_NODE_VIEW: {
         gates_u32 pos, page;
-        if (!inert && gates_i_view_scroll_info(tree, idx, &pos, &page)) actions |= GATES_ACCESS_SCROLL;
+        if (!inert && (gates_i_view_scroll_info(tree, idx, &pos, &page) || gates_i_view_hscroll_info(tree, idx, &pos, &page))) {
+            actions |= GATES_ACCESS_SCROLL; /* up and down, or sideways (0.10.0) */
+        }
         if (gates_i_view_multi(tree, idx)) states |= GATES_ACCESS_MULTISELECT; /* 0.9.0 */
         if (gates_i_view_kind(tree, idx) == GATES_I_VIEW_TABLE) {
             gates_i_view_item_t it = {0};
@@ -1601,6 +1603,101 @@ gates_u32 gates_access_text_offset_at(gates_tree_t *tree, gates_node_t node, gat
     gates_i32 rel = p.x - inner.x;
     if (rel < 0) rel = 0;
     return gates_i_box_offset_at_x(tree->text_backend, gates_i_font(tree, node.index), st, rel + st->view_x);
+}
+
+gates_u32 gates_access_cell_count(gates_tree_t *tree, gates_node_t node, gates_u64 item) {
+    gates_i_view_item_t it;
+    if (tree == nullptr || item == 0 || !gates_i_valid(tree, node) || gates_i_slot(tree, node.index)->kind != GATES_NODE_VIEW ||
+        !gates_i_view_item(tree, node.index, item, &it)) {
+        return 0;
+    }
+    return gates_i_view_cell_count(tree, node.index);
+}
+
+gates_u32 gates_access_cell_at(gates_tree_t *tree, gates_node_t node, gates_point_t p) {
+    if (tree == nullptr || !gates_i_valid(tree, node) || gates_i_slot(tree, node.index)->kind != GATES_NODE_VIEW) return 0;
+    if (gates_i_view_row_at(tree, node.index, p) == 0) return 0;
+    gates_i32 k = gates_i_view_col_at(tree, node.index, p);
+    return k >= 0 ? (gates_u32)k + 1 : 0;
+}
+
+gates_err_t gates_access_cell_info(gates_tree_t *tree, gates_node_t node, gates_u64 item, gates_u32 cell,
+                                  gates_access_info_t *out) {
+    if (tree == nullptr || out == nullptr || cell == 0 || !gates_i_valid(tree, node) ||
+        gates_i_slot(tree, node.index)->kind != GATES_NODE_VIEW) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    gates_i_view_cell_t c;
+    if (!gates_i_view_cell_get(tree, node.index, item, cell - 1, &c)) return PROVEN_ERR_INVALID_ARG;
+    memset(out, 0, sizeof *out);
+    sbuf_t b = { .tree = tree };
+    gates_u32 t0 = put(&b, c.cell.text);
+    gates_u32 l0 = put(&b, c.label);
+    bind(&b, &out->name, t0, c.cell.text.size);
+    bind(&b, &out->value, t0, c.cell.text.size);
+    bind(&b, &out->description, l0, c.label.size);
+    const gates_widget_state_t *st = state_of(tree, node.index);
+    bool on = st != nullptr && !gates_i_widget_inert(tree, st);
+    out->role = GATES_ROLE_CELL;
+    out->bounds = c.rect;
+    if (!c.shown) out->states |= GATES_ACCESS_OFFSCREEN;
+    if (!on) out->states |= GATES_ACCESS_DISABLED;
+    if (c.kind == GATES_CELL_CHECK) {
+        out->states |= GATES_ACCESS_CHECKABLE | (c.cell.checked ? GATES_ACCESS_CHECKED : 0u);
+        if (c.editable && on) out->actions |= GATES_ACCESS_TOGGLE;
+    } else if (c.kind == GATES_CELL_PROGRESS) {
+        out->has_range = true;
+        out->range_max = 1000;
+        out->range_value = c.cell.permille < 1000u ? (gates_i32)c.cell.permille : 1000;
+        out->range_step = 10;
+        out->range_page = 100;
+        out->range_scale = 10;
+    } else if (c.editable && on) {
+        out->actions |= GATES_ACCESS_SET_VALUE;
+    }
+    if (!c.editable) out->states |= GATES_ACCESS_READ_ONLY;
+    out->column = cell - 1;
+    out->column_count = gates_i_view_cell_count(tree, node.index);
+    gates_i_view_item_t it;
+    out->set_position = c.row + 1;
+    out->set_size = gates_i_view_item(tree, node.index, item, &it) ? it.count : 0;
+    resolve(&b);
+    return b.failed ? PROVEN_ERR_NOMEM : GATES_OK;
+}
+
+gates_err_t gates_access_cell_toggle(gates_tree_t *tree, gates_node_t node, gates_u64 item, gates_u32 cell) {
+    gates_widget_state_t *st = nullptr;
+    gates_err_t err = usable(tree, node, &st);
+    if (!gates_is_ok(err)) return err;
+    if (gates_i_slot(tree, node.index)->kind != GATES_NODE_VIEW || cell == 0) return PROVEN_ERR_INVALID_ARG;
+    return gates_i_view_cell_toggle(tree, node.index, item, cell - 1);
+}
+
+gates_err_t gates_access_cell_set_value(gates_tree_t *tree, gates_node_t node, gates_u64 item, gates_u32 cell,
+                                       gates_str_t text) {
+    gates_widget_state_t *st = nullptr;
+    gates_err_t err = usable(tree, node, &st);
+    if (!gates_is_ok(err)) return err;
+    if (gates_i_slot(tree, node.index)->kind != GATES_NODE_VIEW || cell == 0 || (text.size > 0 && text.ptr == nullptr)) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    return gates_i_view_cell_set_text(tree, node.index, item, cell - 1, text);
+}
+
+bool gates_access_hscroll_info(gates_tree_t *tree, gates_node_t node, gates_u32 *pos, gates_u32 *page) {
+    if (tree == nullptr || pos == nullptr || page == nullptr || !gates_i_valid(tree, node) ||
+        gates_i_slot(tree, node.index)->kind != GATES_NODE_VIEW) {
+        return false;
+    }
+    return gates_i_view_hscroll_info(tree, node.index, pos, page);
+}
+
+gates_err_t gates_access_hscroll_to(gates_tree_t *tree, gates_node_t node, gates_u32 pos) {
+    gates_widget_state_t *st = nullptr;
+    gates_err_t err = usable(tree, node, &st);
+    if (!gates_is_ok(err)) return err;
+    if (gates_i_slot(tree, node.index)->kind != GATES_NODE_VIEW) return PROVEN_ERR_INVALID_ARG;
+    return gates_i_view_hscroll_set(tree, node.index, pos);
 }
 
 gates_err_t gates_access_set_item_selected(gates_tree_t *tree, gates_node_t node, gates_u64 item, bool selected) {

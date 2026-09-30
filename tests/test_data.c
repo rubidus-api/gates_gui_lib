@@ -779,6 +779,104 @@ static void test_keyboard_extras(void) {
     free_app(&a);
 }
 
+/* -- 0.10.0: cells as accessibility elements ------------------------------------------------- */
+
+static void test_cells_access(void) {
+    app_t a;
+    make_app(&a, 6, true);
+    gates_tree_t *t = a.t;
+    GT_ASSERT(gates_access_cell_count(t, a.view, 101) == 6);
+    GT_ASSERT(gates_access_cell_count(t, a.view, 0) == 0 && gates_access_cell_count(t, a.view, 999) == 0);
+    GT_ASSERT(gates_access_cell_count(t, a.after, 101) == 0);
+    gates_access_info_t i;
+    /* A text cell: its text as name and value, its column's label as description, editable. */
+    GT_ASSERT_OK(gates_access_cell_info(t, a.view, 101, 1, &i));
+    GT_ASSERT(i.role == GATES_ROLE_CELL && str_is(i.name, "row1") && str_is(i.value, "row1") &&
+              str_is(i.description, "Name") && (i.actions & GATES_ACCESS_SET_VALUE) && i.column == 0);
+    GT_ASSERT(i.set_position == 2 && i.set_size == 6 && i.column_count == 6);
+    gates_rect_t cr = cell_rect(&a, 1, 0);
+    GT_ASSERT(i.bounds.x == cr.x && i.bounds.y == cr.y && i.bounds.w == cr.w);
+    /* A check cell: CHECKABLE, CHECKED as the model says, TOGGLE when editable. */
+    GT_ASSERT_OK(gates_access_cell_info(t, a.view, 101, 2, &i));
+    GT_ASSERT((i.states & GATES_ACCESS_CHECKABLE) && (i.states & GATES_ACCESS_CHECKED) && (i.actions & GATES_ACCESS_TOGGLE));
+    GT_ASSERT_OK(gates_access_cell_info(t, a.view, 100, 2, &i));
+    GT_ASSERT((i.states & GATES_ACCESS_CHECKABLE) && !(i.states & GATES_ACCESS_CHECKED));
+    /* A progress cell: a range read as a percent, never editable. */
+    GT_ASSERT_OK(gates_access_cell_info(t, a.view, 102, 3, &i));
+    GT_ASSERT(i.has_range && i.range_value == 500 && i.range_max == 1000 && i.range_scale == 10 &&
+              (i.states & GATES_ACCESS_READ_ONLY) && i.actions == 0);
+    /* A plain (not editable) column is read-only. */
+    GT_ASSERT_OK(gates_access_cell_info(t, a.view, 101, 5, &i));
+    GT_ASSERT(str_is(i.value, "note") && (i.states & GATES_ACCESS_READ_ONLY) && !(i.actions & GATES_ACCESS_SET_VALUE));
+    GT_ASSERT(gates_access_cell_info(t, a.view, 101, 7, &i) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_access_cell_info(t, a.view, 101, 0, &i) == PROVEN_ERR_INVALID_ARG);
+    /* Toggle and set value go through set_cell and report CELL_EDITED like a person's edit. */
+    a.rec.n = 0;
+    GT_ASSERT_OK(gates_access_cell_toggle(t, a.view, 101, 2));
+    GT_ASSERT(!a.m.rows[1].done && a.m.last_col == C_DONE);
+    GT_ASSERT_OK(gates_access_cell_set_value(t, a.view, 101, 1, GATES_STR("renamed")));
+    GT_ASSERT(strcmp(a.m.rows[1].name, "renamed") == 0);
+    dispatch(&a);
+    GT_ASSERT(count_kind(&a.rec, GATES_EVENT_CELL_EDITED) == 2);
+    GT_ASSERT_OK(gates_access_cell_info(t, a.view, 101, 1, &i));
+    GT_ASSERT(str_is(i.name, "renamed"));
+    GT_ASSERT(gates_access_cell_toggle(t, a.view, 101, 1) == PROVEN_ERR_INVALID_ARG);      /* not a check cell */
+    GT_ASSERT(gates_access_cell_set_value(t, a.view, 101, 2, GATES_STR("x")) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_access_cell_set_value(t, a.view, 101, 3, GATES_STR("x")) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_access_cell_set_value(t, a.view, 101, 5, GATES_STR("x")) == PROVEN_ERR_PERMISSION);
+    a.m.refuse = PROVEN_ERR_INVALID_ARG; /* the model says no: nothing changes, nothing reported */
+    a.rec.n = 0;
+    GT_ASSERT(gates_access_cell_set_value(t, a.view, 101, 1, GATES_STR("no")) == PROVEN_ERR_INVALID_ARG);
+    dispatch(&a);
+    GT_ASSERT(count_kind(&a.rec, GATES_EVENT_CELL_EDITED) == 0 && strcmp(a.m.rows[1].name, "renamed") == 0);
+    a.m.refuse = GATES_OK;
+    /* An open edit of the cell gives way to the value set. */
+    GT_ASSERT_OK(gates_view_edit(t, a.view, 102, C_NAME));
+    GT_ASSERT_OK(gates_access_cell_set_value(t, a.view, 102, 1, GATES_STR("direct")));
+    GT_ASSERT(!gates_view_editing(t, a.view, nullptr, nullptr) && strcmp(a.m.rows[2].name, "direct") == 0);
+    /* The cell under a point; none outside the rows. */
+    gates_rect_t c4 = cell_rect(&a, 2, 3);
+    GT_ASSERT(gates_access_cell_at(t, a.view, at(c4, 5)) == 4);
+    GT_ASSERT(gates_access_cell_at(t, a.view, (gates_point_t){ 0, 0 }) == 0);
+    gates_rect_t hc = gates_view_part_rect(t, a.view, GATES_VIEW_PART_HEADER, 3);
+    GT_ASSERT(gates_access_cell_at(t, a.view, at(hc, 5)) == 0); /* the header is no cell */
+    /* Hidden and moved columns: cells follow the shown order. */
+    GT_ASSERT_OK(gates_view_set_column_hidden(t, a.view, C_DONE, true));
+    GT_ASSERT(gates_access_cell_count(t, a.view, 101) == 5);
+    GT_ASSERT_OK(gates_access_cell_info(t, a.view, 101, 2, &i));
+    GT_ASSERT(str_is(i.description, "Progress"));
+    /* Disabled: read, not changed. */
+    GT_ASSERT_OK(gates_widget_set_disabled(t, a.view, true));
+    GT_ASSERT_OK(gates_access_cell_info(t, a.view, 101, 1, &i));
+    GT_ASSERT((i.states & GATES_ACCESS_DISABLED) && i.actions == 0);
+    GT_ASSERT_OK(gates_access_cell_info(t, a.view, 101, 5, &i)); /* the File column's place now: after hiding Done */
+    GT_ASSERT_OK(gates_view_set_column_hidden(t, a.view, C_DONE, false));
+    GT_ASSERT_OK(gates_access_cell_info(t, a.view, 101, 2, &i)); /* a check cell: no toggle while disabled */
+    GT_ASSERT((i.states & GATES_ACCESS_CHECKABLE) && i.actions == 0);
+    GT_ASSERT(gates_access_cell_set_value(t, a.view, 101, 1, GATES_STR("x")) == PROVEN_ERR_INVALID_STATE);
+    free_app(&a);
+    /* Sideways scrolling of a table wider than its view. */
+    make_app(&a, 6, false);
+    t = a.t;
+    GT_ASSERT(gates_access_cell_toggle(t, a.view, 101, 2) == PROVEN_ERR_PERMISSION); /* a read-only model */
+    GT_ASSERT(a.m.sets == 0);
+    gates_u32 pos = 99, page = 99;
+    GT_ASSERT(!gates_access_hscroll_info(t, a.view, &pos, &page)); /* 540 of 640: fits */
+    GT_ASSERT_OK(gates_layout_run(t, (gates_size_t){ 300, VH }, be));
+    GT_ASSERT(gates_access_hscroll_info(t, a.view, &pos, &page) && pos == 0 && page > 0 && page < GATES_ACCESS_SCROLL_MAX);
+    GT_ASSERT_OK(gates_access_info(t, a.view, 0, &i));
+    GT_ASSERT(i.actions & GATES_ACCESS_SCROLL);
+    GT_ASSERT_OK(gates_access_hscroll_to(t, a.view, GATES_ACCESS_SCROLL_MAX));
+    GT_ASSERT(gates_access_hscroll_info(t, a.view, &pos, &page) && pos == GATES_ACCESS_SCROLL_MAX);
+    GT_ASSERT(gates_view_scroll_x(t, a.view) > 0);
+    GT_ASSERT_OK(gates_access_cell_info(t, a.view, 100, 1, &i)); /* the Name column is scrolled out */
+    GT_ASSERT(i.states & GATES_ACCESS_OFFSCREEN);
+    GT_ASSERT_OK(gates_access_hscroll_to(t, a.view, 0));
+    GT_ASSERT(gates_view_scroll_x(t, a.view) == 0);
+    GT_ASSERT(gates_access_hscroll_to(t, a.after, 0) == PROVEN_ERR_INVALID_ARG);
+    free_app(&a);
+}
+
 /* -- 0.9.0: multi-selection (RFC-0007) ------------------------------------------------------ */
 
 /* What a program does with a request: its own selection changes, then the view repaints. */
@@ -1694,6 +1792,7 @@ int main(void) {
     test_checks();
     test_keyboard_extras();
     test_multi_select();
+    test_cells_access();
     test_scroll_and_model();
     test_create_failures();
     test_hide_and_move();

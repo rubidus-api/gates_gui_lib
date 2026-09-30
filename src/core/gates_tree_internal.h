@@ -688,6 +688,23 @@ gates_u64 gates_i_view_item_count(gates_tree_t *tree, gates_u32 idx);
 gates_item_id_t gates_i_view_item_at(gates_tree_t *tree, gates_u32 idx, gates_u64 k);
 bool gates_i_view_item(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id, gates_i_view_item_t *out);
 gates_str_t gates_i_view_cell(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id, gates_u32 col);
+/* Cells as elements (0.10.0): k is the shown column's position from 0. */
+typedef struct gates_i_view_cell_t {
+    gates_cell_kind_t kind;
+    bool editable;               /* a person could change it (toggle or edit) */
+    bool shown;                  /* on screen (not scrolled out sideways) */
+    gates_rect_t rect;
+    gates_cell_t cell;           /* the model's, borrowed until the next model call */
+    gates_str_t label;           /* the column's header label */
+    gates_u64 row;               /* model position */
+} gates_i_view_cell_t;
+gates_u32 gates_i_view_cell_count(gates_tree_t *tree, gates_u32 idx);
+bool gates_i_view_cell_get(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id, gates_u32 k, gates_i_view_cell_t *out);
+gates_i32 gates_i_view_col_at(gates_tree_t *tree, gates_u32 idx, gates_point_t p);
+gates_err_t gates_i_view_cell_toggle(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id, gates_u32 k);
+gates_err_t gates_i_view_cell_set_text(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id, gates_u32 k, gates_str_t text);
+bool gates_i_view_hscroll_info(gates_tree_t *tree, gates_u32 idx, gates_u32 *pos, gates_u32 *page);
+gates_err_t gates_i_view_hscroll_set(gates_tree_t *tree, gates_u32 idx, gates_u32 pos);
 gates_item_id_t gates_i_view_row_at(gates_tree_t *tree, gates_u32 idx, gates_point_t p);
 gates_err_t gates_i_view_pick_id(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id);
 gates_err_t gates_i_view_activate_id(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id);

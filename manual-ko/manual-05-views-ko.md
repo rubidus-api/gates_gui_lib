@@ -136,6 +136,11 @@ int main(void) {
 읽고 줄(`ev->item`)과 열(`ev->result`)을 담아 CELL_EDITED 를 보낸다. 프로그램은
 `gates_view_edit` 와 `gates_view_end_edit` 로 같은 일을 할 수 있다.
 
+화면 낭독기에는 표 줄의 칸 하나하나가 따로 된 요소로 보인다. 칸의 글자, 그 열의 이름, 체크 칸의 상태, 진행
+칸의 백분율이다. 열이 고칠 수 있으면 체크 칸을 바꾸거나 글자 칸의 값을 정할 수 있고, 이것은 `set_cell` 을
+거쳐 CELL_EDITED 로 알려지며 사람의 편집과 똑같이 거절될 수 있다(`gates_access_cell_info`, `_toggle`,
+`_set_value`). 보기보다 넓은 표는 화면 낭독기에서도 옆으로 스크롤된다.
+
 <!-- example: manual/examples/ex_05_cells.c -->
 ```c
 /* manual example (host): a shopping list edited in place - a text column and a check column.

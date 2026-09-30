@@ -1958,6 +1958,108 @@ gates_str_t gates_i_view_cell(gates_tree_t *tree, gates_u32 idx, gates_item_id_t
     return gates_is_ok(v->model.cell(v->model.user, id, cid, &cell)) ? cell.text : (gates_str_t){0};
 }
 
+/* -- cells as elements (0.10.0) ---------------------------------------------------------------- */
+
+gates_u32 gates_i_view_cell_count(gates_tree_t *tree, gates_u32 idx) {
+    const struct gates_i_view *v = view_at(tree, idx);
+    return v != nullptr && v->ncol > 0 && !v->tree ? nvisible(v) : 0; /* tables; a tree's rows stay whole */
+}
+
+bool gates_i_view_cell_get(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id, gates_u32 k, gates_i_view_cell_t *out) {
+    struct gates_i_view *v = view_at(tree, idx);
+    gates_i_view_item_t it;
+    if (v == nullptr || k >= gates_i_view_cell_count(tree, idx) || !gates_i_view_item(tree, idx, id, &it)) return false;
+    gates_i32 c = visible_at(v, k);
+    if (c < 0) return false;
+    memset(out, 0, sizeof *out);
+    if (!gates_is_ok(v->model.cell(v->model.user, id, v->cols[c].id, &out->cell))) return false;
+    out->kind = v->cols[c].kind;
+    out->editable = v->has_model && v->model.set_cell != nullptr &&
+                    can_edit(v, c, v->cols[c].kind != GATES_CELL_CHECK);
+    out->label = (gates_str_t){ .ptr = v->cols[c].label, .size = v->cols[c].label_len };
+    out->row = it.row;
+    if (it.shown) {
+        view_geom_t g;
+        geom_now(tree, idx, v, &g);
+        gates_rect_t r = { col_left(v, &g, (gates_u32)c), it.rect.y, v->cols[c].width, it.rect.h };
+        out->rect = gates_rect_intersect(r, g.body);
+        out->shown = !gates_rect_is_empty(out->rect);
+    }
+    return true;
+}
+
+gates_i32 gates_i_view_col_at(gates_tree_t *tree, gates_u32 idx, gates_point_t p) {
+    struct gates_i_view *v = view_at(tree, idx);
+    if (v == nullptr || gates_i_view_cell_count(tree, idx) == 0) return -1;
+    view_geom_t g;
+    geom_now(tree, idx, v, &g);
+    gates_i32 c = body_col_at(v, &g, p);
+    if (c < 0) return -1;
+    for (gates_u32 k = 0; k < nvisible(v); k++) {
+        if (visible_at(v, k) == c) return (gates_i32)k;
+    }
+    return -1;
+}
+
+gates_err_t gates_i_view_cell_toggle(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id, gates_u32 k) {
+    struct gates_i_view *v = view_at(tree, idx);
+    gates_i_view_cell_t cell;
+    if (v == nullptr || !gates_i_view_cell_get(tree, idx, id, k, &cell) || cell.kind != GATES_CELL_CHECK) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    if (!cell.editable) return PROVEN_ERR_PERMISSION;
+    gates_i32 c = visible_at(v, k);
+    gates_err_t err = gates_i_wants_events(tree, idx) ? gates_i_event_reserve(tree, 1, 0) : GATES_OK;
+    if (!gates_is_ok(err)) return err;
+    gates_cell_t value = { .checked = !cell.cell.checked };
+    err = v->model.set_cell(v->model.user, id, v->cols[c].id, &value);
+    if (gates_is_ok(err)) edited(tree, idx, v, id, v->cols[c].id);
+    return err;
+}
+
+gates_err_t gates_i_view_cell_set_text(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id, gates_u32 k, gates_str_t text) {
+    struct gates_i_view *v = view_at(tree, idx);
+    gates_i_view_cell_t cell;
+    if (v == nullptr || !gates_i_view_cell_get(tree, idx, id, k, &cell) || cell.kind == GATES_CELL_CHECK ||
+        cell.kind == GATES_CELL_PROGRESS) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    if (!cell.editable) return PROVEN_ERR_PERMISSION;
+    gates_i32 c = visible_at(v, k);
+    if (v->editing && v->edit_id == id && v->edit_col == v->cols[c].id) {
+        (void)end_edit(tree, idx, v, false, false); /* the value set replaces an open edit of the cell */
+    }
+    gates_err_t err = gates_i_wants_events(tree, idx) ? gates_i_event_reserve(tree, 1, 0) : GATES_OK;
+    if (!gates_is_ok(err)) return err;
+    gates_cell_t value = { .text = text };
+    err = v->model.set_cell(v->model.user, id, v->cols[c].id, &value);
+    if (gates_is_ok(err)) edited(tree, idx, v, id, v->cols[c].id);
+    return err;
+}
+
+bool gates_i_view_hscroll_info(gates_tree_t *tree, gates_u32 idx, gates_u32 *pos, gates_u32 *page) {
+    struct gates_i_view *v = view_at(tree, idx);
+    if (v == nullptr) return false;
+    view_geom_t g;
+    geom_now(tree, idx, v, &g);
+    if (g.max_x <= 0) return false;
+    *pos = (gates_u32)scale_down(GATES_ACCESS_SCROLL_MAX, (gates_u64)g.scroll_x, (gates_u64)g.max_x);
+    *page = (gates_u32)scale_down(GATES_ACCESS_SCROLL_MAX, (gates_u64)g.body.w, (gates_u64)g.content_w);
+    return true;
+}
+
+gates_err_t gates_i_view_hscroll_set(gates_tree_t *tree, gates_u32 idx, gates_u32 pos) {
+    struct gates_i_view *v = view_at(tree, idx);
+    if (v == nullptr) return PROVEN_ERR_INVALID_ARG;
+    view_geom_t g;
+    geom_now(tree, idx, v, &g);
+    if (g.max_x <= 0) return PROVEN_ERR_INVALID_STATE;
+    gates_i32 x = (gates_i32)scale_up((gates_u64)g.max_x, pos > GATES_ACCESS_SCROLL_MAX ? GATES_ACCESS_SCROLL_MAX : pos,
+                                      GATES_ACCESS_SCROLL_MAX);
+    scroll_x_by(tree, idx, v, &g, x - g.scroll_x);
+    return GATES_OK;
+}
+
 gates_item_id_t gates_i_view_row_at(gates_tree_t *tree, gates_u32 idx, gates_point_t p) {
     struct gates_i_view *v = view_at(tree, idx);
     if (v == nullptr || !v->has_model) return 0;

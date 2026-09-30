@@ -141,6 +141,12 @@ open and is marked invalid (after focus has left, the edit is dropped instead). 
 the view reads the model again and sends CELL_EDITED with the row (`ev->item`) and the column
 (`ev->result`). The program can do the same with `gates_view_edit` and `gates_view_end_edit`.
 
+Screen readers see every cell of a table row as an element of its own: its text, its column's
+label, a check cell's state and a progress cell's percentage. They can toggle a check cell or set
+a text cell's value when the column is editable - through `set_cell`, reported with CELL_EDITED,
+refused exactly as a person's edit would be (`gates_access_cell_info`, `_toggle`, `_set_value`).
+A table wider than its view scrolls sideways for them too.
+
 <!-- example: manual/examples/ex_05_cells.c -->
 ```c
 /* manual example (host): a shopping list edited in place - a text column and a check column.
