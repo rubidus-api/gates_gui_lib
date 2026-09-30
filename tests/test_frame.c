@@ -1673,6 +1673,18 @@ static void test_tabs_overflow(void) {
     GT_ASSERT(gates_tabs_selected(t, a.tabs) == 8 && gates_tree_overlay_count(t) == 0);
     GT_ASSERT(!gates_rect_is_empty(tab_box(t, a.strip, 8)));
     GT_ASSERT(changes(&a, nullptr) == 1); /* reported as a person's switch */
+    /* A click on an entry chooses it as well (after a layout, as a window runs one). */
+    click_at(t, (gates_point_t){ mr.x + mr.w / 2, mr.y + mr.h / 2 });
+    GT_ASSERT(gates_tree_overlay_count(t) == 1);
+    layout(t);
+    menu = gates_access_last_child(t, (gates_access_ref_t){ gates_tree_root(t), 0 }).node;
+    GT_ASSERT_OK(gates_access_info(t, menu, 11, &info));
+    click_at(t, (gates_point_t){ info.bounds.x + 10, info.bounds.y + info.bounds.h / 2 });
+    dispatch(t);
+    GT_ASSERT(gates_tabs_selected(t, a.tabs) == 10 && gates_tree_overlay_count(t) == 0);
+    GT_ASSERT(changes(&a, nullptr) == 1);
+    GT_ASSERT_OK(gates_tabs_set_selected(t, a.tabs, 8)); /* back, silently */
+    layout(t);
     /* Alt+Down on the strip opens it from the keyboard; the list follows renamed titles. */
     GT_ASSERT_OK(gates_tabs_set_title(t, a.tabs, 0, GATES_STR("Renamed")));
     gates_tree_set_focus(t, a.strip);

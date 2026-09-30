@@ -473,7 +473,7 @@ static HRESULT STDMETHODCALLTYPE simple_property(IRawElementProviderSimple *This
         break;
     case UIA_HasKeyboardFocusPropertyId: {
         gates_access_ref_t f = gates_access_focus_ref(e->win->tree);
-        v_bool(out, !ref_null(f) && ref_eq(f, e->ref));
+        v_bool(out, !ref_null(f) && ref_eq(f, e->ref) && e->cell == 0); /* a cell shares its row's ref */
         break;
     }
     case UIA_IsKeyboardFocusablePropertyId:
