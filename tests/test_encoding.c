@@ -552,6 +552,92 @@ static void test_args(void) {
     GT_ASSERT(gates_args_split(GATES_STR("p x"), a, &argc, &argv) == PROVEN_ERR_NOMEM && argv == (char **)&fa);
 }
 
+/* -- the built-in CP949 / EUC-KR converter (0.11.0) ----------------------------------------- */
+
+static void test_cp949(void) {
+    gates_encoding_set_codepage_converter(gates_codepage_converter_cp949());
+    GT_ASSERT(gates_encoding_system_codepage() == 949 && gates_encoding_console_codepage() == 0);
+    gates_usize_t at = 0;
+    /* Known codes, both ways, both code pages. */
+    GT_ASSERT(to8(CP(949), "ok \xC7\xD1\xB1\xDB", 7, GATES_ENCODING_STRICT, "ok \xED\x95\x9C\xEA\xB8\x80"));
+    GT_ASSERT(to8(CP(51949), "\xC7\xD1\xB1\xDB", 4, GATES_ENCODING_STRICT, "\xED\x95\x9C\xEA\xB8\x80"));
+    GT_ASSERT(to8(CP(0), "\xC7\xD1", 2, 0, "\xED\x95\x9C")); /* the system's: 949 */
+    GT_ASSERT(from8(CP(949), "\xED\x95\x9C\xEA\xB8\x80!", GATES_ENCODING_STRICT, "\xC7\xD1\xB1\xDB!", 5));
+    GT_ASSERT(from8(CP(51949), "\xED\x95\x9C\xEA\xB8\x80", GATES_ENCODING_STRICT, "\xC7\xD1\xB1\xDB", 4));
+    /* U+B620 (an extension syllable): in 949 only. */
+    GT_ASSERT(from8(CP(949), "\xEB\x98\xA0", GATES_ENCODING_STRICT, "\x8C\x63", 2));
+    GT_ASSERT(to8(CP(949), "\x8C\x63", 2, GATES_ENCODING_STRICT, "\xEB\x98\xA0"));
+    GT_ASSERT(bad(CP(51949), "a\xEB\x98\xA0", 4, true, &at) == PROVEN_ERR_INVALID_ENCODING && at == 1);
+    GT_ASSERT(from8(CP(51949), "a\xEB\x98\xA0", 0, "a?", 2));
+    GT_ASSERT(to8(CP(51949), "\x8C\x63", 2, GATES_ENCODING_STRICT, "\xC2\x8C" "c")); /* a C1 byte and a letter, not a pair */
+    /* The single byte 0x80 and NUL. */
+    GT_ASSERT(to8(CP(949), "\x80", 1, GATES_ENCODING_STRICT, "\xC2\x80"));
+    GT_ASSERT(from8(CP(949), "\xC2\x80", GATES_ENCODING_STRICT, "\x80", 1));
+    GT_ASSERT(to8(CP(51949), "\x80\x9F", 2, GATES_ENCODING_STRICT, "\xC2\x80\xC2\x9F")); /* C1 bytes as themselves */
+    GT_ASSERT(from8(CP(51949), "\xC2\x85", GATES_ENCODING_STRICT, "\x85", 1));
+    GT_ASSERT(bad(CP(51949), "\xA0", 1, false, &at) == PROVEN_ERR_INVALID_ENCODING);
+    GT_ASSERT(bad(CP(51949), "\xC9", 1, false, &at) == PROVEN_ERR_INVALID_ENCODING); /* Windows' U+0000 quirk left out */
+    GT_ASSERT(to8(CP(51949), "\xB4\xD3", 2, GATES_ENCODING_STRICT, "\xEB\x8B\x92")); /* U+B2D2, as KS X 1001 */
+    GT_ASSERT(from8(CP(51949), "\xEB\x8B\x92", GATES_ENCODING_STRICT, "\xB4\xD3", 2));
+    GT_ASSERT(to8(CP(949), "\xB4\xD3", 2, GATES_ENCODING_STRICT, "\xEB\x8B\x92"));
+    GT_ASSERT(bad(CP(51949), "\xEB\x8B\x96", 3, true, &at) == PROVEN_ERR_INVALID_ENCODING && at == 0); /* U+B2D6 */
+    GT_ASSERT(from8(CP(949), "\xEB\x8B\x96", GATES_ENCODING_STRICT, "\x88\x9A", 2));
+    GT_ASSERT(bad(CP(949), "\x85", 1, false, &at) == PROVEN_ERR_INVALID_ENCODING);  /* a lead in 949 */
+    GT_ASSERT(from8(CP(949), "\xC2\x85", 0, "?", 1));
+    {
+        gates_u8 *o = nullptr;
+        gates_usize_t n = 0;
+        GT_ASSERT_OK(gates_encoding_to_utf8(CP(949), "a\0b", 3, GATES_ENCODING_STRICT, HEAP, &o, &n, nullptr));
+        GT_ASSERT(n == 3 && o[1] == 0 && o[2] == 'b');
+        proven_heap_allocator().free_fn(nullptr, o);
+        GT_ASSERT_OK(gates_encoding_from_utf8(CP(949), (gates_str_t){ .ptr = (const gates_u8 *)"a\0b", .size = 3 },
+                                              GATES_ENCODING_STRICT, HEAP, &o, &n, nullptr));
+        GT_ASSERT(n == 3 && o[1] == 0 && o[2] == 'b' && o[3] == 0);
+        proven_heap_allocator().free_fn(nullptr, o);
+    }
+    /* Broken input: a lead at the end, a lead before a byte that cannot follow it (kept). */
+    GT_ASSERT(bad(CP(949), "a\xC7", 2, false, &at) == PROVEN_ERR_INVALID_ENCODING && at == 1);
+    GT_ASSERT(to8(CP(949), "a\xC7", 2, 0, "a\xEF\xBF\xBD"));
+    GT_ASSERT(to8(CP(949), "\xC7 x", 3, 0, "\xEF\xBF\xBD x"));
+    GT_ASSERT(to8(CP(949), "\xFF\xC7\xD1", 3, 0, "\xEF\xBF\xBD\xED\x95\x9C"));
+    GT_ASSERT(bad(CP(949), "\xC7\xD1\xFF", 3, false, &at) == PROVEN_ERR_INVALID_ENCODING && at == 2);
+    /* Characters it lacks going out: one '?' each (a supplementary one too). */
+    GT_ASSERT(from8(CP(949), "a\xF0\x9F\x98\x80" "b", 0, "a?b", 3));
+    GT_ASSERT(bad(CP(949), "ab\xF0\x9F\x98\x80", 6, true, &at) == PROVEN_ERR_INVALID_ENCODING && at == 2);
+    GT_ASSERT(from8(CP(949), "\xEA\xB0\x80\xE0\xB8\x81", 0, "\xB0\xA1?", 3)); /* Thai is not in 949 */
+    /* Every code it knows: decoded, encoded back to a code that decodes the same. */
+    int known = 0, same = 0;
+    for (int l = 0x81; l <= 0xFE; l++) {
+        for (int tr = 0x41; tr <= 0xFE; tr++) {
+            char in[2] = { (char)l, (char)tr };
+            gates_u8 *u = nullptr, *back = nullptr, *again = nullptr;
+            gates_usize_t un = 0, bn = 0, an = 0;
+            if (!gates_is_ok(gates_encoding_to_utf8(CP(949), in, 2, GATES_ENCODING_STRICT, HEAP, &u, &un, nullptr))) continue;
+            known++;
+            GT_ASSERT_OK(gates_encoding_from_utf8(CP(949), (gates_str_t){ .ptr = u, .size = un }, GATES_ENCODING_STRICT, HEAP,
+                                                  &back, &bn, nullptr));
+            if (bn == 2 && memcmp(back, in, 2) == 0) same++;
+            GT_ASSERT_OK(gates_encoding_to_utf8(CP(949), back, bn, GATES_ENCODING_STRICT, HEAP, &again, &an, nullptr));
+            GT_ASSERT(an == un && memcmp(again, u, un) == 0);
+            proven_heap_allocator().free_fn(nullptr, u);
+            proven_heap_allocator().free_fn(nullptr, back);
+            proven_heap_allocator().free_fn(nullptr, again);
+        }
+    }
+    GT_ASSERT(known == 17236 && same >= known - 2);
+    /* Only 949 and 51949; allocation failure leaves nothing. */
+    GT_ASSERT(bad(CP(932), "a", 1, false, &at) == PROVEN_ERR_UNSUPPORTED);
+    GT_ASSERT(bad(CP(932), "a", 1, true, &at) == PROVEN_ERR_UNSUPPORTED);
+    fail_alloc_t fa = { .left = 0 };
+    gates_allocator_t a = { .ctx = &fa, .alloc_fn = fa_alloc, .realloc_fn = fa_realloc, .free_fn = fa_free };
+    gates_u8 *o = (gates_u8 *)&fa;
+    gates_usize_t n = 0;
+    GT_ASSERT(gates_encoding_to_utf8(CP(949), "\xC7\xD1", 2, 0, a, &o, &n, nullptr) == PROVEN_ERR_NOMEM && o == (gates_u8 *)&fa);
+    fa.left = 0;
+    GT_ASSERT(gates_encoding_from_utf8(CP(949), GATES_STR("\xED\x95\x9C"), 0, a, &o, &n, nullptr) == PROVEN_ERR_NOMEM);
+    gates_encoding_set_codepage_converter(nullptr);
+}
+
 int main(void) {
     test_utf_forms();
     test_malformed();
@@ -561,5 +647,6 @@ int main(void) {
     test_buffers();
     test_streams();
     test_args();
+    test_cp949();
     return gt_report("test_encoding");
 }

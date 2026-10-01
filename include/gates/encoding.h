@@ -173,6 +173,18 @@ gates_u32 gates_encoding_console_codepage(void);
  * UTF-8. Only in builds with src/platform/win32. */
 [[nodiscard]] gates_err_t gates_console_write_win32(gates_str_t text, bool to_stderr);
 
+/* A built-in converter for 949 (CP949) and 51949 (EUC-KR) for targets with no
+ * OS to ask - a microcontroller, an RTOS GUI (0.11.0). Its tables were
+ * measured on Windows 11, so it converts as Windows does: every CP949 code
+ * both ways, EUC-KR as the part of it Windows maps in 51949 (with the C1 bytes
+ * 0x80-0x9F as themselves) - but not Windows' quirks: 51949's lone C9 read as
+ * U+0000 and characters it writes and cannot read back are refused, and B4D3 is
+ * U+B2D2 as KS X 1001 says (Windows' 51949 reads U+B2D6). Other code pages
+ * are UNSUPPORTED; system_codepage answers 949. It costs about 120 KB of
+ * read-only data, linked only into programs that call this. Install it with
+ * gates_encoding_set_codepage_converter. Platform-free. */
+const gates_codepage_converter_t *gates_codepage_converter_cp949(void);
+
 /* The Win32 converter (MultiByteToWideChar / WideCharToMultiByte). Only in
  * builds that include src/platform/win32; gates_app_create installs it when
  * no converter is set. */

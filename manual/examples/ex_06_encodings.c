@@ -45,8 +45,9 @@ int main(void) {
                                              GATES_ENCODING_STRICT, (gates_allocator_t){0}, &junk, &size, &bad_at);
     printf("strict refuses byte %u; ", err == PROVEN_ERR_INVALID_ENCODING ? (unsigned)bad_at : 99u);
 
-    /* Code pages (949 = Korean Windows, EUC-KR and more) need the platform's tables: on Windows
-     * the app installs them; this headless program has none. */
+    /* Code pages (949 = Korean Windows, EUC-KR and more) need a converter: on Windows the app
+     * installs the platform's; gates_codepage_converter_cp949() is a built-in one for 949 and
+     * 51949. This program installs none, so the call says so. */
     err = gates_encoding_to_utf8((gates_encoding_t){ .kind = GATES_ENCODING_CODEPAGE, .codepage = GATES_CODEPAGE_CP949 },
                                  "\xC7\xD1", 2, 0, (gates_allocator_t){0}, &junk, &size, nullptr);
     printf("code page 949 here: %s\n", err == PROVEN_ERR_UNSUPPORTED ? "unsupported" : "converted");

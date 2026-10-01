@@ -78,7 +78,7 @@ gates 는 입력기를 구현하지 않는다. Windows 에서는 설치된 IME(�
 끈다. 글을 스스로 넣는 프로그램(시험, 자동화)을 위해 `gates_input_commit` 은 IME 처럼 글을 넣고,
 `gates_input_preedit` 은 조합을 보인다.
 
-## 0.10.0 의 유니코드 한계
+## 0.11.0 의 유니코드 한계
 
 - 글은 어디서나 UTF-8 이다. 잘못된 입력은 거절하며, 몰래 고치지 않는다. 다른 인코딩의 글은 가장자리에서
   바꾼다(아래).
@@ -118,6 +118,9 @@ gates 는 입력기를 구현하지 않는다. Windows 에서는 설치된 IME(�
 - `gates_encoding_detect` 는 어디서 왔는지 모르는 바이트를 짐작한다. 바이트 순서 표시가 먼저 정하고, 다음은 0 바이트로
   보는 UTF-16, 그다음 올바른 UTF-8, 아니면 시스템 코드 페이지다. `gates_utf8_valid` 는 글을 편집기에 넣기 전에 확인한다
   (편집기는 UTF-8 이 아닌 글을 거절한다).
+- 물어볼 OS 가 없는 대상(마이크로컨트롤러, RTOS 의 GUI)에는 `gates_codepage_converter_cp949()` 가 있다. Windows 11 에서
+  측정한 표로 949(CP949)와 51949(EUC-KR)를 Windows 와 똑같이 바꾸는 gates 자체 변환기다(0.11.0).
+  `gates_encoding_set_codepage_converter` 로 넣으며, 이것을 부르는 프로그램만 그 표(약 120 KB)를 싣는다.
 - 메모리를 아껴야 하는 대상에는 할당 없이 쓴다. `gates_encoding_to_utf8_buf` / `_from_utf8_buf` 는 부른 쪽의
   버퍼에 쓰고(버퍼 없이 부르면 크기만 알려 준다), `gates_encoding_stream_t` 는 조각으로 바꾼다. 블록으로 읽는
   파일, 직렬선으로 오는 바이트처럼 조각 끝에서 잘린 글자는 다음 조각으로 넘긴다. 둘 다 UTF 형식을 다룬다.
@@ -174,8 +177,9 @@ int main(void) {
                                              GATES_ENCODING_STRICT, (gates_allocator_t){0}, &junk, &size, &bad_at);
     printf("strict refuses byte %u; ", err == PROVEN_ERR_INVALID_ENCODING ? (unsigned)bad_at : 99u);
 
-    /* Code pages (949 = Korean Windows, EUC-KR and more) need the platform's tables: on Windows
-     * the app installs them; this headless program has none. */
+    /* Code pages (949 = Korean Windows, EUC-KR and more) need a converter: on Windows the app
+     * installs the platform's; gates_codepage_converter_cp949() is a built-in one for 949 and
+     * 51949. This program installs none, so the call says so. */
     err = gates_encoding_to_utf8((gates_encoding_t){ .kind = GATES_ENCODING_CODEPAGE, .codepage = GATES_CODEPAGE_CP949 },
                                  "\xC7\xD1", 2, 0, (gates_allocator_t){0}, &junk, &size, nullptr);
     printf("code page 949 here: %s\n", err == PROVEN_ERR_UNSUPPORTED ? "unsupported" : "converted");

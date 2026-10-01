@@ -80,7 +80,7 @@ A read-only or password box turns the IME off while it has focus. For a program 
 text itself - tests, automation - `gates_input_commit` delivers text as an IME would, and
 `gates_input_preedit` shows a composition.
 
-## Unicode limits in 0.10.0
+## Unicode limits in 0.11.0
 
 - Text is UTF-8 everywhere; invalid input is refused, never repaired silently. Text in other
   encodings is converted at the edge (below).
@@ -126,6 +126,10 @@ the program keeps one encoding inside and meets each environment in its own (0.1
 - `gates_encoding_detect` guesses for bytes of unknown origin: a byte order mark decides,
   then UTF-16 by its zero bytes, then valid UTF-8, else the system code page.
   `gates_utf8_valid` checks text before it goes into the editor (which refuses anything else).
+- With no OS to ask (a microcontroller, an RTOS GUI), `gates_codepage_converter_cp949()` is a
+  converter of gates' own for 949 (CP949) and 51949 (EUC-KR), from tables measured on Windows 11,
+  so it converts as Windows does (0.11.0). Install it with `gates_encoding_set_codepage_converter`;
+  only a program that calls it carries its tables (about 120 KB).
 - Without allocating, for targets that count their memory: `gates_encoding_to_utf8_buf` /
   `_from_utf8_buf` write into your buffer (a call with none asks for the size), and a
   `gates_encoding_stream_t` converts in pieces - a file read in blocks, bytes from a serial line -
@@ -185,8 +189,9 @@ int main(void) {
                                              GATES_ENCODING_STRICT, (gates_allocator_t){0}, &junk, &size, &bad_at);
     printf("strict refuses byte %u; ", err == PROVEN_ERR_INVALID_ENCODING ? (unsigned)bad_at : 99u);
 
-    /* Code pages (949 = Korean Windows, EUC-KR and more) need the platform's tables: on Windows
-     * the app installs them; this headless program has none. */
+    /* Code pages (949 = Korean Windows, EUC-KR and more) need a converter: on Windows the app
+     * installs the platform's; gates_codepage_converter_cp949() is a built-in one for 949 and
+     * 51949. This program installs none, so the call says so. */
     err = gates_encoding_to_utf8((gates_encoding_t){ .kind = GATES_ENCODING_CODEPAGE, .codepage = GATES_CODEPAGE_CP949 },
                                  "\xC7\xD1", 2, 0, (gates_allocator_t){0}, &junk, &size, nullptr);
     printf("code page 949 here: %s\n", err == PROVEN_ERR_UNSUPPORTED ? "unsupported" : "converted");

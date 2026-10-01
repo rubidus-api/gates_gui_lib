@@ -1,4 +1,4 @@
-# gates Specification (v0.10.0)
+# gates Specification (v0.11.0)
 
 This document states what gates guarantees: the contract a program may rely on. The manual
 (`manual/`) teaches how to use gates; the public headers (`include/gates/*.h`) give every
@@ -140,7 +140,9 @@ node per part.
   app; elsewhere UNSUPPORTED unless a program installs one). Malformed or unmappable text is
   replaced (U+FFFD, or the code page's `?`) or, in strict mode, refused with its byte offset;
   nothing is allocated on an error. The UTF forms also convert into a caller's buffer and in
-  pieces without allocating; Win32 programs get UTF-8 arguments and console output.
+  pieces without allocating; Win32 programs get UTF-8 arguments and console output. A built-in
+  converter for 949 and 51949, from tables measured on Windows 11, serves targets without an OS
+  (0.11.0); it refuses Windows' one-way quirks, and 51949's B4D3 follows KS X 1001.
 - **Metrics contract** (`gates/text.h`). A text backend reports per font the ascent, descent,
   line height, an average width (a sizing hint) and every code point's advance. A string's width
   is exactly the sum of its advances - no kerning, ligatures or shaping - so the core computes
