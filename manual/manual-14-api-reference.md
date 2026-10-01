@@ -1796,7 +1796,7 @@ Format: a first line "# gates state 1", then one line per node,
 "&lt;kind> &lt;value> &lt;id>" - kind is split (ratio per mille), tabs (selected
 index), columns ("&lt;column id>:&lt;width>" per column in display order, comma
 separated, "h" after a hidden one; the older widths-only form still loads)
-or scroll (offset);
+or scroll (offset; "y,x" when it is also scrolled sideways, 0.10.0);
 the value has no spaces; the id runs to the end of the line, so any id text is
 safe except a line break. Loading skips lines it does not understand, ids it
 does not find and kinds that do not match the node - old files never break a

@@ -1928,6 +1928,69 @@ static void test_state(void) {
     gates_tree_destroy(t);
 }
 
+/* 0.10.0: a scroll area scrolled sideways saves "y,x". */
+static gates_tree_t *make_wide_area(gates_node_t *area, bool sideways) {
+    gates_tree_t *t = nullptr;
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &t));
+    GT_ASSERT_OK(gates_layout_set(t, gates_tree_root(t), GATES_LAYOUT_KIND_COLUMN));
+    GT_ASSERT_OK(gates_panel_create(t, gates_tree_root(t), area));
+    GT_ASSERT_OK(gates_layout_set(t, *area, GATES_LAYOUT_KIND_SCROLL));
+    GT_ASSERT_OK(gates_layout_set_child_grow(t, *area, 1));
+    GT_ASSERT_OK(gates_layout_set_scroll_sideways(t, *area, sideways));
+    gates_node_t l;
+    GT_ASSERT_OK(gates_label_create(t, *area, GATES_STR("a line much wider than the window it is shown in, by far, really - and then some more words to be sure"), &l));
+    for (int i = 0; i < 40; i++) GT_ASSERT_OK(gates_label_create(t, *area, GATES_STR("line"), &l));
+    GT_ASSERT_OK(gates_node_set_automation_id(t, *area, GATES_STR("wide")));
+    layout(t);
+    return t;
+}
+
+static void test_state_sideways(void) {
+    gates_node_t area;
+    gates_tree_t *t = make_wide_area(&area, true);
+    GT_ASSERT_OK(gates_layout_set_scroll_offset(t, area, 20));
+    GT_ASSERT_OK(gates_layout_set_scroll_x(t, area, 50));
+    layout(t);
+    char text[256];
+    gates_usize_t need = 0;
+    GT_ASSERT_OK(gates_state_save(t, (gates_u8 *)text, sizeof text - 1, &need));
+    text[need] = 0;
+    GT_ASSERT(strstr(text, "scroll 20,50 wide\n") != nullptr);
+    GT_ASSERT_OK(gates_layout_set_scroll_x(t, area, 0));
+    GT_ASSERT_OK(gates_state_save(t, (gates_u8 *)text, sizeof text - 1, &need));
+    text[need] = 0;
+    GT_ASSERT(strstr(text, "scroll 20 wide\n") != nullptr); /* no sideways offset: the old form */
+    gates_tree_destroy(t);
+    /* Loading: both back; the old form puts x at 0; bad pairs are skipped. */
+    t = make_wide_area(&area, true);
+    gates_u32 applied = 0;
+    const char *f1 = "# gates state 1\nscroll 20,50 wide\n";
+    GT_ASSERT_OK(gates_state_load(t, (gates_str_t){ .ptr = (const gates_u8 *)f1, .size = strlen(f1) }, &applied));
+    layout(t);
+    GT_ASSERT(applied == 1 && gates_layout_scroll_offset(t, area) == 20 && gates_layout_scroll_x(t, area) == 50);
+    const char *f2 = "scroll 9 wide\n";
+    GT_ASSERT_OK(gates_state_load(t, (gates_str_t){ .ptr = (const gates_u8 *)f2, .size = strlen(f2) }, &applied));
+    layout(t);
+    GT_ASSERT(applied == 1 && gates_layout_scroll_offset(t, area) == 9 && gates_layout_scroll_x(t, area) == 0);
+    const char *bad = "scroll 7,abc wide\nscroll 7, wide\nscroll ,7 wide\nscroll 7,8,9 wide\nscroll 7,-1 wide\n";
+    GT_ASSERT_OK(gates_state_load(t, (gates_str_t){ .ptr = (const gates_u8 *)bad, .size = strlen(bad) }, &applied));
+    GT_ASSERT(applied == 0 && gates_layout_scroll_offset(t, area) == 9);
+    /* Past the end: clamped by the next layout. */
+    const char *big = "scroll 99999,99999 wide\n";
+    GT_ASSERT_OK(gates_state_load(t, (gates_str_t){ .ptr = (const gates_u8 *)big, .size = strlen(big) }, &applied));
+    layout(t);
+    gates_size_t c = gates_layout_scroll_content(t, area);
+    GT_ASSERT(gates_layout_scroll_x(t, area) > 0 && gates_layout_scroll_x(t, area) < c.w);
+    GT_ASSERT(gates_layout_scroll_offset(t, area) > 0 && gates_layout_scroll_offset(t, area) < c.h);
+    gates_tree_destroy(t);
+    /* An area that does not scroll sideways takes the vertical offset only. */
+    t = make_wide_area(&area, false);
+    GT_ASSERT_OK(gates_state_load(t, (gates_str_t){ .ptr = (const gates_u8 *)f1, .size = strlen(f1) }, &applied));
+    layout(t);
+    GT_ASSERT(applied == 1 && gates_layout_scroll_offset(t, area) == 20 && gates_layout_scroll_x(t, area) == 0);
+    gates_tree_destroy(t);
+}
+
 /* -- allocation failure -------------------------------------------------------------- */
 
 typedef struct fail_alloc_t {
@@ -2003,6 +2066,7 @@ int main(void) {
     test_tabs();
     test_tabs_overflow();
     test_state();
+    test_state_sideways();
     test_allocation_failure();
     return gt_report("test_frame");
 }

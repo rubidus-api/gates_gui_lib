@@ -223,7 +223,7 @@ node per part.
 ## 12. Persisted UI state
 
 `gates/state.h` saves what a person arranged - split positions, selected tabs, table columns
-(order, widths, hidden), scroll offsets - as text keyed by automation id, and loads it back.
+(order, widths, hidden), scroll offsets (down and, for an area that scrolls sideways, across) - as text keyed by automation id, and loads it back.
 Loading skips what it does not understand, so an older file never breaks a newer program. The
 window's placement is kept the same way (`gates_window_placement`).
 

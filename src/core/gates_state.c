@@ -79,6 +79,10 @@ gates_err_t gates_state_save(const gates_tree_t *tree, gates_u8 *buf, gates_usiz
                 put_num(&o, s->split_ratio);
             } else {
                 put_num(&o, s->scroll_offset);
+                if (s->scroll_x > 0) { /* sideways too (0.10.0): "y,x" */
+                    put(&o, ",", 1);
+                    put_num(&o, s->scroll_x);
+                }
             }
             put(&o, " ", 1);
             put(&o, (const char *)p->id, p->id_len);
@@ -174,16 +178,25 @@ static bool apply(gates_tree_t *tree, const gates_u8 *line, gates_usize_t n) {
         for (gates_u32 c = 0; c < ncol; c++) gates_i_view_set_col_width(tree, idx, c, w[c]);
         return true;
     }
+    if (s->layout_kind == GATES_LAYOUT_SCROLL) {
+        /* "y" or "y,x" (0.10.0); both clamped by the next layout. */
+        gates_usize_t comma = 0;
+        while (comma < vn && val[comma] != ',') comma++;
+        gates_i32 x = 0;
+        if (!parse_num(val, comma, &v) || (comma < vn && !parse_num(val + comma + 1, vn - comma - 1, &x))) {
+            return false;
+        }
+        s->scroll_offset = v;
+        s->scroll_x = s->scroll_sideways ? x : 0;
+        gates_i_mark_dirty(tree, idx, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
+        return true;
+    }
     if (!parse_num(val, vn, &v)) return false;
     if (s->kind == GATES_NODE_TABS) {
         return gates_is_ok(gates_tabs_set_selected(tree, gates_i_handle(tree, idx), (gates_u32)v));
     }
-    if (s->layout_kind == GATES_LAYOUT_SPLIT) {
-        if (v < 1 || v > 999) return false;
-        s->split_ratio = v;
-    } else {
-        s->scroll_offset = v; /* clamped by the next layout */
-    }
+    if (s->layout_kind != GATES_LAYOUT_SPLIT || v < 1 || v > 999) return false;
+    s->split_ratio = v;
     gates_i_mark_dirty(tree, idx, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
     return true;
 }
