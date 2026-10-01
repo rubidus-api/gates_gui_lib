@@ -1,8 +1,8 @@
 # Vendored: proven_c_lib
 
 - Upstream: `../proven_c_lib` (sibling local checkout; reference homepage: https://github.com/rubidus-api/proven_c_lib)
-- Version: `proven_c_lib-v0.1.1` (git `22f964e`, tag `v0.1.1`)
-- Vendored: 2026-09-22, full copy of `include/`, `src/`, `platform/` (was v26.07.23d / `c0e4d09` / 2026-07-25)
+- Version: `proven_c_lib-v0.6.0` (git `e62cee2`, tag `v0.6.0`)
+- Vendored: 2026-10-01, full copy of `include/`, `src/`, `platform/`, `LICENSE`, `THIRD_PARTY_NOTICES.md` from `git archive v0.6.0` (was v0.1.1 / `22f964e` / 2026-09-22 - an old hash: upstream rewrote its public history on 2026-10-01, and v0.1.1 is now `ba486f1`; before that v26.07.23d / `c0e4d09` / 2026-07-25)
 - License: MIT (see `LICENSE` here). `THIRD_PARTY_NOTICES.md` covers upstream's vendored `nob.h`.
 
 ## Rules
