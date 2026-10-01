@@ -1460,7 +1460,10 @@ static gates_u8 fold(gates_u8 c) { return c >= 'A' && c <= 'Z' ? (gates_u8)(c + 
 static bool row_starts(struct gates_i_view *v, gates_u64 row, const gates_u8 *needle, gates_u32 n) {
     gates_item_id_t id = v->model.id_at(v->model.user, row);
     gates_cell_t cell = {0};
+    /* The current column when there is one (0.10.0: the outlined one), else the first shown. */
     gates_column_id_t cid = v->ncol > 0 && nvisible(v) > 0 ? v->cols[visible_at(v, 0)].id : 0;
+    gates_i32 cc = v->cur_col != 0 ? col_pos(v, v->cur_col) : -1;
+    if (cc >= 0 && !v->cols[cc].hidden) cid = v->cur_col;
     if (id == 0 || !gates_is_ok(v->model.cell(v->model.user, id, cid, &cell)) || cell.text.size < n) return false;
     for (gates_u32 k = 0; k < n; k++) {
         if (fold(cell.text.ptr[k]) != fold(needle[k])) return false;
@@ -1469,7 +1472,7 @@ static bool row_starts(struct gates_i_view *v, gates_u64 row, const gates_u8 *ne
 }
 
 /* Type-ahead (0.8.0): typed characters, within a pause of each other, select
- * the next row whose first shown cell starts with them; the same letter again
+ * the next row whose cell in the current column (else the first shown) starts with them; the same letter again
  * steps through the rows that start with it. A character looks at no more
  * than VIEW_FIND_SCAN rows, so a keystroke's cost stays bounded. */
 bool gates_i_view_char(gates_tree_t *tree, gates_u32 idx, gates_str_t ch) {

@@ -756,6 +756,24 @@ static void test_keyboard_extras(void) {
     GT_ASSERT(key(a.t, GATES_KEY_F2));
     GT_ASSERT(gates_view_editing(a.t, a.view, nullptr, &col) && col == C_FILE);
     GT_ASSERT(key(a.t, GATES_KEY_ESCAPE));
+    /* 0.10.0: typing searches the current column (here File), not the first. */
+    snprintf(a.m.rows[1].file, sizeof a.m.rows[1].file, "zeta.txt");
+    snprintf(a.m.rows[3].file, sizeof a.m.rows[3].file, "Zulu.md");
+    now += 2000;
+    type(a.t, "z");
+    GT_ASSERT(gates_view_selected(a.t, a.view) == 101);
+    type(a.t, "u");
+    GT_ASSERT(gates_view_selected(a.t, a.view) == 103); /* "zu": Zulu.md */
+    now += 2000;
+    type(a.t, "b"); /* no file starts with b; names do, but Name is not current */
+    GT_ASSERT(gates_view_selected(a.t, a.view) == 103);
+    /* A hidden current column: back to the first shown. */
+    GT_ASSERT_OK(gates_view_set_column_hidden(a.t, a.view, C_FILE, true));
+    now += 2000;
+    type(a.t, "b");
+    GT_ASSERT(gates_view_selected(a.t, a.view) == 101); /* banana */
+    GT_ASSERT_OK(gates_view_set_column_hidden(a.t, a.view, C_FILE, false));
+    GT_ASSERT_OK(gates_view_set_selected(a.t, a.view, 104)); /* back where the copy below expects */
     /* Ctrl+C: the selected row's shown cells, tab-separated. */
     gates_key_event_t cc = { .key = GATES_KEY_C, .down = true, .ctrl = true };
     GT_ASSERT(gates_input_key(a.t, &cc));

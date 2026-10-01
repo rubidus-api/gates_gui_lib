@@ -2772,7 +2772,8 @@ the selected row activates it; Left/Right and Shift+wheel scroll sideways.
 A click selects the row under it. Clicking a header cell asks for sorting
 (the model sorts); dragging a header cell's right edge resizes the column,
 never below its minimum. The view is one Tab stop. Typing selects the next
-row whose first shown cell starts with the letters typed (ASCII letters in
+row whose cell in the current column (0.10.0; else the first shown column)
+starts with the letters typed (ASCII letters in
 any case; a pause of a second starts over, the same letter again steps
 through such rows; each character looks at up to 4096 rows). Ctrl+C copies
 the selected row's shown cells, separated by tabs.

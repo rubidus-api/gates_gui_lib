@@ -120,9 +120,10 @@ int main(void) {
   reports GATES_EVENT_FOLLOW_CHANGED (`ev->result` 1 while following), so a status line can say
   so without watching the pointer.
 
-Every view also answers typing: the letters typed select the next row whose first shown cell
-starts with them (a pause of a second starts over; the same letter again steps through such
-rows). Ctrl+C puts the selected row's shown cells on the clipboard, separated by tabs.
+Every view also answers typing: the letters typed select the next row whose cell in the current
+column - the one outlined, moved with Ctrl+Left/Right or a click - starts with them, or its first
+shown cell when there is no current column (0.10.0; a pause of a second starts over; the same
+letter again steps through such rows). Ctrl+C puts the selected row's shown cells on the clipboard, separated by tabs.
 
 ## Cells people can change
 
