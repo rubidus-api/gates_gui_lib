@@ -4,6 +4,40 @@ All notable changes to this project will be documented in this file.
 
 This project follows Keep a Changelog.
 
+## [0.11.0] - 2026-10-02
+
+A built-in CP949/EUC-KR converter, conversion without allocation, UTF-8 command lines and console
+on Windows, and a round of backlog work. proven_c_lib is vendored at v0.6.0.
+
+### Added
+
+- `gates_codepage_converter_cp949()`: a converter for code pages 949 (CP949) and 51949 (EUC-KR)
+  for targets without an OS, from tables measured on Windows 11 (decoding and encoding checked
+  against Windows code by code; Windows' one-way quirks are refused, and 51949's B4D3 follows
+  KS X 1001). Linked only into programs that call it.
+- Text conversion without allocation for the UTF forms: `gates_encoding_to_utf8_buf` /
+  `_from_utf8_buf` into a caller's buffer (with a size query), and `gates_encoding_stream_t`,
+  which converts in pieces and carries a character cut at a piece's end.
+- `gates_args_split` (a command line by the Windows rules), `gates_args_utf8_win32` (this
+  process's arguments as UTF-8) and `gates_console_write_win32` (UTF-8 to the console, or the
+  bytes to a redirect).
+- Saved state keeps a scroll area's sideways offset ("y,x").
+- Menus without an explicit name are named by their menu bar title, the entry that opened them, or
+  the node focused when the program opened them; UIA raises MenuClosed.
+
+### Changed
+
+- A view's accessibility items include its selected row wherever it is (first above the shown
+  rows, last below), so UIA Selection finds it after scrolling away.
+- Type-ahead searches the current column, else the first shown one.
+- proven_c_lib v0.6.0 (was v0.1.1); no gates source needed changing.
+
+### Fixed
+
+- Win32: a fourth quick press is reported as 4 (it was 2: Windows pairs presses into double
+  clicks).
+- Win32: a change of the system's UI font takes effect at once (it needed a restart).
+
 ## [0.10.0] - 2026-10-01
 
 Submenus, tab overflow, cells and tooltips for screen readers, sideways scrolling, font sizes,

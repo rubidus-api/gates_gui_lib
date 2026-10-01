@@ -3,7 +3,7 @@
 # Gates GUI Library
 
 A small retained-mode GUI library in C23 for tool-style Windows programs - settings panels,
-inspectors, log viewers, file browsers, build tools. Version **0.10.0**.
+inspectors, log viewers, file browsers, build tools. Version **0.11.0**.
 
 | | |
 |---|---|
@@ -49,7 +49,7 @@ What you get:
   Automation provider, so Narrator and automation tools can read and use every control; an
   audit of enforced rules (names, 24 x 24 targets, keyboard reach, contrast, focus cues).
 
-It is not a browser engine, a game UI or a pixel-exact drawing kit. Version 0.10.0 has one
+It is not a browser engine, a game UI or a pixel-exact drawing kit. Version 0.11.0 has one
 backend: Win32 with a software renderer. The core is platform-free C23 and runs its tests
 anywhere.
 
@@ -95,7 +95,7 @@ int main(void) {
 Build it with mingw-w64 against the SDK:
 
 ```sh
-x86_64-w64-mingw32-gcc -std=c23 -O2 -Igates-0.10.0/include hello.c -Lgates-0.10.0/lib/win64 \
+x86_64-w64-mingw32-gcc -std=c23 -O2 -Igates-0.11.0/include hello.c -Lgates-0.11.0/lib/win64 \
     -lgates -lproven -lgdi32 -luser32 -limm32 -ldwmapi -ladvapi32 -luiautomationcore \
     -lole32 -loleaut32 -luuid -mwindows -o hello.exe
 ```
@@ -136,7 +136,7 @@ headless use on any system.
 
 ## Status
 
-0.10.0 adds submenus, tab titles that do not fit, a tooltip that screen readers see, table cells that screen readers read and change, scroll areas that scroll sideways, font sizes per node, icons drawn at the right pixel size for the scale, a selection store with drag-to-select, text encodings at the edge (UTF-16, UTF-32, EUC-KR/CP949 and other code pages to and from UTF-8), an API reference of every public function, and the manual as a PDF and a web edition. 0.9.0 added multi-selection in views (the program keeps the selection, so a million selected rows cost nothing), posting queues that grow as bursts need, and a public specification. 0.8.0 rounded out what came before: Shift+click, word and line clicks and row-wise Home/End in
+0.11.0 adds a built-in CP949/EUC-KR converter measured on Windows, text conversion without allocation (into a caller's buffer, in pieces), UTF-8 command lines and console output on Windows, menu names and the selection for screen readers, saved sideways scrolling, a live system font change, and type-ahead in the current column. 0.10.0 added submenus, tab titles that do not fit, a tooltip that screen readers see, table cells that screen readers read and change, scroll areas that scroll sideways, font sizes per node, icons drawn at the right pixel size for the scale, a selection store with drag-to-select, text encodings at the edge (UTF-16, UTF-32, EUC-KR/CP949 and other code pages to and from UTF-8), an API reference of every public function, and the manual as a PDF and a web edition. 0.9.0 added multi-selection in views (the program keeps the selection, so a million selected rows cost nothing), posting queues that grow as bursts need, and a public specification. 0.8.0 rounded out what came before: Shift+click, word and line clicks and row-wise Home/End in
 the editor and text boxes, spin arrows that repeat and a wheel for focused numbers, grid rows
 that grow, type-ahead, row copy and a current column in tables, a follow event for logs,
 several files from one open dialog, forms that measure their stacked height, and error
