@@ -134,6 +134,12 @@ node per part.
 - **Encoding.** All text is UTF-8 at the API; gates validates what it receives and refuses
   invalid UTF-8 where a header says so. Offsets are UTF-8 bytes; edits and carets stay on code
   point boundaries.
+- **Other encodings** (`gates/encoding.h`, 0.10.0). Text from or to the outside is converted at
+  the edge: UTF-8, UTF-16 and UTF-32 in both byte orders on every platform, Windows code pages
+  (949, 51949, ... and the system's) through the platform's converter (Win32: installed with the
+  app; elsewhere UNSUPPORTED unless a program installs one). Malformed or unmappable text is
+  replaced (U+FFFD, or the code page's `?`) or, in strict mode, refused with its byte offset;
+  nothing is allocated on an error.
 - **Metrics contract** (`gates/text.h`). A text backend reports per font the ascent, descent,
   line height, an average width (a sizing hint) and every code point's advance. A string's width
   is exactly the sum of its advances - no kerning, ligatures or shaping - so the core computes

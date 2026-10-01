@@ -641,6 +641,100 @@ the program still changes it.
 bool gates_editor_read_only(const gates_tree_t *tree, gates_node_t editor);
 ```
 
+## gates/encoding.h
+
+Text encodings at the edge (0.10.0).
+
+Inside gates every string is UTF-8: the API, the text buffer, the editor.
+Text that comes from or goes to the outside - a file, the console, another
+program, an older system - may be in another encoding. These functions turn
+it into UTF-8 on the way in and back on the way out, so a program keeps one
+encoding inside and meets each environment in its own.
+
+Encodings: UTF-8, UTF-16 and UTF-32 (little or big endian), done here on
+every platform; and code pages by their Windows numbers (949 = CP949, the
+Korean Windows ANSI code page, all 11172 Hangul syllables; 51949 = EUC-KR
+as such, the 2350 of KS X 1001 - the rest are unmappable there; 932, 936,
+950, 1252, ...; 0 = the system's), done by a code-page
+converter the platform installs (the Win32 backend does when the app is
+created). The UTF code pages 65001, 1200/1201 and 12000/12001 need no
+converter. Without one, other code pages are UNSUPPORTED.
+
+Malformed input (bytes that are not text in that encoding, a lone UTF-16
+surrogate, a UTF-32 value past U+10FFFF, a cut-off last character) becomes
+U+FFFD by default; with GATES_ENCODING_STRICT the call refuses it with
+PROVEN_ERR_INVALID_ENCODING and \*bad_at says where (a byte offset in the
+input). Going out, a character the target cannot hold becomes the target's
+replacement ('?' in code pages, U+FFFD in the UTF forms never happens);
+strict refuses it the same way. Results are allocated from `alloc`
+({0} = the heap) and freed by the caller with the same allocator; on any
+error nothing is allocated. Platform-free; safe from any thread once the
+converter is installed.
+
+Input in `enc` to UTF-8. A byte order mark of that encoding at the start is
+not text and is skipped. INVALID_ARG for a null pointer with a size, an
+unknown kind; UNSUPPORTED for a code page without a converter;
+INVALID_ENCODING (strict). \*bad_at (may be null) is set on INVALID_ENCODING.
+
+```c
+[[nodiscard]] gates_err_t gates_encoding_to_utf8(gates_encoding_t enc, const void *in, gates_usize_t size, gates_u32 flags, gates_allocator_t alloc, gates_u8 **out, gates_usize_t *out_size, gates_usize_t *bad_at);
+```
+
+UTF-8 to `enc` (a byte order mark first when enc.bom). Malformed UTF-8 in
+`text` is treated as above (\*bad_at is then an offset into `text`).
+
+```c
+[[nodiscard]] gates_err_t gates_encoding_from_utf8(gates_encoding_t enc, gates_str_t text, gates_u32 flags, gates_allocator_t alloc, gates_u8 **out, gates_usize_t *out_size, gates_usize_t *bad_at);
+```
+
+A guess for bytes of unknown origin: a byte order mark decides (its length
+is returned); else a text of whole 16-bit units with zeros in at least
+three of four odd bytes and none in the even ones is UTF-16LE (the other
+way round, BE); else valid UTF-8 (all ASCII included) is UTF-8; else the
+system code page. Returns the BOM length (0 without one).
+
+```c
+gates_usize_t gates_encoding_detect(const void *in, gates_usize_t size, gates_encoding_t *out);
+```
+
+true when `text` is valid UTF-8 (no overlong forms, surrogates or values
+past U+10FFFF); \*bad_at (may be null) receives the first bad offset.
+
+```c
+bool gates_utf8_valid(gates_str_t text, gates_usize_t *bad_at);
+```
+
+### the code-page converter (for platform backends and tests)
+
+Code pages need tables the platform has. A converter turns bytes of a code
+page into UTF-8 and back with the same rules as above (replace, or strict
+with \*bad_at); it allocates its result from `alloc`. system_codepage says
+what code page 0 means (Windows: GetACP, 949 on Korean Windows);
+console_codepage what the console uses (0 when there is none). One
+converter for the process; set it before converting from other threads.
+
+Copied; null removes it.
+
+```c
+void gates_encoding_set_codepage_converter(const gates_codepage_converter_t *converter);
+bool gates_encoding_has_codepage_converter(void);
+```
+
+The converter's answers (0 without a converter).
+
+```c
+gates_u32 gates_encoding_system_codepage(void);
+gates_u32 gates_encoding_console_codepage(void);
+```
+
+The Win32 converter (MultiByteToWideChar / WideCharToMultiByte). Only in
+builds that include src/platform/win32; gates_app_create installs it when
+no converter is set.
+
+```c
+const gates_codepage_converter_t *gates_codepage_converter_win32(void);
+```
+
 ## gates/event.h
 
 Typed change notifications.

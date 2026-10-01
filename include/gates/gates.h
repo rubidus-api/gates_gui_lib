@@ -12,6 +12,7 @@
 #include <gates/command.h>
 #include <gates/draw.h>
 #include <gates/editor.h>
+#include <gates/encoding.h>
 #include <gates/event.h>
 #include <gates/form.h>
 #include <gates/frame.h>

@@ -1,5 +1,6 @@
 /* gates_gui_lib - Win32 app lifecycle + message pump. */
 #include "gates_win32_internal.h"
+#include <gates/encoding.h>
 #include <proven/heap.h>
 
 #include <string.h>
@@ -103,6 +104,9 @@ gates_err_t gates_app_create(const gates_app_desc_t *desc, gates_app_t **out_app
         return PROVEN_ERR_INVALID_ARG;
     }
     *out_app = nullptr;
+    if (!gates_encoding_has_codepage_converter()) {
+        gates_encoding_set_codepage_converter(gates_codepage_converter_win32()); /* 0.10.0 */
+    }
 
     gates_allocator_t alloc = (desc != nullptr && proven_alloc_is_valid(desc->allocator))
                                   ? desc->allocator

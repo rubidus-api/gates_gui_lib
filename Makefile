@@ -58,6 +58,7 @@ CORE_SRC := \
   src/core/gates_task.c \
   src/core/gates_editor.c \
   src/core/gates_selection.c \
+  src/core/gates_encoding.c \
   src/render/gates_draw_list.c \
   src/render/gates_render_soft.c \
   src/text/gates_text_builtin.c \
@@ -75,7 +76,7 @@ TESTS     := test_foundation test_node_pool test_tree test_draw_list test_render
              test_events test_text_editing test_focus_commands \
              test_overlay test_controls test_form test_view test_view_adapters test_post \
              test_post_stress test_theme_dpi test_access test_text_prop test_frame test_inputs test_images \
-             test_data test_undo test_task test_text_buffer test_editor test_selection
+             test_data test_undo test_task test_text_buffer test_editor test_selection test_encoding
 TEST_BINS := $(addprefix $(TESTBIN)/,$(TESTS))
 TEST_OBJ  := $(patsubst %,$(OBJ)/tests/%.o,$(TESTS))
 
@@ -140,7 +141,8 @@ WIN32_SRC := \
   src/platform/win32/gates_win32_perf.c \
   src/platform/win32/gates_win32_image.c \
   src/platform/win32/gates_win32_dialogs.c \
-  src/platform/win32/gates_win32_task.c
+  src/platform/win32/gates_win32_task.c \
+  src/platform/win32/gates_win32_encoding.c
 
 # Headers the Windows programs are built from: a change rebuilds them.
 WIN_HDRS := $(wildcard include/gates/*.h) $(wildcard src/core/*.h) $(wildcard src/platform/win32/*.h)

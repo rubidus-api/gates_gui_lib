@@ -82,7 +82,8 @@ text itself - tests, automation - `gates_input_commit` delivers text as an IME w
 
 ## Unicode limits in 0.9.0
 
-- Text is UTF-8 everywhere; invalid input is refused, never repaired silently.
+- Text is UTF-8 everywhere; invalid input is refused, never repaired silently. Text in other
+  encodings is converted at the edge (below).
 - Every character has its own advance, taken from the font: text is proportional in the UI
   font and fixed-pitch in the mono font (chapter 8). A string is exactly as wide as the sum of
   its characters, so the caret, a selection and a click always land between characters.
@@ -101,6 +102,92 @@ text itself - tests, automation - `gates_input_commit` delivers text as an IME w
 The window provides the platform clipboard (`gates/clipboard.h`): text crosses it as UTF-8 and
 is converted at the edge. A tree without a clipboard provider (headless) makes copy, cut and
 paste do nothing.
+
+## Other encodings at the edge
+
+Inside a program everything is UTF-8 - the API, the text box, the editor, the text buffer. The
+outside is not always: a file may be UTF-16 with a byte order mark, a console on Korean Windows
+uses code page 949, an older program writes EUC-KR. `gates/encoding.h` converts at the edge, so
+the program keeps one encoding inside and meets each environment in its own (0.10.0):
+
+- `gates_encoding_to_utf8(enc, bytes, size, flags, alloc, &out, &out_size, &bad_at)` brings
+  text in; a byte order mark of that encoding is skipped. `gates_encoding_from_utf8` takes it
+  out again (with a mark first when `enc.bom`). Results come from `alloc` ({0} = the heap), end
+  with zero bytes that are not counted (a C string, or a wide string, as it is), and are freed
+  by the caller.
+- UTF-8, UTF-16 and UTF-32 in both byte orders are done by gates everywhere. Code pages go by
+  their Windows numbers (`GATES_CODEPAGE_CP949` 949, `GATES_CODEPAGE_EUC_KR` 51949, 932, 936,
+  1252, ...; 0 = the system's) and need the platform's tables: the Win32 app installs a converter
+  when it is created; without one they are UNSUPPORTED. `gates_encoding_system_codepage` and
+  `gates_encoding_console_codepage` say what the system and the console use.
+- Broken input becomes U+FFFD; with `GATES_ENCODING_STRICT` the call refuses it instead and
+  `bad_at` says which byte. A character a code page cannot hold becomes its `?`, or a refusal
+  when strict.
+- `gates_encoding_detect` guesses for bytes of unknown origin: a byte order mark decides,
+  then UTF-16 by its zero bytes, then valid UTF-8, else the system code page.
+  `gates_utf8_valid` checks text before it goes into the editor (which refuses anything else).
+
+<!-- example: manual/examples/ex_06_encodings.c -->
+```c
+/* manual example (host): text from outside in another encoding, UTF-8 inside, back out.
+ * expect: UTF-16LE with a 2-byte mark; 9 characters in 13 UTF-8 bytes; out as UTF-32BE in 36 bytes; strict refuses byte 2; code page 949 here: unsupported */
+#include <gates/gates.h>
+#include <proven/heap.h>
+
+#include <stdio.h>
+
+static const char *name(gates_encoding_kind_t k) {
+    static const char *const names[] = { "UTF-8", "UTF-16LE", "UTF-16BE", "UTF-32LE", "UTF-32BE", "a code page" };
+    return names[k];
+}
+
+int main(void) {
+    /* A file's bytes: a UTF-16LE mark, then "Hi, " and two Hangul syllables U+D55C U+AE00, then "!". */
+    static const unsigned char file[] = { 0xFF, 0xFE, 'H', 0, 'i', 0, ',', 0, ' ', 0, 0x5C, 0xD5, 0x00, 0xAE,
+                                          '!', 0, '\r', 0, '\n', 0 };
+    gates_encoding_t enc;
+    gates_usize_t mark = gates_encoding_detect(file, sizeof file, &enc);
+    printf("%s with a %u-byte mark; ", name(enc.kind), (unsigned)mark);
+
+    /* In: one encoding inside the program from here on (the mark is skipped). */
+    gates_u8 *text = nullptr;
+    gates_usize_t size = 0;
+    if (!gates_is_ok(gates_encoding_to_utf8(enc, file, sizeof file, 0, (gates_allocator_t){0}, &text, &size, nullptr))) {
+        return 1;
+    }
+    gates_str_t s = { .ptr = text, .size = size };
+    unsigned chars = 0;
+    for (gates_u32 at = 0; at < size; chars++) at += gates_text_decode(s, at, &(gates_u32){0});
+    printf("%u characters in %u UTF-8 bytes; ", chars, (unsigned)size);
+
+    /* Out: whatever the other side wants. */
+    gates_u8 *wide = nullptr;
+    gates_usize_t wide_size = 0;
+    if (!gates_is_ok(gates_encoding_from_utf8((gates_encoding_t){ .kind = GATES_ENCODING_UTF32BE }, s, 0,
+                                              (gates_allocator_t){0}, &wide, &wide_size, nullptr))) {
+        return 1;
+    }
+    printf("out as UTF-32BE in %u bytes; ", (unsigned)wide_size);
+
+    /* Broken input: replaced with U+FFFD by default, or refused with where it broke. */
+    gates_usize_t bad_at = 0;
+    gates_u8 *junk = nullptr;
+    gates_err_t err = gates_encoding_to_utf8((gates_encoding_t){ .kind = GATES_ENCODING_UTF8 }, "ok\xFF", 3,
+                                             GATES_ENCODING_STRICT, (gates_allocator_t){0}, &junk, &size, &bad_at);
+    printf("strict refuses byte %u; ", err == PROVEN_ERR_INVALID_ENCODING ? (unsigned)bad_at : 99u);
+
+    /* Code pages (949 = Korean Windows, EUC-KR and more) need the platform's tables: on Windows
+     * the app installs them; this headless program has none. */
+    err = gates_encoding_to_utf8((gates_encoding_t){ .kind = GATES_ENCODING_CODEPAGE, .codepage = GATES_CODEPAGE_CP949 },
+                                 "\xC7\xD1", 2, 0, (gates_allocator_t){0}, &junk, &size, nullptr);
+    printf("code page 949 here: %s\n", err == PROVEN_ERR_UNSUPPORTED ? "unsupported" : "converted");
+
+    gates_allocator_t heap = proven_heap_allocator();
+    heap.free_fn(heap.ctx, text);
+    heap.free_fn(heap.ctx, wide);
+    return 0;
+}
+```
 
 ## Many lines: the editor
 

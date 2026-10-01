@@ -80,7 +80,8 @@ gates 는 입력기를 구현하지 않는다. Windows 에서는 설치된 IME(�
 
 ## 0.9.0 의 유니코드 한계
 
-- 글은 어디서나 UTF-8 이다. 잘못된 입력은 거절하며, 몰래 고치지 않는다.
+- 글은 어디서나 UTF-8 이다. 잘못된 입력은 거절하며, 몰래 고치지 않는다. 다른 인코딩의 글은 가장자리에서
+  바꾼다(아래).
 - 글자마다 글꼴에서 가져온 제 폭(advance)이 있다. UI 글꼴에서는 비례폭, 고정폭 글꼴에서는
   고정폭이다(8장). 글줄의 폭은 글자 폭의 합과 정확히 같으므로 캐럿, 고른 범위, 누른 자리는 늘
   글자 사이에 떨어진다.
@@ -97,6 +98,88 @@ gates 는 입력기를 구현하지 않는다. Windows 에서는 설치된 IME(�
 
 창이 플랫폼 클립보드를 대 준다(`gates/clipboard.h`). 글은 UTF-8 로 넘나들고 가장자리에서 바뀐다.
 클립보드 제공자가 없는 트리(창 없음)에서는 복사, 잘라내기, 붙여넣기가 아무 일도 하지 않는다.
+
+## 바깥의 다른 인코딩
+
+프로그램 안에서는 API, 텍스트 상자, 편집기, 텍스트 버퍼 모두가 UTF-8 이다. 바깥은 늘 그렇지 않다. 파일은 바이트 순서
+표시가 붙은 UTF-16 일 수 있고, 한국어 Windows 의 콘솔은 949 코드 페이지를 쓰며, 옛 프로그램은 EUC-KR 로 쓴다.
+`gates/encoding.h` 가 가장자리에서 바꿔 주므로, 프로그램은 안에서 인코딩 하나만 두고 환경마다 그 환경의 인코딩으로
+만난다(0.10.0).
+
+- `gates_encoding_to_utf8(enc, bytes, size, flags, alloc, &out, &out_size, &bad_at)` 는 글을 들여온다. 그 인코딩의
+  바이트 순서 표시는 건너뛴다. `gates_encoding_from_utf8` 은 다시 내보낸다(`enc.bom` 이면 표시를 앞에 붙인다).
+  결과는 `alloc`({0} = 힙)에서 받고, 세지 않는 0 바이트로 끝나며(그대로 C 문자열이나 와이드 문자열), 부른 쪽이 푼다.
+- UTF-8, UTF-16, UTF-32 는 두 바이트 순서 모두 gates 가 어디서나 바꾼다. 코드 페이지는 Windows 번호로 고르며
+  (`GATES_CODEPAGE_CP949` 949, `GATES_CODEPAGE_EUC_KR` 51949, 932, 936, 1252 …, 0 = 시스템의 것) 플랫폼의 표가 있어야
+  한다. Win32 앱은 만들어질 때 변환기를 넣고, 변환기가 없으면 UNSUPPORTED 다. `gates_encoding_system_codepage` 와
+  `gates_encoding_console_codepage` 는 시스템과 콘솔이 쓰는 코드 페이지를 알려 준다.
+- 깨진 입력은 U+FFFD 가 된다. `GATES_ENCODING_STRICT` 를 주면 대신 거절하고 `bad_at` 이 몇 번째 바이트인지 알려 준다.
+  코드 페이지에 없는 글자는 그 코드 페이지의 `?` 가 되며, strict 면 거절된다.
+- `gates_encoding_detect` 는 어디서 왔는지 모르는 바이트를 짐작한다. 바이트 순서 표시가 먼저 정하고, 다음은 0 바이트로
+  보는 UTF-16, 그다음 올바른 UTF-8, 아니면 시스템 코드 페이지다. `gates_utf8_valid` 는 글을 편집기에 넣기 전에 확인한다
+  (편집기는 UTF-8 이 아닌 글을 거절한다).
+
+<!-- example: manual/examples/ex_06_encodings.c -->
+```c
+/* manual example (host): text from outside in another encoding, UTF-8 inside, back out.
+ * expect: UTF-16LE with a 2-byte mark; 9 characters in 13 UTF-8 bytes; out as UTF-32BE in 36 bytes; strict refuses byte 2; code page 949 here: unsupported */
+#include <gates/gates.h>
+#include <proven/heap.h>
+
+#include <stdio.h>
+
+static const char *name(gates_encoding_kind_t k) {
+    static const char *const names[] = { "UTF-8", "UTF-16LE", "UTF-16BE", "UTF-32LE", "UTF-32BE", "a code page" };
+    return names[k];
+}
+
+int main(void) {
+    /* A file's bytes: a UTF-16LE mark, then "Hi, " and two Hangul syllables U+D55C U+AE00, then "!". */
+    static const unsigned char file[] = { 0xFF, 0xFE, 'H', 0, 'i', 0, ',', 0, ' ', 0, 0x5C, 0xD5, 0x00, 0xAE,
+                                          '!', 0, '\r', 0, '\n', 0 };
+    gates_encoding_t enc;
+    gates_usize_t mark = gates_encoding_detect(file, sizeof file, &enc);
+    printf("%s with a %u-byte mark; ", name(enc.kind), (unsigned)mark);
+
+    /* In: one encoding inside the program from here on (the mark is skipped). */
+    gates_u8 *text = nullptr;
+    gates_usize_t size = 0;
+    if (!gates_is_ok(gates_encoding_to_utf8(enc, file, sizeof file, 0, (gates_allocator_t){0}, &text, &size, nullptr))) {
+        return 1;
+    }
+    gates_str_t s = { .ptr = text, .size = size };
+    unsigned chars = 0;
+    for (gates_u32 at = 0; at < size; chars++) at += gates_text_decode(s, at, &(gates_u32){0});
+    printf("%u characters in %u UTF-8 bytes; ", chars, (unsigned)size);
+
+    /* Out: whatever the other side wants. */
+    gates_u8 *wide = nullptr;
+    gates_usize_t wide_size = 0;
+    if (!gates_is_ok(gates_encoding_from_utf8((gates_encoding_t){ .kind = GATES_ENCODING_UTF32BE }, s, 0,
+                                              (gates_allocator_t){0}, &wide, &wide_size, nullptr))) {
+        return 1;
+    }
+    printf("out as UTF-32BE in %u bytes; ", (unsigned)wide_size);
+
+    /* Broken input: replaced with U+FFFD by default, or refused with where it broke. */
+    gates_usize_t bad_at = 0;
+    gates_u8 *junk = nullptr;
+    gates_err_t err = gates_encoding_to_utf8((gates_encoding_t){ .kind = GATES_ENCODING_UTF8 }, "ok\xFF", 3,
+                                             GATES_ENCODING_STRICT, (gates_allocator_t){0}, &junk, &size, &bad_at);
+    printf("strict refuses byte %u; ", err == PROVEN_ERR_INVALID_ENCODING ? (unsigned)bad_at : 99u);
+
+    /* Code pages (949 = Korean Windows, EUC-KR and more) need the platform's tables: on Windows
+     * the app installs them; this headless program has none. */
+    err = gates_encoding_to_utf8((gates_encoding_t){ .kind = GATES_ENCODING_CODEPAGE, .codepage = GATES_CODEPAGE_CP949 },
+                                 "\xC7\xD1", 2, 0, (gates_allocator_t){0}, &junk, &size, nullptr);
+    printf("code page 949 here: %s\n", err == PROVEN_ERR_UNSUPPORTED ? "unsupported" : "converted");
+
+    gates_allocator_t heap = proven_heap_allocator();
+    heap.free_fn(heap.ctx, text);
+    heap.free_fn(heap.ctx, wide);
+    return 0;
+}
+```
 
 ## 여러 줄: 편집기
 
