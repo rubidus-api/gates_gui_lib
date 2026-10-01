@@ -263,6 +263,12 @@ bench: lib-host
 # manual-check fails when a block, the Korean edition or an example build disagrees, when a
 # public function has no comment, or when the API reference (chapter 14) is not what the
 # headers make (sh tests/api_reference.sh write regenerates it).
+# The manual as a book (0.10.0): a PDF of the guide (chapters 0-13) per language and a web
+# edition of everything (with chapter 14). Needs Python 3, Typst and the fonts manual/book/build.py
+# names (TYPST=..., FONT_PATH=... or TYPST_FONT_PATHS).
+manual-book:
+	python3 manual/book/build.py --out $(BUILD)/book
+
 manual-sync:
 	sh tests/manual_check.sh sync
 	sh tests/api_reference.sh write
@@ -289,4 +295,4 @@ $(WIN_BUILD)/%.exe: examples/%/main.c $(CORE_SRC) $(WIN32_SRC) $(PROVEN_SRC) $(W
 		-lgdi32 -luser32 -limm32 -ldwmapi -ladvapi32 \
 		-luiautomationcore -lole32 -loleaut32 -luuid -mwindows -o $@
 
-.PHONY: all test check-core clean win lib lib-host lib-win dist dist-bin install package-check bench manual-sync manual-check
+.PHONY: all test check-core clean win lib lib-host lib-win dist dist-bin install package-check bench manual-sync manual-check manual-book
