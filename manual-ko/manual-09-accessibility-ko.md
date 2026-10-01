@@ -21,6 +21,9 @@ gates 는 모든 노드를 보조 기술에 설명한다. 역할(버튼, 체크�
 체크박스의 글)이다. 텍스트 상자 옆에 놓은 이름표는 프로그램이 묶기 전까지는 묶이지 않는다. 감사가
 그런 필드를 찾아낸다.
 
+제 이름이 없는 메뉴는 메뉴 막대의 제목, 자기를 연 항목(하위 메뉴), 또는 프로그램이 열 때 포커스를 가진 컨트롤의
+이름(맥락 메뉴)을 이름으로 쓴다(0.10.0).
+
 <!-- example: manual/examples/ex_10_access.c -->
 ```c
 /* manual example (host): the audit finds a field without a name; a label fixes it.

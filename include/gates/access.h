@@ -17,6 +17,9 @@
  *   4. the node's own text: a label's text, a button's label (a bound command's
  *      label), a checkbox's caption, a dialog's title;
  *   5. for an item: its option label, command label, or the row's first cell.
+ * A menu without an explicit name (0.10.0): a menu bar menu is named by its
+ * title, a submenu by the entry that opened it, a menu the program opened by
+ * the node that had focus then (its explicit name, else its own text).
  * Description: a form field's error, then its help, joined by ". ".
  * Automation id: explicit (gates_node_set_automation_id), else "field-<id>" for
  * a form editor, "cmd-<id>" for a button bound to a command, else empty; items
@@ -27,7 +30,8 @@
  * Setting a text value is a user edit (TEXT_CHANGED fires). Expanding is a
  * request (a choice opens its list; a tree row asks its model).
  * Views (list, table, tree, log): the rows shown now are the items (and the
- * selected row wherever it is), item id = row id; a row's name is its first
+ * selected row wherever it is: first when above them, last when below,
+ * 0.10.0), item id = row id; a row's name is its first
  * cell (a table row: its cells joined by ", "); gates reads cells of shown
  * rows only.
  * Everything here is for the UI thread. Platform-free. */

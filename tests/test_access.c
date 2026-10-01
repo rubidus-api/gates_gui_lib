@@ -650,12 +650,28 @@ static void test_view_items(void) {
     gates_access_info_t sel = info(t, v, 4);
     GT_ASSERT((sel.states & (GATES_ACCESS_SELECTED | GATES_ACCESS_OFFSCREEN)) ==
               (GATES_ACCESS_SELECTED | GATES_ACCESS_OFFSCREEN) && sel.name.size == 0);
-    GT_ASSERT(ref_is(gates_access_next(t, at(v, 4)), GATES_NODE_NULL, 0)); /* not among the shown */
+    /* 0.10.0: it is an item - the first one, since it is above the shown rows. */
+    GT_ASSERT(gates_access_item_at(t, v, 0) == 4);
+    GT_ASSERT(ref_is(gates_access_first_child(t, at(v, 0)), v, 4));
+    GT_ASSERT(ref_is(gates_access_prev(t, at(v, 4)), GATES_NODE_NULL, 0));
+    GT_ASSERT(ref_is(gates_access_next(t, at(v, 4)), v, gates_access_item_at(t, v, 1)));
+    GT_ASSERT(gates_access_item_at(t, v, 1) == 1000000 - gates_access_item_count(t, v) + 2);
     GT_ASSERT(gates_access_info(t, v, 2, &tmp) == PROVEN_ERR_INVALID_ARG);  /* scrolled away */
     GT_ASSERT_OK(gates_access_scroll_by(t, v, -1, true));
     GT_ASSERT(gates_view_first_row(t, v) < 1000000 - shown);
     GT_ASSERT_OK(gates_access_scroll_to(t, v, 0));
     GT_ASSERT(gates_view_first_row(t, v) == 0);
+    /* A selected row below the shown ones is the last item. */
+    GT_ASSERT_OK(gates_view_set_selected(t, v, 500000));
+    GT_ASSERT_OK(gates_access_scroll_to(t, v, 0));
+    GT_ASSERT_OK(gates_layout_run(t, (gates_size_t){ 300, 200 }, be));
+    gates_u64 nitems = gates_access_item_count(t, v);
+    GT_ASSERT(gates_access_item_at(t, v, 0) == 1 && gates_access_item_at(t, v, nitems - 1) == 500000);
+    GT_ASSERT(gates_access_item_at(t, v, nitems) == 0);
+    GT_ASSERT(ref_is(gates_access_next(t, at(v, gates_access_item_at(t, v, nitems - 2))), v, 500000));
+    GT_ASSERT(ref_is(gates_access_next(t, at(v, 500000)), GATES_NODE_NULL, 0));
+    GT_ASSERT_OK(gates_view_set_selected(t, v, 2)); /* shown: no extra item */
+    GT_ASSERT(gates_access_item_count(t, v) == nitems - 1 && gates_access_item_at(t, v, nitems - 1) == 0);
     /* Cells were read for shown rows only (the top rows and the last page). */
     GT_ASSERT(m.cells > 0 && m.cell_max < 1000000);
     GT_ASSERT(m.cell_max < shown || m.cell_max >= 1000000 - shown - 1);

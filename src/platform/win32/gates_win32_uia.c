@@ -2084,6 +2084,16 @@ void gates_win32_uia_events(gates_window_t *win) {
                 if (i.role == GATES_ROLE_DIALOG) win->uia_opened = top; /* once it is laid out */
             }
         }
+        /* Menus that closed (0.10.0): the menu is gone, so the window's root tells. */
+        gates_u32 menus = 0;
+        for (gates_access_ref_t r = gates_access_last_child(t, root); !ref_null(r); r = gates_access_prev(t, r)) {
+            gates_access_info_t i;
+            if (!gates_is_ok(gates_access_info(t, r.node, 0, &i))) break;
+            if (i.role == GATES_ROLE_MENU) menus++;
+            else if (i.role != GATES_ROLE_DIALOG) break; /* past the overlays */
+        }
+        if (listening && menus < win->uia_menus) raise_on(win, root, UIA_MenuClosedEventId);
+        win->uia_menus = menus;
     }
     /* Property changes for the elements clients hold (few: those they asked for). */
     if (any_changed && listening) {

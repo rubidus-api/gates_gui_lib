@@ -101,6 +101,7 @@ struct gates_window {
     gates_access_ref_t uia_focus;
     gates_access_ref_t uia_opened;   /* a dialog to announce once laid out */
     gates_u32 uia_overlays;
+    gates_u32 uia_menus;             /* open menus at the last drain (0.10.0: MenuClosed) */
     bool uia_draining;
     bool caret_made;
     gates_i32 caret_h;

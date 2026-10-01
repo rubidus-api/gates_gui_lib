@@ -1963,12 +1963,23 @@ gates_u32 gates_i_view_kind(const gates_tree_t *tree, gates_u32 idx) {
     return v->tree ? GATES_I_VIEW_TREE : v->ncol > 0 && v->log == nullptr ? GATES_I_VIEW_TABLE : GATES_I_VIEW_LIST;
 }
 
+/* The selected (focus) row when it is not among the painted ones: -1 above
+ * them, 1 below, 0 when it is shown or there is none (0.10.0). */
+static int sel_outside(struct gates_i_view *v, const view_geom_t *g) {
+    gates_u64 row = 0;
+    if (v->sel == 0 || !v->model.index_of(v->model.user, v->sel, &row)) return 0;
+    if (row < g->first) return -1;
+    return row - g->first >= g->painted ? 1 : 0;
+}
+
+/* The items: the painted rows, and the selected row wherever it is - first
+ * when it is above them, last when below (so a reader finds the selection). */
 gates_u64 gates_i_view_item_count(gates_tree_t *tree, gates_u32 idx) {
     struct gates_i_view *v = view_at(tree, idx);
     if (v == nullptr || !v->has_model) return 0;
     view_geom_t g;
     geom_now(tree, idx, v, &g);
-    return g.painted;
+    return g.painted + (sel_outside(v, &g) != 0 ? 1u : 0u);
 }
 
 gates_item_id_t gates_i_view_item_at(gates_tree_t *tree, gates_u32 idx, gates_u64 k) {
@@ -1976,7 +1987,13 @@ gates_item_id_t gates_i_view_item_at(gates_tree_t *tree, gates_u32 idx, gates_u6
     if (v == nullptr || !v->has_model) return 0;
     view_geom_t g;
     geom_now(tree, idx, v, &g);
-    return k < g.painted ? v->model.id_at(v->model.user, g.first + k) : 0;
+    int out = sel_outside(v, &g);
+    if (out < 0) {
+        if (k == 0) return v->sel;
+        k--;
+    }
+    if (k < g.painted) return v->model.id_at(v->model.user, g.first + k);
+    return out > 0 && k == g.painted ? v->sel : 0;
 }
 
 bool gates_i_view_item(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id, gates_i_view_item_t *out) {

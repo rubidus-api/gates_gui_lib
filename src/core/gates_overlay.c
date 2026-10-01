@@ -472,6 +472,7 @@ static gates_err_t menu_create(gates_tree_t *tree, gates_point_t at, gates_i32 a
     st->menu_scope_generation = scope.generation;
     st->menu_parent_index = GATES_NONE;
     st->menu_child_row = -1;
+    st->menu_owner_index = GATES_NONE;
     tree->overlays[tree->overlay_count++] = (gates_i_overlay_t){
         .index = m.index,
         .generation = m.generation,
@@ -494,7 +495,35 @@ gates_err_t gates_menu_open(gates_tree_t *tree, gates_point_t at, gates_node_t s
         return PROVEN_ERR_INVALID_ARG;
     }
     *out_menu = GATES_NODE_NULL;
-    return menu_create(tree, at, at.y, scope, ids, count, out_menu);
+    gates_u32 focus = tree->focus;
+    gates_err_t err = menu_create(tree, at, at.y, scope, ids, count, out_menu);
+    if (gates_is_ok(err) && focus != GATES_NONE) {
+        gates_widget_state_t *st = state_at(tree, out_menu->index);
+        st->menu_owner_index = focus;
+        st->menu_owner_generation = gates_i_slot(tree, focus)->generation;
+    }
+    return err;
+}
+
+gates_str_t gates_i_menu_title(const gates_tree_t *tree, gates_u32 idx, gates_u32 *owner) {
+    const gates_widget_state_t *st = state_at(tree, idx);
+    *owner = GATES_NONE;
+    if (st == nullptr) return (gates_str_t){0}; /* a choice's list has no owner either */
+    if (st->menu_parent_index != GATES_NONE) {
+        const gates_widget_state_t *ps = state_at(tree, st->menu_parent_index);
+        if (ps == nullptr || ps->menu_child_row < 0 || (gates_u32)ps->menu_child_row >= ps->menu_count) {
+            return (gates_str_t){0};
+        }
+        gates_node_t scope = { ps->menu_scope_index, ps->menu_scope_generation };
+        return gates_command_label(tree, scope, ps->menu_ids[ps->menu_child_row]);
+    }
+    if (st->menu_from_bar) {
+        if (tree->menubar == GATES_NONE) return (gates_str_t){0};
+        return gates_menubar_title(tree, gates_i_handle(tree, tree->menubar), st->menu_bar_title);
+    }
+    gates_node_t o = { st->menu_owner_index, st->menu_owner_generation };
+    if (st->menu_owner_index != GATES_NONE && gates_i_valid(tree, o)) *owner = st->menu_owner_index;
+    return (gates_str_t){0};
 }
 
 static void menu_step(gates_tree_t *tree, gates_u32 idx, gates_i32 from, gates_i32 dir);

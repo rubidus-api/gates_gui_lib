@@ -986,6 +986,22 @@ gates_err_t gates_access_info(gates_tree_t *tree, gates_node_t node, gates_u64 i
         gates_i32 pi = gates_i_tab_page_index(tree, idx, &tabs);
         name = gates_i_tabs_title(tree, tabs, (gates_u32)pi);
         markup = true;
+    } else if (s->kind == GATES_NODE_MENU) {
+        /* 0.10.0: a submenu by its entry, a menu bar menu by its title, a menu the
+         * program opened by the node that had focus then (its name, else its text). */
+        gates_u32 owner = GATES_NONE;
+        name = gates_i_menu_title(tree, idx, &owner);
+        markup = true;
+        if (owner != GATES_NONE) {
+            const gates_i_access_prop_t *op = find_prop(tree, owner);
+            if (op != nullptr && op->name_len > 0) {
+                name = (gates_str_t){ .ptr = op->name, .size = op->name_len };
+                markup = false;
+            } else {
+                name = own_text(tree, owner);
+                markup = gates_i_mn_markup(tree, owner);
+            }
+        }
     } else {
         name = own_text(tree, idx);
         markup = gates_i_mn_markup(tree, idx) && s->kind != GATES_NODE_MENUBAR;

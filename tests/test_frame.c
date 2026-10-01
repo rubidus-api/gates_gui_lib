@@ -1549,6 +1549,65 @@ static void test_submenus_in_bar(void) {
     gates_tree_destroy(t);
 }
 
+/* 0.10.0: menus have names - a menu bar menu its title, a submenu its entry, a
+ * menu the program opened the node that had focus then. */
+static bool menu_named(gates_tree_t *t, const char *want) {
+    gates_node_t m = gates_access_last_child(t, (gates_access_ref_t){ gates_tree_root(t), 0 }).node;
+    gates_access_info_t i;
+    if (!gates_is_ok(gates_access_info(t, m, 0, &i)) || i.role != GATES_ROLE_MENU) return false;
+    return i.name.size == strlen(want) && memcmp(i.name.ptr, want, i.name.size) == 0;
+}
+
+static void test_menu_names(void) {
+    bapp_t a;
+    make_bapp(&a, (gates_allocator_t){0});
+    gates_tree_t *t = a.t;
+    gates_node_t root = gates_tree_root(t);
+    static const gates_command_id_t more[] = { C_CUT, C_PASTE };
+    GT_ASSERT_OK(gates_command_set_submenu(t, root, C_OPEN, more, 2));
+    layout(t);
+    GT_ASSERT_OK(gates_menubar_open(t, a.bar, 0));
+    layout(t);
+    GT_ASSERT(menu_named(t, "File")); /* markup dropped */
+    GT_ASSERT(key(t, GATES_KEY_DOWN) && key(t, GATES_KEY_RIGHT));
+    layout(t);
+    GT_ASSERT(menu_named(t, "Open..."));
+    GT_ASSERT(key(t, GATES_KEY_ESCAPE) && key(t, GATES_KEY_ESCAPE) && key(t, GATES_KEY_ESCAPE));
+    GT_ASSERT(gates_tree_overlay_count(t) == 0);
+    /* A context menu: named by the focused node - its own text, its explicit name. */
+    static const gates_command_id_t ctx[] = { C_CUT, C_PASTE };
+    gates_node_t m;
+    gates_tree_set_focus(t, a.btn);
+    GT_ASSERT_OK(gates_menu_open(t, (gates_point_t){ 10, 10 }, root, ctx, 2, &m));
+    layout(t);
+    GT_ASSERT(menu_named(t, "Go"));
+    GT_ASSERT(key(t, GATES_KEY_ESCAPE));
+    GT_ASSERT_OK(gates_node_set_access_name(t, a.box, GATES_STR("R&D tools")));
+    gates_tree_set_focus(t, a.box);
+    GT_ASSERT_OK(gates_menu_open(t, (gates_point_t){ 10, 10 }, root, ctx, 2, &m));
+    layout(t);
+    GT_ASSERT(menu_named(t, "R&D tools")); /* an explicit name is no markup */
+    /* The program's name for the menu wins. */
+    GT_ASSERT_OK(gates_node_set_access_name(t, m, GATES_STR("Text actions")));
+    GT_ASSERT(menu_named(t, "Text actions"));
+    GT_ASSERT(key(t, GATES_KEY_ESCAPE));
+    /* No focus, or the owner gone: no name. */
+    gates_tree_set_focus(t, GATES_NODE_NULL);
+    GT_ASSERT_OK(gates_menu_open(t, (gates_point_t){ 10, 10 }, root, ctx, 2, &m));
+    layout(t);
+    GT_ASSERT(menu_named(t, ""));
+    GT_ASSERT_OK(gates_menu_close(t, m));
+    gates_node_t tmp;
+    GT_ASSERT_OK(gates_button_create(t, root, GATES_STR("Temp"), nullptr, nullptr, &tmp));
+    layout(t);
+    gates_tree_set_focus(t, tmp);
+    GT_ASSERT_OK(gates_menu_open(t, (gates_point_t){ 10, 10 }, root, ctx, 2, &m));
+    GT_ASSERT_OK(gates_node_destroy(t, tmp));
+    layout(t);
+    GT_ASSERT(gates_tree_overlay_count(t) == 0 || menu_named(t, ""));
+    gates_tree_destroy(t);
+}
+
 /* -- tabs -------------------------------------------------------------------------------- */
 
 typedef struct tabs_app_t {
@@ -2063,6 +2122,7 @@ int main(void) {
     test_tooltip_without_clock();
     test_submenus();
     test_submenus_in_bar();
+    test_menu_names();
     test_tabs();
     test_tabs_overflow();
     test_state();

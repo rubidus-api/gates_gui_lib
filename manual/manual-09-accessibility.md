@@ -21,7 +21,9 @@ A control's accessible name comes, in this order, from: an explicit name
 (`gates_node_set_access_name`); a label tied to it (`gates_node_set_labelled_by`, like HTML's
 `<label for>`); its form label; its own text (a button's label, a check box's caption). A label
 placed next to a text box is not tied to it until the program says so - the audit finds such a
-field:
+field. A menu without a name of its own takes its menu bar title, the entry that opened it (a
+submenu), or the name of the control that had focus when the program opened it (a context
+menu) (0.10.0):
 
 <!-- example: manual/examples/ex_10_access.c -->
 ```c

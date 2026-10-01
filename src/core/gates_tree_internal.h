@@ -229,6 +229,9 @@ typedef struct gates_widget_state_t {
     gates_u32 menu_parent_index;
     gates_u32 menu_parent_generation;
     gates_i32 menu_child_row;
+    /* A menu the program opened (0.10.0): the node that had focus then - its name names the menu. */
+    gates_u32 menu_owner_index;
+    gates_u32 menu_owner_generation;
     /* Radio group / choice: one allocation holds array and labels. */
     bool has_options;
     gates_i_option_t *opts;
@@ -862,6 +865,10 @@ void gates_i_menubar_check(gates_tree_t *tree);
 void gates_i_menubar_destroying(gates_tree_t *tree, gates_u32 top);
 /* The overlay record index of the bar's open menu, or -1 (gates_overlay.c). */
 gates_i32 gates_i_bar_menu_overlay(const gates_tree_t *tree);
+/* A menu's default accessible name (0.10.0, mnemonic markup): a submenu's
+ * entry label, a menu bar menu's title; else empty, with *owner the node that
+ * had focus when the program opened it (GATES_NONE when none). */
+gates_str_t gates_i_menu_title(const gates_tree_t *tree, gates_u32 idx, gates_u32 *owner);
 /* Opens a menu overlay for the bar (gates_overlay.c). */
 gates_err_t gates_i_menu_open_for_bar(gates_tree_t *tree, gates_point_t at, gates_i32 above_y,
                                       gates_node_t scope, const gates_command_id_t *ids,
