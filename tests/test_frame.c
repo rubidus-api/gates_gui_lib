@@ -1555,7 +1555,7 @@ static bool menu_named(gates_tree_t *t, const char *want) {
     gates_node_t m = gates_access_last_child(t, (gates_access_ref_t){ gates_tree_root(t), 0 }).node;
     gates_access_info_t i;
     if (!gates_is_ok(gates_access_info(t, m, 0, &i)) || i.role != GATES_ROLE_MENU) return false;
-    return i.name.size == strlen(want) && memcmp(i.name.ptr, want, i.name.size) == 0;
+    return i.name.size == strlen(want) && (i.name.size == 0 || memcmp(i.name.ptr, want, i.name.size) == 0);
 }
 
 static void test_menu_names(void) {
