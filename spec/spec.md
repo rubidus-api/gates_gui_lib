@@ -139,7 +139,8 @@ node per part.
   (949, 51949, ... and the system's) through the platform's converter (Win32: installed with the
   app; elsewhere UNSUPPORTED unless a program installs one). Malformed or unmappable text is
   replaced (U+FFFD, or the code page's `?`) or, in strict mode, refused with its byte offset;
-  nothing is allocated on an error.
+  nothing is allocated on an error. The UTF forms also convert into a caller's buffer and in
+  pieces without allocating; Win32 programs get UTF-8 arguments and console output.
 - **Metrics contract** (`gates/text.h`). A text backend reports per font the ascent, descent,
   line height, an average width (a sizing hint) and every code point's advance. A string's width
   is exactly the sum of its advances - no kerning, ligatures or shaping - so the core computes

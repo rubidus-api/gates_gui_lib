@@ -316,3 +316,297 @@ gates_usize_t gates_encoding_detect(const void *in, gates_usize_t size, gates_en
     if (out != nullptr) *out = e;
     return 0;
 }
+
+/* -- into the caller's buffer (0.10.0): the UTF forms, no allocation ------------------------ */
+
+/* Converts between UTF forms into out: *needed always receives the size; with
+ * out null (cap 0) it is a size query; a too small cap writes nothing. */
+static gates_err_t transcode_into(gates_encoding_kind_t from, gates_encoding_kind_t to, const gates_u8 *in,
+                                  gates_usize_t size, bool bom, bool strict, gates_u8 *out, gates_usize_t cap,
+                                  gates_usize_t *needed, gates_usize_t *bad_at) {
+    gates_usize_t total = bom ? bom_of(to, nullptr) : 0;
+    for (gates_usize_t pos = 0; pos < size;) {
+        gates_u32 cp;
+        bool bad;
+        gates_usize_t used = next_cp(from, in, size, pos, &cp, &bad);
+        if (bad && strict) {
+            if (bad_at != nullptr) *bad_at = pos;
+            return PROVEN_ERR_INVALID_ENCODING;
+        }
+        gates_usize_t n = put_cp(to, cp, nullptr);
+        if (total > (gates_usize_t)-1 - n) return PROVEN_ERR_OVERFLOW;
+        total += n;
+        pos += used;
+    }
+    *needed = total;
+    if (out == nullptr && cap == 0) return GATES_OK;
+    if (out == nullptr || cap < total) return out == nullptr ? PROVEN_ERR_INVALID_ARG : PROVEN_ERR_OVERFLOW;
+    gates_usize_t w = bom ? bom_of(to, out) : 0;
+    for (gates_usize_t pos = 0; pos < size;) {
+        gates_u32 cp;
+        bool bad;
+        pos += next_cp(from, in, size, pos, &cp, &bad);
+        w += put_cp(to, cp, out + w);
+    }
+    return GATES_OK;
+}
+
+/* The UTF kind an encoding stands for; UNSUPPORTED for a real code page. */
+static gates_err_t utf_kind(gates_encoding_t enc, gates_encoding_kind_t *kind) {
+    bool native;
+    gates_u32 cp = 0;
+    gates_err_t err = resolve(enc, kind, &cp, &native);
+    if (gates_is_ok(err) && !native) return PROVEN_ERR_UNSUPPORTED;
+    return err;
+}
+
+gates_err_t gates_encoding_to_utf8_buf(gates_encoding_t enc, const void *in, gates_usize_t size, gates_u32 flags,
+                                       gates_u8 *out, gates_usize_t cap, gates_usize_t *needed, gates_usize_t *bad_at) {
+    if (needed == nullptr || (in == nullptr && size > 0)) return PROVEN_ERR_INVALID_ARG;
+    gates_encoding_kind_t kind;
+    gates_err_t err = utf_kind(enc, &kind);
+    if (!gates_is_ok(err)) return err;
+    const gates_u8 *p = (const gates_u8 *)in;
+    gates_usize_t skip = 0;
+    if (size > 0 && starts_with_bom(kind, p, size, &skip)) {
+        p += skip;
+        size -= skip;
+    }
+    err = transcode_into(kind, GATES_ENCODING_UTF8, p, size, false, (flags & GATES_ENCODING_STRICT) != 0, out, cap,
+                         needed, bad_at);
+    if (err == PROVEN_ERR_INVALID_ENCODING && bad_at != nullptr) *bad_at += skip;
+    return err;
+}
+
+gates_err_t gates_encoding_from_utf8_buf(gates_encoding_t enc, gates_str_t text, gates_u32 flags, gates_u8 *out,
+                                         gates_usize_t cap, gates_usize_t *needed, gates_usize_t *bad_at) {
+    if (needed == nullptr || (text.ptr == nullptr && text.size > 0)) return PROVEN_ERR_INVALID_ARG;
+    gates_encoding_kind_t kind;
+    gates_err_t err = utf_kind(enc, &kind);
+    if (!gates_is_ok(err)) return err;
+    return transcode_into(GATES_ENCODING_UTF8, kind, text.ptr, text.size, enc.bom, (flags & GATES_ENCODING_STRICT) != 0,
+                          out, cap, needed, bad_at);
+}
+
+/* -- in pieces (0.10.0): a stream that carries a character cut at a piece's end ------------- */
+
+/* Whether the bytes at p (avail of them) hold a whole character of `kind` -
+ * or enough to know it is broken; false means "wait for more". */
+static bool char_ready(gates_encoding_kind_t kind, const gates_u8 *p, gates_usize_t avail) {
+    if (avail == 0) return false;
+    switch (kind) {
+    case GATES_ENCODING_UTF8: {
+        gates_u8 b = p[0];
+        gates_usize_t need = b < 0x80 ? 1 : (b & 0xE0) == 0xC0 ? 2 : (b & 0xF0) == 0xE0 ? 3 : (b & 0xF8) == 0xF0 ? 4 : 1;
+        return avail >= need; /* a broken one is told when its bytes are in */
+    }
+    case GATES_ENCODING_UTF16LE:
+    case GATES_ENCODING_UTF16BE: {
+        if (avail < 2) return false;
+        gates_u32 u = kind == GATES_ENCODING_UTF16LE ? (gates_u32)(p[0] | (p[1] << 8)) : (gates_u32)((p[0] << 8) | p[1]);
+        return !(u >= 0xD800 && u <= 0xDBFF) || avail >= 4;
+    }
+    default:
+        return avail >= 4;
+    }
+}
+
+gates_err_t gates_encoding_stream_init(gates_encoding_stream_t *st, gates_encoding_t enc, gates_u32 flags,
+                                       bool to_utf8) {
+    if (st == nullptr) return PROVEN_ERR_INVALID_ARG;
+    gates_encoding_kind_t kind;
+    gates_err_t err = utf_kind(enc, &kind);
+    if (!gates_is_ok(err)) return err;
+    *st = (gates_encoding_stream_t){ .from = to_utf8 ? kind : GATES_ENCODING_UTF8,
+                                     .to = to_utf8 ? GATES_ENCODING_UTF8 : kind,
+                                     .strict = (flags & GATES_ENCODING_STRICT) != 0,
+                                     .skip_bom = to_utf8,
+                                     .write_bom = !to_utf8 && enc.bom };
+    return GATES_OK;
+}
+
+gates_err_t gates_encoding_stream_feed(gates_encoding_stream_t *st, const void *in, gates_usize_t size, bool last,
+                                       gates_u8 *out, gates_usize_t cap, gates_usize_t *used,
+                                       gates_usize_t *written, gates_usize_t *bad_at) {
+    if (st == nullptr || used == nullptr || written == nullptr || (in == nullptr && size > 0) ||
+        (out == nullptr && cap > 0)) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    const gates_u8 *p = (const gates_u8 *)in;
+    gates_usize_t pos = 0, w = 0;
+    *used = 0;
+    *written = 0;
+    if (st->write_bom) {
+        gates_usize_t n = bom_of(st->to, nullptr);
+        if (cap < n) return GATES_OK; /* no room yet: nothing taken */
+        w += bom_of(st->to, out);
+        st->write_bom = false;
+    }
+    for (;;) {
+        /* The next character: from the carried bytes topped up from the input, or the input itself. */
+        gates_u8 window[4];
+        const gates_u8 *c;
+        gates_usize_t avail, from_pending = st->pending_n;
+        if (st->pending_n > 0) {
+            while (st->pending_n < 4 && pos < size) {
+                st->pending[st->pending_n++] = p[pos++];
+            }
+            memcpy(window, st->pending, st->pending_n);
+            c = window;
+            avail = st->pending_n;
+        } else {
+            c = p + pos;
+            avail = size - pos;
+        }
+        if (avail == 0) break;
+        if (st->skip_bom) { /* the mark of the input encoding, once, at the very start */
+            gates_u8 b[4];
+            gates_usize_t n = bom_of(st->from, b);
+            gates_usize_t k = avail < n ? avail : n;
+            if (memcmp(c, b, k) != 0) {
+                st->skip_bom = false;
+            } else if (avail < n && !last) {
+                if (from_pending == 0) { /* too few bytes to tell: carry them */
+                    memcpy(st->pending, c, avail);
+                    st->pending_n = (gates_u32)avail;
+                    pos = size;
+                }
+                break;
+            } else {
+                st->skip_bom = false;
+                if (avail >= n) {
+                    st->offset += n;
+                    if (from_pending > 0) {
+                        memmove(st->pending, st->pending + n, st->pending_n - n);
+                        st->pending_n -= (gates_u32)n;
+                    } else {
+                        pos += n;
+                    }
+                    continue;
+                }
+            }
+        }
+        if (!char_ready(st->from, c, avail) && !last) {
+            if (from_pending == 0) { /* a character cut at the end: carry it */
+                memcpy(st->pending, c, avail);
+                st->pending_n = (gates_u32)avail;
+                pos = size;
+            }
+            break;
+        }
+        gates_u32 cp;
+        bool bad;
+        gates_usize_t n = next_cp(st->from, c, avail, 0, &cp, &bad);
+        if (bad && st->strict) {
+            if (bad_at != nullptr) *bad_at = st->offset;
+            if (from_pending > 0) pos -= st->pending_n - from_pending; /* give back what was topped up */
+            *used = pos;
+            *written = w;
+            return PROVEN_ERR_INVALID_ENCODING;
+        }
+        gates_usize_t len = put_cp(st->to, cp, nullptr);
+        if (cap - w < len) { /* no room: stop before this character */
+            if (from_pending > 0) {
+                pos -= st->pending_n - from_pending;
+                st->pending_n = (gates_u32)from_pending;
+            }
+            break;
+        }
+        w += put_cp(st->to, cp, out + w);
+        st->offset += n;
+        if (from_pending > 0) {
+            memmove(st->pending, st->pending + n, st->pending_n - n);
+            st->pending_n -= (gates_u32)n;
+        } else {
+            pos += n;
+        }
+    }
+    *used = pos;
+    *written = w;
+    return GATES_OK;
+}
+
+/* -- a command line, by the Windows rules (0.10.0) -------------------------------------- */
+
+/* One pass over the command line: counts (out null) or fills the arguments.
+ * The first argument (the program) ends at a space unless quoted and knows no
+ * escapes; after it: blanks separate, 2n backslashes before a quote give n and
+ * toggle quoting, 2n+1 give n and a literal quote, other backslashes are
+ * literal, and "" inside quotes is one literal quote. */
+static void split_args(const gates_u8 *c, gates_usize_t n, gates_usize_t *argc, gates_usize_t *bytes, char **argv,
+                       char *strings) {
+    gates_usize_t i = 0, count = 0, total = 0;
+    char *w = strings;
+    while (i < n && (c[i] == ' ' || c[i] == '\t')) i++;
+    if (i < n) { /* the program name */
+        bool quoted = false;
+        if (argv != nullptr) argv[count] = w;
+        while (i < n && (quoted || (c[i] != ' ' && c[i] != '\t'))) {
+            if (c[i] == '"') quoted = !quoted;
+            else {
+                if (w != nullptr) *w++ = (char)c[i];
+                total++;
+            }
+            i++;
+        }
+        if (w != nullptr) *w++ = 0;
+        total++;
+        count++;
+    }
+    for (;;) {
+        while (i < n && (c[i] == ' ' || c[i] == '\t')) i++;
+        if (i >= n) break;
+        bool quoted = false;
+        if (argv != nullptr) argv[count] = w;
+        while (i < n && (quoted || (c[i] != ' ' && c[i] != '\t'))) {
+            if (c[i] == '\\') {
+                gates_usize_t bs = 0;
+                while (i < n && c[i] == '\\') { bs++; i++; }
+                if (i < n && c[i] == '"') {
+                    for (gates_usize_t k = 0; k < bs / 2; k++) { if (w != nullptr) *w++ = '\\'; total++; }
+                    if (bs % 2 == 1) { if (w != nullptr) *w++ = '"'; total++; i++; }
+                } else {
+                    for (gates_usize_t k = 0; k < bs; k++) { if (w != nullptr) *w++ = '\\'; total++; }
+                }
+            } else if (c[i] == '"') {
+                if (quoted && i + 1 < n && c[i + 1] == '"') { /* "" inside quotes */
+                    if (w != nullptr) *w++ = '"';
+                    total++;
+                    i += 2;
+                } else {
+                    quoted = !quoted;
+                    i++;
+                }
+            } else {
+                if (w != nullptr) *w++ = (char)c[i];
+                total++;
+                i++;
+            }
+        }
+        if (w != nullptr) *w++ = 0;
+        total++;
+        count++;
+    }
+    *argc = count;
+    *bytes = total;
+}
+
+gates_err_t gates_args_split(gates_str_t command_line, gates_allocator_t alloc, int *argc, char ***argv) {
+    if (argc == nullptr || argv == nullptr || (command_line.ptr == nullptr && command_line.size > 0)) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    gates_usize_t count = 0, bytes = 0;
+    split_args(command_line.ptr, command_line.size, &count, &bytes, nullptr, nullptr);
+    if (count > (gates_usize_t)INT32_MAX) return PROVEN_ERR_OVERFLOW;
+    gates_usize_t head = (count + 1) * sizeof(char *);
+    gates_allocator_t a = proven_alloc_is_valid(alloc) ? alloc : proven_heap_allocator();
+    proven_result_mem_mut_t r = a.alloc_fn(a.ctx, head + bytes, alignof(char *));
+    if (!proven_is_ok(r.err)) return r.err;
+    char **v = (char **)r.value.ptr;
+    split_args(command_line.ptr, command_line.size, &count, &bytes, v, (char *)r.value.ptr + head);
+    v[count] = nullptr;
+    *argc = (int)count;
+    *argv = v;
+    return GATES_OK;
+}
+

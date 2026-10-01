@@ -149,3 +149,58 @@ const gates_codepage_converter_t *gates_codepage_converter_win32(void) {
     };
     return &conv;
 }
+
+/* -- command line and console (0.10.0) -------------------------------------------------- */
+
+gates_err_t gates_args_utf8_win32(gates_allocator_t alloc, int *argc, char ***argv) {
+    if (argc == nullptr || argv == nullptr) return PROVEN_ERR_INVALID_ARG;
+    const wchar_t *cl = GetCommandLineW();
+    gates_usize_t n = cl != nullptr ? wcslen(cl) : 0;
+    gates_allocator_t heap = proven_heap_allocator();
+    gates_u8 *line = nullptr;
+    gates_usize_t size = 0;
+    gates_err_t err = gates_encoding_to_utf8((gates_encoding_t){ .kind = GATES_ENCODING_UTF16LE }, cl, n * 2u, 0, heap,
+                                             &line, &size, nullptr);
+    if (!gates_is_ok(err)) return err;
+    err = gates_args_split((gates_str_t){ .ptr = line, .size = size }, alloc, argc, argv);
+    heap.free_fn(heap.ctx, line);
+    return err;
+}
+
+gates_err_t gates_console_write_win32(gates_str_t text, bool to_stderr) {
+    if (text.ptr == nullptr && text.size > 0) return PROVEN_ERR_INVALID_ARG;
+    if (!gates_utf8_valid(text, nullptr)) return PROVEN_ERR_INVALID_ENCODING;
+    HANDLE h = GetStdHandle(to_stderr ? STD_ERROR_HANDLE : STD_OUTPUT_HANDLE);
+    if (h == nullptr || h == INVALID_HANDLE_VALUE) return PROVEN_ERR_IO;
+    if (text.size == 0) return GATES_OK;
+    DWORD mode = 0;
+    if (!GetConsoleMode(h, &mode)) { /* a file or a pipe: the bytes as they are */
+        gates_usize_t done = 0;
+        while (done < text.size) {
+            DWORD chunk = text.size - done > 0x40000000u ? 0x40000000u : (DWORD)(text.size - done), wrote = 0;
+            if (!WriteFile(h, text.ptr + done, chunk, &wrote, nullptr) || wrote == 0) return PROVEN_ERR_IO;
+            done += wrote;
+        }
+        return GATES_OK;
+    }
+    gates_allocator_t heap = proven_heap_allocator();
+    gates_u8 *wbuf = nullptr;
+    gates_usize_t wbytes = 0;
+    gates_err_t err = gates_encoding_from_utf8((gates_encoding_t){ .kind = GATES_ENCODING_UTF16LE }, text, 0, heap,
+                                               &wbuf, &wbytes, nullptr);
+    if (!gates_is_ok(err)) return err;
+    const wchar_t *w = (const wchar_t *)(void *)wbuf;
+    gates_usize_t units = wbytes / 2u, done = 0;
+    while (done < units) {
+        DWORD chunk = units - done > 16384u ? 16384u : (DWORD)(units - done), wrote = 0;
+        if (chunk < units - done && w[done + chunk - 1] >= 0xD800 && w[done + chunk - 1] <= 0xDBFF) chunk--; /* keep pairs */
+        if (!WriteConsoleW(h, w + done, chunk, &wrote, nullptr) || wrote == 0) {
+            err = PROVEN_ERR_IO;
+            break;
+        }
+        done += wrote;
+    }
+    heap.free_fn(heap.ctx, wbuf);
+    return err;
+}
+

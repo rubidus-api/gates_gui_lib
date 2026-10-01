@@ -81,6 +81,49 @@ gates_usize_t gates_encoding_detect(const void *in, gates_usize_t size, gates_en
  * past U+10FFFF); *bad_at (may be null) receives the first bad offset. */
 bool gates_utf8_valid(gates_str_t text, gates_usize_t *bad_at);
 
+/* -- without allocating (0.10.0): the UTF forms ------------------------------------
+ *
+ * For targets that count their memory (a microcontroller, an RTOS GUI): the same
+ * conversions into a buffer the caller owns, and in pieces. Code pages need the
+ * allocating calls above (UNSUPPORTED here). */
+
+/* Into out (cap bytes; no zero terminator is added). *needed always receives
+ * the full size; out null with cap 0 asks only that; a cap that is too small
+ * is OVERFLOW and writes nothing. Otherwise as gates_encoding_to_utf8 /
+ * _from_utf8 (marks, replacement, strict). */
+[[nodiscard]] gates_err_t gates_encoding_to_utf8_buf(gates_encoding_t enc, const void *in, gates_usize_t size,
+                                                     gates_u32 flags, gates_u8 *out, gates_usize_t cap,
+                                                     gates_usize_t *needed, gates_usize_t *bad_at);
+[[nodiscard]] gates_err_t gates_encoding_from_utf8_buf(gates_encoding_t enc, gates_str_t text, gates_u32 flags,
+                                                       gates_u8 *out, gates_usize_t cap, gates_usize_t *needed,
+                                                       gates_usize_t *bad_at);
+
+/* A conversion in pieces - a file read in blocks, bytes from a serial line. The
+ * state lives in the caller's memory; a character cut at the end of a piece
+ * waits for the next (so is a mark split across the first pieces). */
+typedef struct gates_encoding_stream_t {
+    gates_encoding_kind_t from, to;
+    bool strict, skip_bom, write_bom;
+    gates_u8 pending[4];         /* the start of a character cut at a piece's end */
+    gates_u32 pending_n;
+    gates_usize_t offset;        /* input bytes converted so far (bad_at counts from the start) */
+} gates_encoding_stream_t;
+
+/* to_utf8: `enc` to UTF-8 (a leading mark skipped); else UTF-8 to `enc` (a mark
+ * first when enc.bom). UNSUPPORTED for a code page. */
+[[nodiscard]] gates_err_t gates_encoding_stream_init(gates_encoding_stream_t *st, gates_encoding_t enc,
+                                                     gates_u32 flags, bool to_utf8);
+/* Converts what fits into out: *used receives the input bytes taken (all of
+ * them, unless out filled up - feed the rest again), *written the bytes put out.
+ * `last` says no more input follows: a character still cut then is malformed
+ * (replaced, or refused when strict). Strict refusal: INVALID_ENCODING with
+ * *bad_at the offset from the start of the stream; *used and *written say
+ * what was done before it. */
+[[nodiscard]] gates_err_t gates_encoding_stream_feed(gates_encoding_stream_t *st, const void *in, gates_usize_t size,
+                                                     bool last, gates_u8 *out, gates_usize_t cap,
+                                                     gates_usize_t *used, gates_usize_t *written,
+                                                     gates_usize_t *bad_at);
+
 /* -- the code-page converter (for platform backends and tests) ---------------------
  *
  * Code pages need tables the platform has. A converter turns bytes of a code
@@ -105,6 +148,30 @@ bool gates_encoding_has_codepage_converter(void);
 /* The converter's answers (0 without a converter). */
 gates_u32 gates_encoding_system_codepage(void);
 gates_u32 gates_encoding_console_codepage(void);
+
+/* -- command lines and the console (0.10.0) ------------------------------------------
+ *
+ * A Windows program's main() gets its arguments in the ANSI code page (949 on
+ * Korean Windows), and printf's UTF-8 shows garbled on a console that is not
+ * set to UTF-8. These give the program UTF-8 both ways. */
+
+/* Splits a command line (UTF-8) into arguments by the Windows rules: the first
+ * (the program) ends at a blank unless quoted; after it blanks separate, 2n
+ * backslashes before a quote give n and start or end quoting, 2n+1 give n and a
+ * literal quote, other backslashes stay, and "" inside quotes is one quote. One
+ * allocation from `alloc` ({0} = the heap) holds the pointer array (argv[argc]
+ * is null) and the strings: free argv with the same allocator. */
+[[nodiscard]] gates_err_t gates_args_split(gates_str_t command_line, gates_allocator_t alloc, int *argc,
+                                           char ***argv);
+/* Win32: this process's command line (GetCommandLineW) as UTF-8 arguments, as
+ * gates_args_split makes them. Only in builds with src/platform/win32. */
+[[nodiscard]] gates_err_t gates_args_utf8_win32(gates_allocator_t alloc, int *argc, char ***argv);
+/* Win32: writes UTF-8 text to standard output (or standard error): through
+ * WriteConsoleW on a console, so every character shows whatever its code page;
+ * redirected to a file or a pipe, the UTF-8 bytes as they are. IO when Windows
+ * refuses the write; INVALID_ENCODING (nothing written) for text that is not
+ * UTF-8. Only in builds with src/platform/win32. */
+[[nodiscard]] gates_err_t gates_console_write_win32(gates_str_t text, bool to_stderr);
 
 /* The Win32 converter (MultiByteToWideChar / WideCharToMultiByte). Only in
  * builds that include src/platform/win32; gates_app_create installs it when

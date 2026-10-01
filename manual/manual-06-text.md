@@ -126,6 +126,15 @@ the program keeps one encoding inside and meets each environment in its own (0.1
 - `gates_encoding_detect` guesses for bytes of unknown origin: a byte order mark decides,
   then UTF-16 by its zero bytes, then valid UTF-8, else the system code page.
   `gates_utf8_valid` checks text before it goes into the editor (which refuses anything else).
+- Without allocating, for targets that count their memory: `gates_encoding_to_utf8_buf` /
+  `_from_utf8_buf` write into your buffer (a call with none asks for the size), and a
+  `gates_encoding_stream_t` converts in pieces - a file read in blocks, bytes from a serial line -
+  carrying a character cut at a piece's end over to the next. Both take the UTF forms.
+- On Windows, `main`'s arguments are in the ANSI code page and `printf` of UTF-8 shows garbled on a
+  console that is not set to UTF-8: `gates_args_utf8_win32` gives the command line as UTF-8
+  arguments (split by `gates_args_split`, the Windows rules, usable anywhere), and
+  `gates_console_write_win32` writes UTF-8 to the console, or the bytes as they are when the output
+  is redirected.
 
 <!-- example: manual/examples/ex_06_encodings.c -->
 ```c

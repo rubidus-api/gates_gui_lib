@@ -75,9 +75,9 @@ struct gates_window {
     gates_u32 pending_lead;  /* UTF-16 high surrogate awaiting its low half */
     /* The last double click (message time, client pixels): a press soon after
      * it, near it, is the third of a triple click (0.8.0). */
-    bool dbl_valid;
-    DWORD dbl_time;
-    POINT dbl_pos;
+    gates_u32 press_count;           /* quick presses in one place so far (0 = none) */
+    DWORD press_time;
+    POINT press_pos;
 
     /* IME composition in progress and the node it started in. */
     bool ime_active;
@@ -160,6 +160,9 @@ void gates_win32_caret_follow(gates_window_t *win);
 void gates_win32_caret_drop(gates_window_t *win);
 /* gates_win32_window.c: the window's drawing DPI from its monitor, zoom and text size. */
 void gates_win32_rescale(gates_window_t *win);
+/* The system's UI font changed (0.10.0): drop every made face; the next
+ * measure makes them again from the current settings. */
+void gates_win32_text_refresh(void);
 /* gates_win32_perf.c (0.3.0): GATES_PERF=<file> field measurements. */
 bool gates_win32_perf_on(void);
 gates_u64 gates_win32_perf_now_us(void);

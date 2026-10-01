@@ -108,21 +108,21 @@ static void button_event(gates_window_t *win, gates_point_t pos, gates_u32 butto
     }
 }
 
-/* Windows reports one and two clicks; a press within the double-click time
- * and distance of the last double click is the third (0.8.0). */
+/* Quick presses in one place are counted (1, 2, 3, 4, ...): each within the
+ * double-click time and distance of the one before (0.10.0; Windows itself
+ * pairs presses into double clicks, so a fourth would read as 2). A double-
+ * click message is at least the second. */
 static gates_u32 left_clicks(gates_window_t *win, gates_point_t pos, bool dbl) {
     DWORD now = (DWORD)GetMessageTime();
-    if (dbl) {
-        win->dbl_valid = true;
-        win->dbl_time = now;
-        win->dbl_pos = (POINT){ pos.x, pos.y };
-        return 2;
-    }
-    bool third = win->dbl_valid && now - win->dbl_time <= GetDoubleClickTime() &&
-                 abs(pos.x - win->dbl_pos.x) <= GetSystemMetrics(SM_CXDOUBLECLK) / 2 &&
-                 abs(pos.y - win->dbl_pos.y) <= GetSystemMetrics(SM_CYDOUBLECLK) / 2;
-    win->dbl_valid = false;
-    return third ? 3 : 1;
+    bool close_by = win->press_count > 0 && now - win->press_time <= GetDoubleClickTime() &&
+                abs(pos.x - win->press_pos.x) <= GetSystemMetrics(SM_CXDOUBLECLK) / 2 &&
+                abs(pos.y - win->press_pos.y) <= GetSystemMetrics(SM_CYDOUBLECLK) / 2;
+    gates_u32 n = close_by ? win->press_count + 1 : 1;
+    if (dbl && n < 2) n = 2;
+    win->press_count = n;
+    win->press_time = now;
+    win->press_pos = (POINT){ pos.x, pos.y };
+    return n;
 }
 
 bool gates_win32_handle_input(gates_window_t *win, UINT msg, WPARAM wparam, LPARAM lparam) {

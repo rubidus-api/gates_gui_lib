@@ -277,6 +277,11 @@ LRESULT CALLBACK gates_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM 
         return DefWindowProcW(hwnd, msg, wparam, lparam);
     case WM_SETTINGCHANGE:   /* app mode ("ImmersiveColorSet"), high contrast, text size */
         cues_setting(win);
+        if (wparam == SPI_SETNONCLIENTMETRICS) { /* the UI font (0.10.0): measure everything again */
+            gates_win32_text_refresh();
+            win->last_layout_size = (gates_size_t){ 0, 0 };
+            InvalidateRect(hwnd, nullptr, FALSE);
+        }
         [[fallthrough]];
     case WM_SYSCOLORCHANGE:
     case WM_THEMECHANGED:

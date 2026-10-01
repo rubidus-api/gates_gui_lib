@@ -112,6 +112,12 @@ static void face_release(gdi_face_t *f) {
     *f = (gdi_face_t){0};
 }
 
+void gates_win32_text_refresh(void) {
+    for (unsigned i = 0; i < GDI_FACES; i++) {
+        if (g_gdi.faces[i].ready) face_release(&g_gdi.faces[i]);
+    }
+}
+
 static gdi_face_t *face(gates_font_t font) {
     gates_font_t kind = gates_font_face(font) == GATES_FONT_MONO ? GATES_FONT_MONO : GATES_FONT_UI;
     gates_u32 pct = gates_font_percent(font);

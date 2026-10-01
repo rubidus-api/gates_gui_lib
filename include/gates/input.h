@@ -40,8 +40,9 @@ typedef struct gates_pointer_event_t {
     float tilt_y;
     bool primary;
     bool canceled;
-    /* DOWN: 2 for the second press of a double click, 3 for a third quick
-     * press in the same place, else 1 (0 reads as 1). */
+    /* DOWN: how many quick presses in the same place this one makes - 2 for
+     * a double click, 3 for a triple, and on (0.10.0: the Win32 backend counts
+     * past 3); 1 for a lone press (0 reads as 1). */
     gates_u32 clicks;
     /* Modifier keys held at the time of the event (0.8.0): Shift+press
      * extends a text selection. */
