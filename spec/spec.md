@@ -1,4 +1,4 @@
-# gates Specification (v0.9.0)
+# gates Specification (v0.10.0)
 
 This document states what gates guarantees: the contract a program may rely on. The manual
 (`manual/`) teaches how to use gates; the public headers (`include/gates/*.h`) give every

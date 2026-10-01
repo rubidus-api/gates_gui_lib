@@ -15,12 +15,12 @@ business of the backend and the theme. A feature in gates is finished when the i
 serves works - reachable, usable with pointer, keyboard and input method, readable by a screen
 reader - not when it matches a picture.
 
-Version 0.9.0 has one backend: Win32 with a software renderer. The core (everything except
+Version 0.10.0 has one backend: Win32 with a software renderer. The core (everything except
 the window) is platform-free and runs anywhere a C23 compiler does, which is how its tests run.
 
 ## The package
 
-A release is a folder, `gates-0.9.0/`:
+A release is a folder, `gates-0.10.0/`:
 
 | Path | What |
 |---|---|

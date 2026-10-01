@@ -4,6 +4,56 @@ All notable changes to this project will be documented in this file.
 
 This project follows Keep a Changelog.
 
+## [0.10.0] - 2026-10-01
+
+Submenus, tab overflow, cells and tooltips for screen readers, sideways scrolling, font sizes,
+icon pixel sets, a selection store, text encodings, an API reference and the manual as a book.
+
+### Added
+
+- Menus: submenus (`gates_command_set_submenu`): opened by hovering (GATES_MENU_SUB_DELAY_MS), by
+  Right, Enter or Space; Left closes one; choosing an entry closes the whole chain; in a menu bar
+  Left/Right still switch titles. The gallery's View menu has a Theme submenu.
+- Tabs: titles that do not fit - the strip shows whole titles, always the selected one, and a
+  ">>" button (or Alt+Down on the strip) opens a list of every tab; screen readers see it as a
+  "More tabs" button.
+- Accessibility: the shown tooltip is an element of its own (role TOOLTIP, UIA ToolTip, announced
+  when it opens); table cells are elements a level below their rows (`gates_access_cell_count`,
+  `_cell_at`, `_cell_info`, `_cell_toggle`, `_cell_set_value`; UIA GridItem, Toggle, Value,
+  RangeValue) and tables scroll sideways for assistive technology (`gates_access_hscroll_info` /
+  `_hscroll_to`).
+- Scroll areas can scroll sideways too (`gates_layout_set_scroll_sideways`, `_set_scroll_x`):
+  a bottom bar, the wheel's sideways motion (Shift+wheel), focus into view across.
+- Font sizes per node in percent of the system's text size (`gates_node_set_font_size`;
+  GATES_FONT_SIZE_SMALL, _LARGE, _HEADING), inherited separately from the face; a font value
+  carries its size (`gates_font_sized`, `gates_font_face`, `gates_font_percent`).
+- Images hold pixel sets for other scales (`gates_image_add_variant_rgba`, `_load_variant_file` /
+  `_memory`): the renderer draws the smallest set that covers the device pixels, so icons stay
+  sharp at 150 % and 200 %. The gallery's icons carry 24- and 32-pixel sets.
+- A selection store for multi-select views (`gates_selection_t`: ranges of rows, requests in rows,
+  rows inserted and removed) and `gates_view_apply_selection`; dragging over rows selects them.
+- Text encodings at the edge (`gates/encoding.h`): UTF-8, UTF-16 and UTF-32 to and from UTF-8 on
+  every platform, Windows code pages (949, 51949, the system's, ...) through the platform's
+  converter (installed by the Win32 app), replacement or strict refusal with a byte offset, and
+  a guess for bytes of unknown origin.
+- Manual chapter 14, the API reference: every public function with its header's comment, made from
+  the headers (`tests/api_reference.sh`); `make manual-check` fails on an undocumented public
+  function or a stale chapter. The manual as a book: a PDF of the guide and a web edition of
+  everything (`make manual-book`), attached to the release.
+
+### Changed
+
+- Hit testing finds a scroll area's children only inside its viewport (not under its bars or in
+  its padding).
+- View and editor row geometry for hit testing uses the node's line height from the text
+  backend, as painting always did.
+- The GDI text backend keeps fallback fonts per face and size.
+
+### Fixed
+
+- A node created in a destroyed scroll area's slot no longer inherits its sideways scrolling.
+- A table cell no longer reports its row's keyboard focus to UI Automation.
+
 ## [0.9.0] - 2026-09-30
 
 Multi-selection, growing posting queues, and a public specification.
