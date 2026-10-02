@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 This project follows Keep a Changelog.
 
+## [0.13.0] - 2026-10-02
+
+The pointer shows what a press will do.
+
+### Added
+
+- `gates_cursor_at()` and `gates_cursor_t`: the pointer's shape over a point - resize arrows over a
+  table's column edge and a side-by-side split's handle (left-right) or a stacked split's handle
+  (up-down), the text beam over a text box and an editor's text, the arrow elsewhere, over disabled
+  controls and over what a modal dialog covers. A drag keeps its shape wherever the pointer goes.
+- Win32 windows set the pointer from it (WM_SETCURSOR); before, it was always the arrow.
+
 ## [0.12.0] - 2026-10-02
 
 Fonts by name: one face for the whole program, at creation or while it runs, or a face per element.
