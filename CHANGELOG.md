@@ -4,13 +4,22 @@ All notable changes to this project will be documented in this file.
 
 This project follows Keep a Changelog.
 
-## [Unreleased]
+## [0.12.0] - 2026-10-02
+
+Fonts by name: one face for the whole program, at creation or while it runs, or a face per element.
 
 ### Added
 
 - `gates_app_desc_t.ui_font`: the face of `GATES_FONT_UI` chosen by the program (UTF-8, such as
   "Malgun Gothic"), at the platform's UI size. Empty keeps the system message font; a face that is
-  not installed falls back to it. Requested by mulpoom_doumi.
+  not installed falls back to it.
+- `gates_app_set_ui_font()`: the same while running (a settings screen's font choice); every window
+  lays out again. `PROVEN_ERR_NOT_FOUND` when the face is not installed.
+- Named faces per element: `gates_font_named()` registers a face name and returns a face that
+  `gates_node_set_font()` takes like `GATES_FONT_MONO` - on one node, an area, or the root for the
+  whole window; inherited and sized like the others. `gates_font_face_name()` gives a backend the
+  name. The Win32 backend draws the face at the UI size (the UI face when it is not installed);
+  the builtin backend has one face.
 
 ## [0.11.0] - 2026-10-02
 
