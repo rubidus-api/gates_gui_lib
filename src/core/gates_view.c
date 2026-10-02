@@ -1535,6 +1535,15 @@ static gates_i32 header_col_at(const struct gates_i_view *v, const view_geom_t *
     return -1;
 }
 
+gates_cursor_t gates_i_view_cursor(gates_tree_t *tree, gates_u32 idx, gates_point_t p) {
+    struct gates_i_view *v = view_at(tree, idx);
+    if (v == nullptr) return GATES_CURSOR_ARROW;
+    view_geom_t g;
+    geom_now(tree, idx, v, &g);
+    bool edge = false;
+    return header_col_at(v, &g, p, &edge) >= 0 && edge ? GATES_CURSOR_RESIZE_EW : GATES_CURSOR_ARROW;
+}
+
 bool gates_i_view_pointer_down(gates_tree_t *tree, gates_u32 idx, gates_point_t p,
                                gates_u32 clicks, bool shift, bool ctrl) {
     struct gates_i_view *v = view_at(tree, idx);

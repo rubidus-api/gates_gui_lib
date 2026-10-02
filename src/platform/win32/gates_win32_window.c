@@ -288,6 +288,21 @@ LRESULT CALLBACK gates_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM 
         resolve_theme(win);
         gates_win32_rescale(win);
         return DefWindowProcW(hwnd, msg, wparam, lparam);
+    case WM_SETCURSOR:
+        /* The pointer's shape over what is under it (0.13.0): resize over a column edge or a
+         * split handle, the text beam over text. While the mouse is captured (a drag) Windows
+         * does not ask, so the shape set at the press stays for the drag. */
+        if (LOWORD(lparam) == HTCLIENT && win->tree != nullptr) {
+            POINT pt;
+            if (GetCursorPos(&pt) && ScreenToClient(hwnd, &pt)) {
+                gates_point_t p = { gates_logical(pt.x, win->dpi), gates_logical(pt.y, win->dpi) };
+                static const LPCWSTR shapes[] = { IDC_ARROW, IDC_IBEAM, IDC_SIZEWE, IDC_SIZENS };
+                gates_cursor_t c = gates_cursor_at(win->tree, p);
+                SetCursor(LoadCursorW(nullptr, shapes[(unsigned)c < 4u ? (unsigned)c : 0u]));
+                return TRUE;
+            }
+        }
+        return DefWindowProcW(hwnd, msg, wparam, lparam);
     case WM_ERASEBKGND:
         return 1; /* full client repaint via DIB; no GDI background erase */
     case WM_SIZE:

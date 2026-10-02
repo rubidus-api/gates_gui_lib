@@ -4,7 +4,7 @@ Headers: `gates/widget.h`, `gates/layout.h`, `gates/geometry.h`.
 
 ## The control matrix
 
-Every control is one node. The table is the whole finite set in 0.12.0: what the person does
+Every control is one node. The table is the whole finite set in 0.13.0: what the person does
 with it, the keys, the events the program receives, and what a screen reader hears (chapter 9).
 
 | Control | Create | The person | Keys | Events | Accessible as |
@@ -61,6 +61,11 @@ Padding and gap are set per container; `gates_layout_set_child_grow` lets a chil
 of the space left over, `gates_layout_set_child_align` places a child that does not stretch.
 Children never overlap in normal flow. A window lays its tree out before painting, in logical
 units; without a window, `gates_layout_run` does it.
+
+The pointer shows what a press will do (0.13.0): over a split's handle and a table's column edge
+it becomes the resize arrows (left-right, or up-down for stacked panes), over a text box and an
+editor's text the text beam, and it keeps that shape for the whole drag. A window does this by
+itself; `gates_cursor_at(tree, point)` answers the same question for a platform of your own.
 
 <!-- example: manual/examples/ex_03_layout.c -->
 ```c

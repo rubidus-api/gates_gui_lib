@@ -14,6 +14,7 @@
 #include <gates/draw.h>
 #include <gates/theme.h>
 #include <gates/view.h>
+#include <gates/ui.h>
 #include <gates/post.h>
 #include <gates/timer.h>
 #include <gates/access.h>
@@ -748,6 +749,9 @@ bool gates_i_view_char(gates_tree_t *tree, gates_u32 idx, gates_str_t ch);
 /* Left press on the view (true: taken, possibly starting a drag). */
 bool gates_i_view_multi(const gates_tree_t *tree, gates_u32 idx);
 gates_err_t gates_i_view_set_item_selected(gates_tree_t *tree, gates_u32 idx, gates_item_id_t id, bool selected);
+/* The pointer's shape over a view / an editor (0.13.0): column edges, text. */
+gates_cursor_t gates_i_view_cursor(gates_tree_t *tree, gates_u32 idx, gates_point_t p);
+gates_cursor_t gates_i_editor_cursor(const gates_tree_t *tree, gates_u32 idx, gates_point_t p);
 bool gates_i_view_pointer_down(gates_tree_t *tree, gates_u32 idx, gates_point_t p,
                                gates_u32 clicks, bool shift, bool ctrl);
 void gates_i_view_pointer_up(gates_tree_t *tree, gates_u32 idx, gates_point_t p);

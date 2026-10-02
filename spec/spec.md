@@ -1,4 +1,4 @@
-# gates Specification (v0.12.0)
+# gates Specification (v0.13.0)
 
 This document states what gates guarantees: the contract a program may rely on. The manual
 (`manual/`) teaches how to use gates; the public headers (`include/gates/*.h`) give every
@@ -94,7 +94,8 @@ Consequences a program can rely on:
 - **Pointer.** One pointer model for mouse, pen and touch (`gates/input.h`); events carry the
   position, buttons, click count (1, 2 or 3) and modifier keys. A press goes to the deepest hit
   node; a drag on a handle, thumb or selection owns the pointer until release or
-  `gates_input_cancel_pointer`.
+  `gates_input_cancel_pointer`. The pointer's shape tells what a press does (`gates_cursor_at`,
+  0.13.0): resize over split handles and column edges, the text beam over text, kept for a drag.
 - **Keyboard.** Keys go to the focused node, then to commands (shortcuts), then to the window.
   Tab and Shift+Tab move focus in document order within the focus scope (a modal dialog, else
   the window); Space and Enter activate; Escape cancels. The keyboard is never trapped: a

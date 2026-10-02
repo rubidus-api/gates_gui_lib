@@ -22,6 +22,21 @@
  * this unambiguous in normal flow; stack considers the active page only). */
 gates_node_t gates_hit_test(const gates_tree_t *tree, gates_point_t p);
 
+/* The pointer's shape over p (0.13.0), so a person sees what a press there
+ * does before pressing: RESIZE_EW over a table's column edge and a
+ * side-by-side split's handle, RESIZE_NS over a stacked split's handle, TEXT
+ * over a text box and an editor's text, ARROW elsewhere (also over disabled
+ * controls and what a modal dialog covers). While a drag runs, the drag's
+ * shape wherever the pointer is. The platform asks before it draws the pointer
+ * (Win32: WM_SETCURSOR); run gates_layout_run first. */
+typedef enum gates_cursor_t {
+    GATES_CURSOR_ARROW = 0,
+    GATES_CURSOR_TEXT,
+    GATES_CURSOR_RESIZE_EW,
+    GATES_CURSOR_RESIZE_NS,
+} gates_cursor_t;
+gates_cursor_t gates_cursor_at(gates_tree_t *tree, gates_point_t p);
+
 /* Routes a pointer event: updates hover/pressed, fires button on_click and
  * checkbox on_toggle on release-inside, marks paint dirty on state changes.
  * Returns the node that consumed the event (or GATES_NODE_NULL). */

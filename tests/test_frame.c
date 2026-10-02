@@ -10,6 +10,7 @@
 #include <gates/timer.h>
 #include <gates/state.h>
 #include <gates/view.h>
+#include <gates/editor.h>
 #include "gates_test.h"
 #include <proven/heap.h>
 
@@ -2097,6 +2098,118 @@ static void test_allocation_failure(void) {
     gates_tree_destroy(t);
 }
 
+/* -- the pointer's shape (0.13.0) ----------------------------------------------------------- */
+
+/* The first point on a line from `from` stepping by (dx, dy) with that shape, or {-1, -1}. */
+static gates_point_t first_shape(gates_tree_t *t, gates_point_t from, gates_i32 dx, gates_i32 dy, gates_i32 steps,
+                                 gates_cursor_t want) {
+    for (gates_i32 i = 0; i < steps; i++) {
+        gates_point_t p = { from.x + dx * i, from.y + dy * i };
+        if (gates_cursor_at(t, p) == want) return p;
+    }
+    return (gates_point_t){ -1, -1 };
+}
+
+static void test_cursors(void) {
+    gates_tree_t *t = nullptr;
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &t));
+    gates_node_t root = gates_tree_root(t), hsplit, vsplit, left, right, top, bottom, box, ed, view, l;
+    GT_ASSERT_OK(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN));
+    GT_ASSERT_OK(gates_panel_create(t, root, &hsplit));
+    GT_ASSERT_OK(gates_layout_set(t, hsplit, GATES_LAYOUT_KIND_SPLIT));
+    GT_ASSERT_OK(gates_layout_set_child_grow(t, hsplit, 1));
+    GT_ASSERT_OK(gates_panel_create(t, hsplit, &left));
+    GT_ASSERT_OK(gates_layout_set(t, left, GATES_LAYOUT_KIND_COLUMN));
+    GT_ASSERT_OK(gates_panel_create(t, hsplit, &right));
+    GT_ASSERT_OK(gates_textbox_create(t, left, GATES_STR("some text"), 10, &box));
+    GT_ASSERT_OK(gates_editor_create(t, left, &(gates_editor_desc_t){0}, &ed));
+    GT_ASSERT_OK(gates_layout_set_child_grow(t, ed, 1));
+    static const gates_column_desc_t cols[] = { { .id = 1, .label = GATES_STR("Name"), .width = 100 },
+                                                { .id = 2, .label = GATES_STR("Size"), .width = 60 } };
+    GT_ASSERT_OK(gates_view_create(t, right, &(gates_view_desc_t){ .columns = cols, .column_count = 2, .header = true },
+                                   &view));
+    GT_ASSERT_OK(gates_layout_set_child_grow(t, view, 1));
+    GT_ASSERT_OK(gates_panel_create(t, root, &vsplit));
+    GT_ASSERT_OK(gates_layout_set(t, vsplit, GATES_LAYOUT_KIND_SPLIT));
+    GT_ASSERT_OK(gates_layout_set_split(t, vsplit, GATES_SPLIT_VERTICAL, 500));
+    GT_ASSERT_OK(gates_layout_set_child_grow(t, vsplit, 1));
+    GT_ASSERT_OK(gates_panel_create(t, vsplit, &top));
+    GT_ASSERT_OK(gates_panel_create(t, vsplit, &bottom));
+    GT_ASSERT_OK(gates_label_create(t, top, GATES_STR("top"), &l));
+    GT_ASSERT_OK(gates_label_create(t, bottom, GATES_STR("bottom"), &l));
+    layout(t);
+
+    GT_ASSERT(gates_cursor_at(nullptr, (gates_point_t){ 1, 1 }) == GATES_CURSOR_ARROW);
+    GT_ASSERT(gates_cursor_at(t, (gates_point_t){ -50, -50 }) == GATES_CURSOR_ARROW);
+    /* Text: a text box and an editor's text area; a label is not. */
+    GT_ASSERT(gates_cursor_at(t, center(t, box)) == GATES_CURSOR_TEXT);
+    GT_ASSERT(gates_cursor_at(t, center(t, ed)) == GATES_CURSOR_TEXT);
+    GT_ASSERT(gates_cursor_at(t, center(t, l)) == GATES_CURSOR_ARROW);
+
+    /* A column edge: the shape is exactly where a press resizes the column. */
+    gates_rect_t vr = gates_node_layout_rect(t, view);
+    gates_point_t edge = { -1, -1 };
+    for (gates_i32 y = vr.y + 1; y < vr.y + 12 && edge.x < 0; y++) {
+        edge = first_shape(t, (gates_point_t){ vr.x, y }, 1, 0, vr.w, GATES_CURSOR_RESIZE_EW);
+    }
+    GT_ASSERT(edge.x > vr.x + 90 && edge.x < vr.x + 112); /* the first column's right edge */
+    GT_ASSERT(gates_cursor_at(t, (gates_point_t){ vr.x + 40, edge.y }) == GATES_CURSOR_ARROW); /* the title itself */
+    GT_ASSERT(gates_cursor_at(t, (gates_point_t){ edge.x, vr.y + vr.h / 2 }) == GATES_CURSOR_ARROW); /* rows below */
+    pointer(t, GATES_POINTER_DOWN, edge);
+    pointer(t, GATES_POINTER_MOVE, (gates_point_t){ edge.x + 30, edge.y + 40 });
+    GT_ASSERT(gates_cursor_at(t, (gates_point_t){ edge.x + 30, edge.y + 40 }) == GATES_CURSOR_RESIZE_EW); /* kept */
+    pointer(t, GATES_POINTER_UP, (gates_point_t){ edge.x + 30, edge.y + 40 });
+    GT_ASSERT(gates_view_column_width(t, view, 1) == 130);
+    layout(t);
+    GT_ASSERT(gates_cursor_at(t, (gates_point_t){ edge.x + 30, edge.y + 40 }) == GATES_CURSOR_ARROW); /* the drag ended */
+
+    /* Split handles: side by side -> EW, stacked -> NS; a press there moves the handle. */
+    gates_rect_t hr = gates_node_layout_rect(t, hsplit);
+    gates_point_t h = first_shape(t, (gates_point_t){ hr.x + 1, hr.y + hr.h - 3 }, 1, 0, hr.w - 2, GATES_CURSOR_RESIZE_EW);
+    GT_ASSERT(h.x > 0);
+    gates_i32 before = gates_layout_split_ratio(t, hsplit);
+    pointer(t, GATES_POINTER_DOWN, h);
+    pointer(t, GATES_POINTER_MOVE, (gates_point_t){ h.x - 40, h.y });
+    GT_ASSERT(gates_cursor_at(t, (gates_point_t){ h.x - 40, h.y + 100 }) == GATES_CURSOR_RESIZE_EW);
+    pointer(t, GATES_POINTER_UP, (gates_point_t){ h.x - 40, h.y });
+    GT_ASSERT(gates_layout_split_ratio(t, hsplit) < before);
+    layout(t);
+    gates_rect_t sr = gates_node_layout_rect(t, vsplit);
+    gates_point_t v = first_shape(t, (gates_point_t){ sr.x + sr.w / 2, sr.y + 1 }, 0, 1, sr.h - 2, GATES_CURSOR_RESIZE_NS);
+    GT_ASSERT(v.y > sr.y);
+    before = gates_layout_split_ratio(t, vsplit);
+    pointer(t, GATES_POINTER_DOWN, v);
+    pointer(t, GATES_POINTER_MOVE, (gates_point_t){ v.x, v.y + 10 });
+    GT_ASSERT(gates_cursor_at(t, (gates_point_t){ 1, 1 }) == GATES_CURSOR_RESIZE_NS);
+    pointer(t, GATES_POINTER_UP, (gates_point_t){ v.x, v.y + 10 });
+    GT_ASSERT(gates_layout_split_ratio(t, vsplit) > before);
+    layout(t);
+
+    /* Selecting text keeps the beam off the text; then the arrow again. */
+    gates_point_t bc = center(t, box);
+    pointer(t, GATES_POINTER_DOWN, bc);
+    pointer(t, GATES_POINTER_MOVE, (gates_point_t){ bc.x, sr.y + 2 });
+    GT_ASSERT(gates_cursor_at(t, (gates_point_t){ bc.x, sr.y + 2 }) == GATES_CURSOR_TEXT);
+    pointer(t, GATES_POINTER_UP, (gates_point_t){ bc.x, sr.y + 2 });
+    GT_ASSERT(gates_cursor_at(t, (gates_point_t){ bc.x, sr.y + 2 }) != GATES_CURSOR_TEXT);
+
+    /* Disabled controls show the arrow; so does what a modal dialog covers. */
+    GT_ASSERT_OK(gates_widget_set_disabled(t, box, true));
+    GT_ASSERT(gates_cursor_at(t, center(t, box)) == GATES_CURSOR_ARROW);
+    GT_ASSERT_OK(gates_widget_set_disabled(t, box, false));
+    gates_node_t dlg, content, dbox;
+    GT_ASSERT_OK(gates_dialog_open(t, &(gates_dialog_desc_t){ .title = GATES_STR("D") }, &dlg, &content));
+    GT_ASSERT_OK(gates_textbox_create(t, content, GATES_STR("in"), 6, &dbox));
+    layout(t);
+    gates_rect_t dr = gates_node_layout_rect(t, dlg), br = gates_node_layout_rect(t, box);
+    gates_point_t outside = { br.x + 2, br.y + br.h / 2 };
+    GT_ASSERT(!gates_rect_contains(dr, outside));
+    GT_ASSERT(gates_cursor_at(t, outside) == GATES_CURSOR_ARROW);
+    GT_ASSERT(gates_cursor_at(t, center(t, dbox)) == GATES_CURSOR_TEXT);
+    GT_ASSERT(gates_cursor_at(t, (gates_point_t){ dr.x + dr.w / 2, dr.y + 2 }) == GATES_CURSOR_ARROW); /* its title */
+    gates_tree_destroy(t);
+}
+
 int main(void) {
     be = gates_text_backend_builtin();
     theme = gates_theme_light();
@@ -2128,5 +2241,6 @@ int main(void) {
     test_state();
     test_state_sideways();
     test_allocation_failure();
+    test_cursors();
     return gt_report("test_frame");
 }

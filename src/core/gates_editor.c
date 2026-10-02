@@ -1466,6 +1466,14 @@ static gates_u32 offset_at(gates_tree_t *tree, gates_u32 idx, struct gates_i_edi
     return at_row_x(tree, &L, e, d, p.x - g->text.x + g->scroll_x, end);
 }
 
+gates_cursor_t gates_i_editor_cursor(const gates_tree_t *tree, gates_u32 idx, gates_point_t p) {
+    struct gates_i_editor *e = ed_at(tree, idx);
+    if (e == nullptr) return GATES_CURSOR_ARROW;
+    ed_geom g;
+    geom_now(tree, idx, e, &g);
+    return gates_rect_contains(g.text, p) ? GATES_CURSOR_TEXT : GATES_CURSOR_ARROW; /* not the gutter or bars */
+}
+
 bool gates_i_editor_press(gates_tree_t *tree, gates_u32 idx, gates_point_t p, gates_u32 clicks, bool shift) {
     struct gates_i_editor *e = ed_at(tree, idx);
     gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);

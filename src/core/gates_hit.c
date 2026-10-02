@@ -71,6 +71,32 @@ gates_node_t gates_hit_test(const gates_tree_t *tree, gates_point_t p) {
     return idx == GATES_NONE ? GATES_NODE_NULL : gates_i_handle(tree, idx);
 }
 
+gates_cursor_t gates_cursor_at(gates_tree_t *tree, gates_point_t p) {
+    if (tree == nullptr) return GATES_CURSOR_ARROW;
+    switch ((gates_drag_kind_i)tree->drag_kind) { /* a drag keeps its shape (0.13.0) */
+    case GATES_DRAG_NONE: break;
+    case GATES_DRAG_SPLIT:
+        return gates_i_slot(tree, tree->drag_node)->split_vertical ? GATES_CURSOR_RESIZE_NS : GATES_CURSOR_RESIZE_EW;
+    case GATES_DRAG_VIEW_COLUMN: return GATES_CURSOR_RESIZE_EW;
+    case GATES_DRAG_TEXT_SELECT:
+    case GATES_DRAG_EDITOR_SELECT: return GATES_CURSOR_TEXT;
+    default: return GATES_CURSOR_ARROW;
+    }
+    gates_node_t hit = gates_hit_test(tree, p);
+    if (gates_node_eq(hit, GATES_NODE_NULL)) return GATES_CURSOR_ARROW;
+    gates_u32 idx = hit.index;
+    gates_node_slot_t *s = gates_i_slot(tree, idx);
+    if (s->layout_kind == GATES_LAYOUT_SPLIT && gates_rect_contains(gates_i_split_handle(tree, idx), p)) {
+        return s->split_vertical ? GATES_CURSOR_RESIZE_NS : GATES_CURSOR_RESIZE_EW;
+    }
+    gates_widget_state_t *st = gates_i_state(tree, s->state_index);
+    if (st == nullptr || gates_i_widget_inert(tree, st)) return GATES_CURSOR_ARROW;
+    if (s->kind == GATES_NODE_VIEW) return gates_i_view_cursor(tree, idx, p);
+    if (s->kind == GATES_NODE_EDITOR) return gates_i_editor_cursor(tree, idx, p);
+    if (s->kind == GATES_NODE_TEXTBOX) return GATES_CURSOR_TEXT;
+    return GATES_CURSOR_ARROW;
+}
+
 static void set_hover(gates_tree_t *tree, gates_u32 idx) {
     if (tree->hover == idx) {
         return;
