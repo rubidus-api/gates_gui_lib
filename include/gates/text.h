@@ -47,6 +47,25 @@ static inline gates_i32 gates_font_scale(gates_font_t font, gates_i32 v) {
     return (gates_i32)(((gates_i64)v * gates_font_percent(font) * 2 + 100) / 200);
 }
 
+/* Named faces (0.12.0): a face chosen by name - "Malgun Gothic", "Arial" - for
+ * one node and what is under it (gates_node_set_font), or for a whole window
+ * by setting it on the root. gates_font_named registers a name once per process
+ * and returns its face (GATES_FONT_NAMED_FIRST and up; the same name, compared
+ * byte for byte, gives the same face); it is a face like GATES_FONT_UI, so it
+ * takes sizes and is inherited the same way. A backend draws it from
+ * gates_font_face_name; a face the system does not have is drawn in the UI face,
+ * and a backend with one face of its own (the builtin one) ignores names.
+ * Register on the UI thread, before or between frames. Names are UTF-8, 1 to
+ * GATES_FONT_NAME_MAX bytes: INVALID_ARG otherwise, OVERFLOW past
+ * GATES_FONT_NAMED_MAX names. */
+#define GATES_FONT_NAMED_FIRST 2
+#define GATES_FONT_NAMED_MAX   62u   /* faces 2 to 63 */
+#define GATES_FONT_NAME_MAX    96u
+[[nodiscard]] gates_err_t gates_font_named(gates_str_t name, gates_font_t *out_face);
+/* The name of a named face (any size of it); empty for GATES_FONT_UI,
+ * GATES_FONT_MONO and faces never registered. Valid for the process. */
+gates_str_t gates_font_face_name(gates_font_t font);
+
 typedef struct gates_text_metrics_t {
     gates_i32 advance;      /* average character width: a sizing hint (text box cols, steps) */
     gates_i32 ascent;       /* px above the baseline */

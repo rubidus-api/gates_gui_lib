@@ -1,4 +1,4 @@
-# gates Specification (v0.11.0)
+# gates Specification (v0.12.0)
 
 This document states what gates guarantees: the contract a program may rely on. The manual
 (`manual/`) teaches how to use gates; the public headers (`include/gates/*.h`) give every
@@ -148,8 +148,9 @@ node per part.
   is exactly the sum of its advances - no kerning, ligatures or shaping - so the core computes
   carets, selections and hit tests itself, identically on every backend. Rendering inside the
   assigned rect is the backend's.
-- **Fonts.** Two per node: UI (proportional, the default) and MONO (fixed pitch), inherited
-  by descendants; and a size in percent of the system's text size (50 to 400, 0.10.0),
+- **Fonts.** Per node: UI (proportional, the default), MONO (fixed pitch), or a named face
+  (`gates_font_named`, 0.12.0; drawn in the UI face where the system lacks it), inherited by
+  descendants - set on the root, the whole window's; and a size in percent of the system's text size (50 to 400, 0.10.0),
   inherited separately. A font value carries both (`gates_font_face`, `gates_font_percent`).
 - **Text box.** One line; selection, clipboard, undo (bounded: 64 entries and 16384 bytes by
   default), read-only, password (no copy, no undo, no input method, events carry no text), and a
@@ -251,8 +252,9 @@ window's placement is kept the same way (`gates_window_placement`).
 - One window per top-level surface; a window is shown when `gates_app_run` starts (or at once
   while it runs), so its first frame already shows the program's UI.
 - Rendering: the software renderer into a DIB, presented with GDI; text through GDI with the
-  system message font (UI) and Consolas (MONO), missing characters from the system's fallback
-  fonts.
+  system message font (UI; the program may name another, `ui_font` / `gates_app_set_ui_font`,
+  0.12.0), Consolas (MONO) and named faces at the UI size, missing characters from the system's
+  fallback fonts.
 - Input methods through IMM32 (composition drawn inline at the caret); the clipboard, images
   (Windows Imaging Component), native file, folder, colour and message dialogs, per-monitor DPI,
   system themes and UI Automation are provided by the backend.

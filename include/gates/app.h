@@ -33,4 +33,12 @@ void gates_app_destroy(gates_app_t *app);
 [[nodiscard]] gates_err_t gates_app_run(gates_app_t *app);
 void gates_app_quit(gates_app_t *app);
 
+/* Changes the face of GATES_FONT_UI while running (0.12.0), as ui_font does at
+ * creation - a settings screen's "font" choice; empty goes back to the
+ * platform's. Every window measures and lays out again. NOT_FOUND when the face
+ * is not installed (the platform's is used then); INVALID_ARG for a name that is
+ * not UTF-8 or too long for the platform. A named face (gates_font_named) set on
+ * a node stays as it is. */
+[[nodiscard]] gates_err_t gates_app_set_ui_font(gates_app_t *app, gates_str_t face);
+
 #endif /* GATES_APP_H */

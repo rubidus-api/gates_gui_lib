@@ -866,8 +866,9 @@ gates_err_t gates_node_set_hidden(gates_tree_t *tree, gates_node_t node, bool hi
 }
 
 gates_err_t gates_node_set_font(gates_tree_t *tree, gates_node_t node, gates_i32 font) {
-    if (tree == nullptr || !gates_i_valid(tree, node) || font < -1 || font > 1) {
-        return PROVEN_ERR_INVALID_ARG;
+    if (tree == nullptr || !gates_i_valid(tree, node) || font < -1 || font > 0xFF ||
+        (font > GATES_FONT_MONO && gates_font_face_name(font).size == 0)) {
+        return PROVEN_ERR_INVALID_ARG; /* a named face only once registered (0.12.0) */
     }
     gates_node_slot_t *s = gates_i_slot(tree, node.index);
     if (s->font != (gates_i8)font) {

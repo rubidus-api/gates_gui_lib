@@ -1,8 +1,10 @@
 /* gates_gui_lib - Win32 GDI text backend (0.2.0).
  *
- * Two faces: GATES_FONT_UI is the system message font (Segoe UI, Malgun
- * Gothic on Korean Windows - proportional), GATES_FONT_MONO a fixed-pitch face
- * (Consolas, D2Coding, Courier New). A sized font (0.10.0) is the face at a
+ * Faces: GATES_FONT_UI is the system message font (Segoe UI, Malgun
+ * Gothic on Korean Windows - proportional) or the program's ui_font,
+ * GATES_FONT_MONO a fixed-pitch face (Consolas, D2Coding, Courier New), a
+ * named face (0.12.0) that face at the UI size - the UI face when it is not
+ * installed. A sized font (0.10.0) is the face at a
  * percentage of its height, made on first use; up to GDI_FACES of them are
  * kept (then the last is remade as needed). Advances are measured per code point at
  * the logical (96 dpi) size and cached; a character the face lacks is measured
@@ -80,13 +82,32 @@ static bool face_installed(const wchar_t *name) {
     return found;
 }
 
-void gates_win32_text_set_ui_face(const wchar_t *face) {
+/* Whether each named face is installed: 0 not asked yet, 1 yes, 2 no. */
+static gates_u8 g_named_state[GATES_FONT_NAMED_MAX];
+
+/* A named face's name in UTF-16 when it is installed (false otherwise). */
+static bool named_face(gates_font_t kind, wchar_t out[LF_FACESIZE]) {
+    gates_str_t name = gates_font_face_name(kind);
+    if (name.size == 0) return false;
+    gates_u32 i = (gates_u32)(kind - GATES_FONT_NAMED_FIRST);
+    int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, (const char *)name.ptr, (int)name.size, out,
+                                LF_FACESIZE - 1);
+    if (n <= 0) return false; /* longer than a GDI face name */
+    out[n] = L'\0';
+    if (g_named_state[i] == 0) g_named_state[i] = face_installed(out) ? 1 : 2;
+    return g_named_state[i] == 1;
+}
+
+bool gates_win32_text_set_ui_face(const wchar_t *face) {
+    bool named = face != nullptr && face[0] != L'\0';
+    bool found = named && face_installed(face);
     g_ui_face[0] = L'\0';
-    if (face != nullptr && face[0] != L'\0' && face_installed(face)) {
+    if (found) {
         wcsncpy(g_ui_face, face, LF_FACESIZE - 1);
         g_ui_face[LF_FACESIZE - 1] = L'\0';
     }
     gates_win32_text_refresh();
+    return found || !named;
 }
 
 /* The system message font at 96 dpi. */
@@ -148,13 +169,17 @@ static void face_release(gdi_face_t *f) {
 }
 
 void gates_win32_text_refresh(void) {
+    memset(g_named_state, 0, sizeof g_named_state); /* fonts may have been installed */
     for (unsigned i = 0; i < GDI_FACES; i++) {
         if (g_gdi.faces[i].ready) face_release(&g_gdi.faces[i]);
     }
 }
 
 static gdi_face_t *face(gates_font_t font) {
-    gates_font_t kind = gates_font_face(font) == GATES_FONT_MONO ? GATES_FONT_MONO : GATES_FONT_UI;
+    gates_font_t kind = gates_font_face(font);
+    wchar_t named[LF_FACESIZE];
+    bool is_named = kind > GATES_FONT_MONO && named_face(kind, named);
+    if (kind > GATES_FONT_MONO && !is_named) kind = GATES_FONT_UI; /* unknown or not installed */
     gates_u32 pct = gates_font_percent(font);
     if (pct < GATES_FONT_SIZE_MIN) pct = GATES_FONT_SIZE_MIN;
     if (pct > GATES_FONT_SIZE_MAX) pct = GATES_FONT_SIZE_MAX;
@@ -170,6 +195,11 @@ static gdi_face_t *face(gates_font_t font) {
     if (f->ready || !ensure_probe()) return f;
     f->key = key;
     f->lf = kind == GATES_FONT_MONO ? mono_logfont() : ui_logfont();
+    if (is_named) { /* the named face at the UI size */
+        wcsncpy(f->lf.lfFaceName, named, LF_FACESIZE - 1);
+        f->lf.lfCharSet = DEFAULT_CHARSET;
+        f->lf.lfPitchAndFamily = DEFAULT_PITCH | FF_DONTCARE;
+    }
     if (pct != 100u) {
         LONG h = MulDiv(f->lf.lfHeight, (int)pct, 100);
         f->lf.lfHeight = h != 0 ? h : (f->lf.lfHeight < 0 ? -1 : 1);

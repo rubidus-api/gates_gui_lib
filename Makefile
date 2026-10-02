@@ -66,7 +66,8 @@ CORE_SRC := \
   src/text/gates_text_utf8.c \
   src/text/gates_text_width.c \
   src/text/gates_text_edit.c \
-  src/text/gates_text_buffer.c
+  src/text/gates_text_buffer.c \
+  src/text/gates_text_faces.c
 
 PROVEN_OBJ := $(patsubst %.c,$(OBJ)/%.o,$(PROVEN_SRC))
 CORE_OBJ   := $(patsubst %.c,$(OBJ)/%.o,$(CORE_SRC))

@@ -13,6 +13,7 @@
 #include "gates_test.h"
 #include "text_prop_backend.h"
 
+#include <stdio.h>
 #include <string.h>
 
 static const gates_text_backend_t *be = &tp_backend;
@@ -455,6 +456,96 @@ static void test_font_sizes(void) {
     gates_tree_destroy(t);
 }
 
+/* -- named faces (0.12.0) ------------------------------------------------------------------ */
+
+static int text_cmds(gates_tree_t *t, gates_font_t font) {
+    gates_draw_list_t dl;
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    GT_ASSERT_OK(gates_paint_tree(t, &dl, gates_theme_light(), be));
+    int n = 0;
+    for (gates_u32 i = 0; i < gates_draw_list_len(&dl); i++) {
+        const gates_draw_cmd_t *cmd = gates_draw_list_at(&dl, i);
+        if (cmd->kind == GATES_DRAW_TEXT && cmd->font == font) n++;
+    }
+    gates_draw_list_deinit(&dl);
+    return n;
+}
+
+static void test_named_faces(void) {
+    gates_font_t gothic = 0, again = 0, serif = 0, x = 0;
+    GT_ASSERT(gates_font_face_name(GATES_FONT_UI).size == 0 && gates_font_face_name(GATES_FONT_MONO).size == 0);
+    GT_ASSERT(gates_font_face_name(GATES_FONT_NAMED_FIRST).size == 0); /* none yet */
+    GT_ASSERT_OK(gates_font_named(GATES_STR("\xeb\xa7\x91\xec\x9d\x80 \xea\xb3\xa0\xeb\x94\x95"), &gothic));
+    GT_ASSERT(gothic == GATES_FONT_NAMED_FIRST);
+    GT_ASSERT_OK(gates_font_named(GATES_STR("\xeb\xa7\x91\xec\x9d\x80 \xea\xb3\xa0\xeb\x94\x95"), &again));
+    GT_ASSERT(again == gothic); /* one face per name */
+    GT_ASSERT_OK(gates_font_named(GATES_STR("Georgia"), &serif));
+    GT_ASSERT(serif == gothic + 1);
+    gates_str_t nm = gates_font_face_name(gates_font_sized(serif, 150)); /* any size of it */
+    GT_ASSERT(nm.size == 7 && memcmp(nm.ptr, "Georgia", 7) == 0);
+    GT_ASSERT(gates_font_face(gates_font_sized(serif, 150)) == serif && gates_font_percent(gates_font_sized(serif, 150)) == 150);
+    /* names that are not names */
+    GT_ASSERT(gates_font_named(GATES_STR(""), &x) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_font_named(GATES_STR("Bad\xff"), &x) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_font_named((gates_str_t){ .ptr = (const gates_u8 *)"a\0b", .size = 3 }, &x) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_font_named(GATES_STR("Georgia"), nullptr) == PROVEN_ERR_INVALID_ARG);
+    static char longest[GATES_FONT_NAME_MAX + 1];
+    memset(longest, 'n', sizeof longest);
+    GT_ASSERT(gates_font_named((gates_str_t){ .ptr = (const gates_u8 *)longest, .size = GATES_FONT_NAME_MAX + 1 }, &x) ==
+              PROVEN_ERR_INVALID_ARG);
+
+    /* Per node, inherited, and at a size; the whole window from the root. */
+    gates_tree_t *t = nullptr;
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &t));
+    gates_node_t root = gates_tree_root(t), panel, a, b, c;
+    GT_ASSERT_OK(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN));
+    GT_ASSERT_OK(gates_label_create(t, root, GATES_STR("mill"), &a));
+    GT_ASSERT_OK(gates_panel_create(t, root, &panel));
+    GT_ASSERT_OK(gates_layout_set(t, panel, GATES_LAYOUT_KIND_ROW));
+    GT_ASSERT_OK(gates_label_create(t, panel, GATES_STR("mill"), &b));
+    GT_ASSERT_OK(gates_label_create(t, panel, GATES_STR("mill"), &c));
+    GT_ASSERT(gates_node_set_font(t, a, GATES_FONT_NAMED_FIRST + 40) == PROVEN_ERR_INVALID_ARG); /* never registered */
+    GT_ASSERT(gates_node_set_font(t, a, gates_font_sized(serif, 150)) == PROVEN_ERR_INVALID_ARG); /* sizes are separate */
+    GT_ASSERT_OK(gates_node_set_font(t, panel, serif));
+    GT_ASSERT_OK(gates_node_set_font(t, c, GATES_FONT_MONO));
+    layout(t, 300);
+    GT_ASSERT(gates_node_font(t, b) == serif);
+    GT_ASSERT(gates_node_preferred_size(t, a).w == 21);  /* UI: 7+3+3+3... as before */
+    GT_ASSERT(gates_node_preferred_size(t, b).w == 40);  /* the named face measured: 4 x 10 */
+    GT_ASSERT(gates_node_preferred_size(t, c).w == 32);  /* its own MONO wins */
+    GT_ASSERT(text_cmds(t, serif) == 1);
+    GT_ASSERT_OK(gates_node_set_font_size(t, panel, GATES_FONT_SIZE_HEADING));
+    layout(t, 300);
+    GT_ASSERT(gates_node_font(t, b) == gates_font_sized(serif, 150));
+    GT_ASSERT(gates_node_preferred_size(t, b).w == 60);
+    GT_ASSERT(text_cmds(t, gates_font_sized(serif, 150)) == 1);
+    GT_ASSERT_OK(gates_node_set_font_size(t, panel, 0));
+    /* one face for everything: set on the root */
+    GT_ASSERT_OK(gates_node_set_font(t, root, gothic));
+    GT_ASSERT_OK(gates_node_set_font(t, panel, GATES_FONT_INHERIT));
+    layout(t, 300);
+    GT_ASSERT(gates_node_font(t, a) == gothic && gates_node_font(t, b) == gothic && gates_node_font(t, c) == GATES_FONT_MONO);
+    GT_ASSERT(gates_node_preferred_size(t, a).w == 40);
+    GT_ASSERT(text_cmds(t, gothic) == 2);
+    gates_tree_destroy(t);
+
+    /* The builtin backend has one face: a named one draws as the UI face. */
+    const gates_text_backend_t *bi = gates_text_backend_builtin();
+    GT_ASSERT(bi->glyph_advance(bi->ctx, serif, 'm') == bi->glyph_advance(bi->ctx, GATES_FONT_UI, 'm'));
+
+    /* The list is bounded. */
+    gates_err_t err = GATES_OK;
+    char name[16];
+    for (unsigned i = 0; i < GATES_FONT_NAMED_MAX + 1 && gates_is_ok(err); i++) {
+        int n = snprintf(name, sizeof name, "Face %u", i);
+        err = gates_font_named((gates_str_t){ .ptr = (const gates_u8 *)name, .size = (gates_usize_t)n }, &x);
+        if (gates_is_ok(err)) GT_ASSERT(x <= GATES_FONT_NAMED_FIRST + (gates_font_t)GATES_FONT_NAMED_MAX - 1);
+    }
+    GT_ASSERT(err == PROVEN_ERR_OVERFLOW);
+    GT_ASSERT_OK(gates_font_named(GATES_STR("Georgia"), &x)); /* known names still resolve */
+    GT_ASSERT(x == serif);
+}
+
 int main(void) {
     test_contract();
     test_offset_at_x();
@@ -464,5 +555,6 @@ int main(void) {
     test_builtin_sized_draw();
     test_font_sizes();
     test_sized_editor_and_form();
+    test_named_faces();
     return gt_report("test_text_prop");
 }

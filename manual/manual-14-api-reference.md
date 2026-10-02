@@ -290,6 +290,17 @@ gates_app_quit() or when the last window closes.
 void gates_app_quit(gates_app_t *app);
 ```
 
+Changes the face of GATES_FONT_UI while running (0.12.0), as ui_font does at
+creation - a settings screen's "font" choice; empty goes back to the
+platform's. Every window measures and lays out again. NOT_FOUND when the face
+is not installed (the platform's is used then); INVALID_ARG for a name that is
+not UTF-8 or too long for the platform. A named face (gates_font_named) set on
+a node stays as it is.
+
+```c
+[[nodiscard]] gates_err_t gates_app_set_ui_font(gates_app_t *app, gates_str_t face);
+```
+
 ## gates/clipboard.h
 
 Clipboard boundary.
@@ -1997,6 +2008,29 @@ A length at the font's size: round-half-up(v \* percent / 100).
 static inline gates_i32 gates_font_scale(gates_font_t font, gates_i32 v);
 ```
 
+Named faces (0.12.0): a face chosen by name - "Malgun Gothic", "Arial" - for
+one node and what is under it (gates_node_set_font), or for a whole window
+by setting it on the root. gates_font_named registers a name once per process
+and returns its face (GATES_FONT_NAMED_FIRST and up; the same name, compared
+byte for byte, gives the same face); it is a face like GATES_FONT_UI, so it
+takes sizes and is inherited the same way. A backend draws it from
+gates_font_face_name; a face the system does not have is drawn in the UI face,
+and a backend with one face of its own (the builtin one) ignores names.
+Register on the UI thread, before or between frames. Names are UTF-8, 1 to
+GATES_FONT_NAME_MAX bytes: INVALID_ARG otherwise, OVERFLOW past
+GATES_FONT_NAMED_MAX names.
+
+```c
+[[nodiscard]] gates_err_t gates_font_named(gates_str_t name, gates_font_t *out_face);
+```
+
+The name of a named face (any size of it); empty for GATES_FONT_UI,
+GATES_FONT_MONO and faces never registered. Valid for the process.
+
+```c
+gates_str_t gates_font_face_name(gates_font_t font);
+```
+
 ### widths (src/text/gates_text_width.c, 0.2.0)
 
 The width of a single-line string: the sum of its code points' advances
@@ -2462,12 +2496,15 @@ A hidden page of a stack still counts as a page. The root and overlays
 bool gates_node_hidden(const gates_tree_t *tree, gates_node_t node);
 ```
 
-Font (0.2.0): a gates_font_t from gates/text.h - GATES_FONT_UI (the
-platform's proportional UI face, the default), GATES_FONT_MONO (fixed
-pitch), or GATES_FONT_INHERIT (-1, take the parent's). Like CSS
-font-family, a node's font applies to everything under it that does not
-choose its own. Dialogs and menus are not under the root: they start from
-GATES_FONT_UI unless set on them. INVALID_ARG for other values.
+Font (0.2.0): a face from gates/text.h - GATES_FONT_UI (the platform's
+proportional UI face, the default), GATES_FONT_MONO (fixed pitch), a named
+face from gates_font_named (0.12.0), or GATES_FONT_INHERIT (-1, take the
+parent's). Like CSS font-family, a node's font applies to everything under
+it that does not choose its own: set on the root, a face is the whole
+window's. Dialogs and menus are not under the root: they start from
+GATES_FONT_UI unless set on them (the program's UI face for everything:
+gates_app_desc_t.ui_font). Sizes are separate (gates_node_set_font_size).
+INVALID_ARG for other values, a sized font, and names never registered.
 
 ```c
 [[nodiscard]] gates_err_t gates_node_set_font(gates_tree_t *tree, gates_node_t node, gates_i32 font);

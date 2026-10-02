@@ -57,12 +57,31 @@ Text uses one of two fonts (`gates_font_t` in `gates/text.h`):
 |---|---|---|
 | `GATES_FONT_UI` (the default) | the platform's UI face, proportional | the system message font: Segoe UI, Malgun Gothic on Korean Windows |
 | `GATES_FONT_MONO` | fixed pitch, for code, logs and aligned columns | Consolas |
+| a named face (0.12.0) | a face you name, from `gates_font_named` | that face at the UI size; the UI face when it is not installed |
 
 `gates_node_set_font` chooses the font of a node and, like CSS `font-family`, of everything
 under it that does not choose its own; `GATES_FONT_INHERIT` goes back to the parent's, and
 `gates_node_font` reads the effective one. Set it on a panel to switch a whole area, or on one
 view for a log. Dialogs and menus are not under the window's root: they start from the UI font
 unless you set one on them.
+
+Faces by name (0.12.0) work two ways. For **one face everywhere**, give the application its UI
+face: `gates_app_desc_t.ui_font` at creation, or `gates_app_set_ui_font(app, name)` while it runs
+(a settings screen's font choice; it answers `PROVEN_ERR_NOT_FOUND` when the face is not
+installed, and an empty name goes back to the system's). Everything that uses `GATES_FONT_UI` -
+dialogs and menus too - takes it, at the system's UI size. For **a face per element**, register
+the name once with `gates_font_named(name, &face)` and set that face like `GATES_FONT_MONO`: on one
+node, on a panel for an area, or on the root for the whole window. The same name always gives the
+same face; up to `GATES_FONT_NAMED_MAX` (62) names. Names are the system's family names, in English
+or in the system's language ("Malgun Gothic" or its Korean name both work on Windows).
+
+```c
+gates_app_desc_t desc = { .ui_font = GATES_STR("Malgun Gothic") };  /* one face for the program */
+gates_font_t serif;
+if (gates_is_ok(gates_font_named(GATES_STR("Georgia"), &serif))) {
+    (void)gates_node_set_font(tree, quote, serif);                  /* one element */
+}
+```
 
 Sizes (0.10.0) are a percentage of the system's text size, so they still follow the
 person's Windows "Text size" setting. `gates_node_set_font_size(tree, node, percent)` sets one
@@ -88,6 +107,7 @@ which reports per font a line height, an average width (a sizing hint: a text bo
 and the advance of every character; a string's width is exactly the sum of its advances, and
 the backend draws each character at that offset. So layout, drawing, the caret and hit testing
 agree on every backend and at every scale. The builtin backend is fixed-pitch for both fonts,
-which keeps tests deterministic (a size scales its 8 x 16 cell). A backend of your own reads the
-face with `gates_font_face(font)` and scales by `gates_font_percent(font)`. An application can draw its own things in the window's paint
+which keeps tests deterministic (a size scales its 8 x 16 cell; named faces draw as the UI one). A
+backend of your own reads the face with `gates_font_face(font)`, a named face's name with
+`gates_font_face_name(font)`, and scales by `gates_font_percent(font)`. An application can draw its own things in the window's paint
 callback; it never reads widget state there.

@@ -99,6 +99,18 @@ gates_err_t gates_app_sender(gates_app_t *app, gates_sender_t **out_sender) {
     return GATES_OK;
 }
 
+/* A UTF-8 face name in UTF-16 (empty stays empty); false when it does not fit. */
+static bool face_name(gates_str_t name, wchar_t out[LF_FACESIZE]) {
+    out[0] = L'\0';
+    if (name.size == 0) return true;
+    if (name.ptr == nullptr || name.size >= 4 * LF_FACESIZE) return false;
+    int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, (const char *)name.ptr, (int)name.size, out,
+                                LF_FACESIZE - 1);
+    if (n <= 0) return false;
+    out[n] = L'\0';
+    return true;
+}
+
 gates_err_t gates_app_create(const gates_app_desc_t *desc, gates_app_t **out_app) {
     if (out_app == nullptr) {
         return PROVEN_ERR_INVALID_ARG;
@@ -124,12 +136,8 @@ gates_err_t gates_app_create(const gates_app_desc_t *desc, gates_app_t **out_app
 
     /* The program's UI face (0.12.0); empty keeps the system message font. */
     wchar_t face[LF_FACESIZE] = L"";
-    if (desc != nullptr && desc->ui_font.size > 0 && desc->ui_font.size < 4 * LF_FACESIZE) {
-        int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, (const char *)desc->ui_font.ptr,
-                                    (int)desc->ui_font.size, face, LF_FACESIZE - 1);
-        face[n > 0 ? n : 0] = L'\0';
-    }
-    gates_win32_text_set_ui_face(face);
+    if (desc != nullptr) (void)face_name(desc->ui_font, face);
+    (void)gates_win32_text_set_ui_face(face);
 
     /* Per-monitor DPI v2: process-wide and one-shot, so before any
      * window exists. Older Windows: system-aware as before. */
@@ -244,6 +252,17 @@ gates_err_t gates_app_run(gates_app_t *app) {
 void gates_app_quit(gates_app_t *app) {
     (void)app;
     PostQuitMessage(0);
+}
+
+gates_err_t gates_app_set_ui_font(gates_app_t *app, gates_str_t face) {
+    wchar_t w[LF_FACESIZE];
+    if (app == nullptr || !face_name(face, w)) return PROVEN_ERR_INVALID_ARG;
+    bool found = gates_win32_text_set_ui_face(w);
+    for (gates_window_t *win = app->windows; win != nullptr; win = win->next_window) {
+        win->last_layout_size = (gates_size_t){ 0, 0 }; /* as for a system font change */
+        if (win->hwnd != nullptr) InvalidateRect(win->hwnd, nullptr, FALSE);
+    }
+    return found ? GATES_OK : PROVEN_ERR_NOT_FOUND;
 }
 
 const wchar_t *gates_win32_class_name(void) {

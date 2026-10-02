@@ -54,12 +54,31 @@ int main(void) {
 |---|---|---|
 | `GATES_FONT_UI`(기본) | 플랫폼의 UI 글꼴, 비례폭 | 시스템 메시지 글꼴: Segoe UI, 한국어 Windows 에서는 맑은 고딕 |
 | `GATES_FONT_MONO` | 고정폭. 코드, 로그, 열을 맞춰야 하는 글 | Consolas |
+| 이름 붙은 글꼴(0.12.0) | `gates_font_named` 로 이름을 댄 글꼴 | 그 글꼴을 UI 크기로. 설치되어 있지 않으면 UI 글꼴 |
 
 `gates_node_set_font` 는 노드의 글꼴을 정하고, CSS 의 `font-family` 처럼 그 아래에서 제 글꼴을
 정하지 않은 모든 것에도 적용된다. `GATES_FONT_INHERIT` 는 부모의 것으로 돌아가고,
 `gates_node_font` 는 실제로 쓰이는 글꼴을 읽는다. 패널에 정하면 한 구역 전체가 바뀌고, 뷰 하나에
 정하면 로그 하나가 바뀐다. 대화상자와 메뉴는 창의 루트 아래에 있지 않으므로, 따로 정하지 않으면
 UI 글꼴에서 시작한다.
+
+이름으로 글꼴을 정하는 길(0.12.0)은 둘이다. **전체를 한 글꼴로** 하려면 응용의 UI 글꼴을 정한다.
+만들 때는 `gates_app_desc_t.ui_font`, 실행 중에는 `gates_app_set_ui_font(app, name)` 이다(설정 화면의
+글꼴 고르기. 설치되지 않은 글꼴이면 `PROVEN_ERR_NOT_FOUND` 를 돌려주고, 빈 이름은 시스템 글꼴로
+돌아간다). `GATES_FONT_UI` 를 쓰는 모든 것이, 대화상자와 메뉴까지, 그 글꼴을 시스템 UI 크기로 쓴다.
+**요소마다 글꼴을** 정하려면 `gates_font_named(name, &face)` 로 이름을 한 번 등록하고, 그 face 를
+`GATES_FONT_MONO` 처럼 정한다. 노드 하나에, 패널에 정하면 한 구역에, 루트에 정하면 창 전체에 적용된다.
+같은 이름은 늘 같은 face 를 준다. 이름은 `GATES_FONT_NAMED_MAX`(62)개까지다. 이름은 시스템의 글꼴
+패밀리 이름이고, 영어 이름도 시스템 언어 이름도 된다(Windows 에서 "Malgun Gothic" 과 "맑은 고딕" 이
+둘 다 된다).
+
+```c
+gates_app_desc_t desc = { .ui_font = GATES_STR("Malgun Gothic") };  /* one face for the program */
+gates_font_t serif;
+if (gates_is_ok(gates_font_named(GATES_STR("Georgia"), &serif))) {
+    (void)gates_node_set_font(tree, quote, serif);                  /* one element */
+}
+```
 
 크기(0.10.0)는 시스템 글자 크기의 백분율이라 사람이 고른 Windows "텍스트 크기"를 그대로 따른다.
 `gates_node_set_font_size(tree, node, percent)` 는 `GATES_FONT_SIZE_MIN`(50)부터 `GATES_FONT_SIZE_MAX`(400)
@@ -81,6 +100,6 @@ UI 글꼴에서 시작한다.
 픽셀로 바꾼다. 글은 글자 백엔드(`gates/text.h`)를 거친다. 백엔드는 글꼴마다 줄 높이, 평균 글자 폭
 (크기 가늠용: 텍스트 상자의 `cols`), 글자마다의 폭을 알린다. 글줄의 폭은 글자 폭의 합과 정확히
 같고, 백엔드는 글자를 그 자리에 그린다. 그래서 어느 백엔드에서든, 어느 배율에서든 배치, 그리기,
-캐럿, 누른 자리가 서로 맞는다. 내장 백엔드는 두 글꼴 모두 고정폭이어서 시험이 결정적으로 돈다(크기는 8 x 16 칸을 늘인다). 직접 만든 백엔드는
-`gates_font_face(font)` 로 글꼴을 읽고 `gates_font_percent(font)` 만큼 키운다.
+캐럿, 누른 자리가 서로 맞는다. 내장 백엔드는 모든 글꼴이 고정폭이어서 시험이 결정적으로 돈다(크기는 8 x 16 칸을 늘이고, 이름 붙은 글꼴은 UI 글꼴로 그린다). 직접 만든 백엔드는
+`gates_font_face(font)` 로 글꼴을, `gates_font_face_name(font)` 로 이름 붙은 글꼴의 이름을 읽고 `gates_font_percent(font)` 만큼 키운다.
 응용은 창의 그리기 콜백에서 제 것을 더 그릴 수 있다. 거기서 위젯 상태를 읽지는 않는다.

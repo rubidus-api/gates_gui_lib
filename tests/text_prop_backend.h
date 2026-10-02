@@ -1,7 +1,8 @@
 /* A deterministic proportional text backend for host tests (0.2.0).
  * GATES_FONT_UI: synthetic proportional widths - narrow letters 3, 'm'/'w' 12,
  * space 4, other ASCII 7, wide (Hangul, CJK, fullwidth) 16, combining marks 0.
- * GATES_FONT_MONO: the cell rule, 8 per cell. A sized font (0.10.0) scales
+ * GATES_FONT_MONO: the cell rule, 8 per cell. A named face (0.12.0): 10 per code
+ * point, so tests see which face measured. A sized font (0.10.0) scales
  * every advance and the line. Draws nothing. */
 #ifndef GATES_TEXT_PROP_BACKEND_H
 #define GATES_TEXT_PROP_BACKEND_H
@@ -10,6 +11,7 @@
 
 static gates_i32 tp_advance_face(gates_font_t font, gates_u32 cp) {
     if (font == GATES_FONT_MONO) return (gates_i32)gates_text_cell_width(cp) * 8;
+    if (gates_font_face_name(font).size > 0) return 10;
     if (cp >= 0x300 && cp <= 0x36F) return 0;
     if (gates_text_cell_width(cp) == 2) return 16;
     switch (cp) {
