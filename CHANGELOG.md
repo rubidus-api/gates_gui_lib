@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project follows Keep a Changelog.
 
+## [Unreleased]
+
+### Added
+
+- `gates_app_desc_t.ui_font`: the face of `GATES_FONT_UI` chosen by the program (UTF-8, such as
+  "Malgun Gothic"), at the platform's UI size. Empty keeps the system message font; a face that is
+  not installed falls back to it. Requested by mulpoom_doumi.
+
 ## [0.11.0] - 2026-10-02
 
 A built-in CP949/EUC-KR converter, conversion without allocation, UTF-8 command lines and console

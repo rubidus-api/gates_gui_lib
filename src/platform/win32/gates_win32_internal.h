@@ -163,6 +163,8 @@ void gates_win32_rescale(gates_window_t *win);
 /* The system's UI font changed (0.10.0): drop every made face; the next
  * measure makes them again from the current settings. */
 void gates_win32_text_refresh(void);
+/* The GATES_FONT_UI face (0.12.0): null or empty = the system message font. Drops cached faces. */
+void gates_win32_text_set_ui_face(const wchar_t *face);
 /* gates_win32_perf.c (0.3.0): GATES_PERF=<file> field measurements. */
 bool gates_win32_perf_on(void);
 gates_u64 gates_win32_perf_now_us(void);

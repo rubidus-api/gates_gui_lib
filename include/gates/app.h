@@ -16,6 +16,11 @@ typedef struct gates_app_desc_t {
     /* Posting queue limits (gates/post.h); 0 -> 1024 messages, 1 MiB. */
     gates_u32 post_max_messages;
     gates_usize_t post_max_bytes;
+    /* The face of GATES_FONT_UI (0.12.0), UTF-8, e.g. "Malgun Gothic"; copied. Empty: the
+     * platform's UI font (Win32: the system message font). The size stays the platform's;
+     * a face that is not installed falls back to the platform's. GATES_FONT_MONO is not
+     * affected. */
+    gates_str_t ui_font;
 } gates_app_desc_t;
 
 /* The application: one per process, made and used on the UI thread. */

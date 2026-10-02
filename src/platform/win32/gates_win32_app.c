@@ -122,6 +122,15 @@ gates_err_t gates_app_create(const gates_app_desc_t *desc, gates_app_t **out_app
     app->alloc = alloc;
     app->hinstance = GetModuleHandleW(nullptr);
 
+    /* The program's UI face (0.12.0); empty keeps the system message font. */
+    wchar_t face[LF_FACESIZE] = L"";
+    if (desc != nullptr && desc->ui_font.size > 0 && desc->ui_font.size < 4 * LF_FACESIZE) {
+        int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, (const char *)desc->ui_font.ptr,
+                                    (int)desc->ui_font.size, face, LF_FACESIZE - 1);
+        face[n > 0 ? n : 0] = L'\0';
+    }
+    gates_win32_text_set_ui_face(face);
+
     /* Per-monitor DPI v2: process-wide and one-shot, so before any
      * window exists. Older Windows: system-aware as before. */
     typedef BOOL (WINAPI *set_ctx_fn)(HANDLE);

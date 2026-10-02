@@ -59,6 +59,36 @@ static gdi_text_t g_gdi;
 
 typedef BOOL(WINAPI *spi_for_dpi_fn)(UINT, UINT, PVOID, UINT, UINT);
 
+/* The program's own UI face (gates_app_desc_t.ui_font), or empty. */
+static wchar_t g_ui_face[LF_FACESIZE];
+
+static int CALLBACK face_found(const LOGFONTW *lf, const TEXTMETRICW *tm, DWORD type, LPARAM found) {
+    (void)lf; (void)tm; (void)type;
+    *(bool *)found = true;
+    return 0;
+}
+
+/* Whether a face of that name is installed. */
+static bool face_installed(const wchar_t *name) {
+    LOGFONTW q = { .lfCharSet = DEFAULT_CHARSET };
+    wcsncpy(q.lfFaceName, name, LF_FACESIZE - 1);
+    bool found = false;
+    HDC dc = GetDC(nullptr);
+    if (dc == nullptr) return false;
+    EnumFontFamiliesExW(dc, &q, face_found, (LPARAM)&found, 0);
+    ReleaseDC(nullptr, dc);
+    return found;
+}
+
+void gates_win32_text_set_ui_face(const wchar_t *face) {
+    g_ui_face[0] = L'\0';
+    if (face != nullptr && face[0] != L'\0' && face_installed(face)) {
+        wcsncpy(g_ui_face, face, LF_FACESIZE - 1);
+        g_ui_face[LF_FACESIZE - 1] = L'\0';
+    }
+    gates_win32_text_refresh();
+}
+
 /* The system message font at 96 dpi. */
 static LOGFONTW ui_logfont(void) {
     NONCLIENTMETRICSW ncm = { .cbSize = sizeof ncm };
@@ -74,6 +104,11 @@ static LOGFONTW ui_logfont(void) {
     }
     LOGFONTW lf = ok ? ncm.lfMessageFont : (LOGFONTW){ .lfHeight = -12, .lfFaceName = L"Segoe UI" };
     if (lf.lfHeight == 0) lf.lfHeight = -12;
+    if (g_ui_face[0] != L'\0') { /* the program's face at the system's size */
+        wcsncpy(lf.lfFaceName, g_ui_face, LF_FACESIZE - 1);
+        lf.lfCharSet = DEFAULT_CHARSET;
+        lf.lfPitchAndFamily = DEFAULT_PITCH | FF_DONTCARE;
+    }
     lf.lfQuality = CLEARTYPE_QUALITY;
     return lf;
 }
