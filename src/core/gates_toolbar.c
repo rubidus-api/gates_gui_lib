@@ -251,6 +251,11 @@ gates_err_t gates_i_toolbar_paint(const gates_tree_t *tree, gates_u32 idx, gates
     const gates_widget_state_t *st = state_at(tree, idx);
     gates_rect_t r = gates_i_slot(tree, idx)->layout_rect;
     gates_err_t err = gates_draw_rect(dl, r, gates_theme_color(theme, GATES_COLOR_PANEL_BG));
+    /* A line under the band (0.14.0): a bar of commands, not another row of tabs. */
+    if (gates_is_ok(err) && r.h > 0) {
+        err = gates_draw_rect(dl, (gates_rect_t){ r.x, r.y + r.h - 1, r.w, 1 },
+                              gates_theme_color(theme, GATES_COLOR_CONTROL_BORDER));
+    }
     if (st == nullptr || st->tbar == nullptr || !gates_is_ok(err)) {
         return err;
     }
@@ -265,6 +270,7 @@ gates_err_t gates_i_toolbar_paint(const gates_tree_t *tree, gates_u32 idx, gates
         if (!more && k >= shown) continue;
         gates_rect_t er = more ? gates_i_toolbar_more_rect(tree, idx) : gates_i_toolbar_entry_rect(tree, idx, k);
         if (gates_rect_is_empty(er)) continue;
+        er.h -= 1; /* above the band's line */
         if (!more && tb->ids[k] == 0) {
             err = gates_draw_rect(dl, (gates_rect_t){ er.x + TB_SEP_SPACE, er.y + TB_PAD_Y, 1, er.h - 2 * TB_PAD_Y },
                                   gates_theme_color(theme, GATES_COLOR_CONTROL_BORDER));
@@ -272,14 +278,17 @@ gates_err_t gates_i_toolbar_paint(const gates_tree_t *tree, gates_u32 idx, gates
         }
         const gates_i_command_t *c = more ? nullptr : gates_i_toolbar_command(tree, idx, k);
         bool enabled = more || (c != nullptr && c->enabled);
-        bool down = (tree->pressed == idx && tb->press == (gates_i32)k) || (c != nullptr && c->checked);
+        bool checked = c != nullptr && c->checked;
+        bool down = (tree->pressed == idx && tb->press == (gates_i32)k) || checked;
         bool hot = tb->hover == (gates_i32)k && enabled;
         if (down || hot) {
             err = gates_draw_rect(dl, er, gates_theme_color(theme, down ? GATES_COLOR_CONTROL_PRESSED_BG
                                                                          : GATES_COLOR_CONTROL_HOVER_BG));
         }
         if (gates_is_ok(err) && (down || hot)) {
-            err = gates_draw_border(dl, er, 1, gates_theme_color(theme, GATES_COLOR_CONTROL_BORDER));
+            /* A button that is on has the accent border (0.14.0), unlike a tab's box. */
+            err = gates_draw_border(dl, er, 1, gates_theme_color(theme, checked ? GATES_COLOR_SELECTION_BG
+                                                                                : GATES_COLOR_CONTROL_BORDER));
         }
         gates_str_t label = more ? MORE : c != nullptr ? (gates_str_t){ .ptr = c->label, .size = c->label_len }
                                                        : (gates_str_t){0};

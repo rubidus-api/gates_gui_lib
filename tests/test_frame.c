@@ -2098,6 +2098,98 @@ static void test_allocation_failure(void) {
     gates_tree_destroy(t);
 }
 
+/* -- toolbar and tabs look apart (0.14.0) ----------------------------------------------------- */
+
+static bool same_color(gates_color_t a, gates_color_t b) { return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a; }
+
+static void paint_into(gates_tree_t *t, gates_draw_list_t *dl) {
+    GT_ASSERT_OK(gates_draw_list_init(dl, (gates_allocator_t){0}, 0));
+    GT_ASSERT_OK(gates_paint_tree(t, dl, theme, be));
+}
+
+/* Accent rects 3 tall inside `in`; *x gets the last one's x. */
+static int accent_bars(const gates_draw_list_t *dl, gates_rect_t in, gates_i32 *x) {
+    int n = 0;
+    for (gates_u32 i = 0; i < gates_draw_list_len(dl); i++) {
+        const gates_draw_cmd_t *c = gates_draw_list_at(dl, i);
+        if (c->kind == GATES_DRAW_RECT && c->rect.h == 3 && gates_rect_contains(in, (gates_point_t){ c->rect.x, c->rect.y }) &&
+            same_color(c->color, gates_theme_color(theme, GATES_COLOR_SELECTION_BG))) {
+            n++;
+            *x = c->rect.x;
+        }
+    }
+    return n;
+}
+
+static void test_toolbar_and_tabs_apart(void) {
+    tapp_t a;
+    make_tapp(&a, VW);
+    gates_rect_t bar = gates_node_layout_rect(a.t, a.bar);
+    gates_draw_list_t dl;
+    paint_into(a.t, &dl);
+    bool line = false, accent_on_bold = false, box_over_line = false;
+    gates_rect_t bold = tb_rect(&a, 4);
+    for (gates_u32 i = 0; i < gates_draw_list_len(&dl); i++) {
+        const gates_draw_cmd_t *c = gates_draw_list_at(&dl, i);
+        if (c->kind == GATES_DRAW_RECT && c->rect.x == bar.x && c->rect.y == bar.y + bar.h - 1 && c->rect.w == bar.w &&
+            c->rect.h == 1 && same_color(c->color, gates_theme_color(theme, GATES_COLOR_CONTROL_BORDER))) {
+            line = true; /* the band's line */
+        }
+        if (c->kind == GATES_DRAW_BORDER && c->rect.x == bold.x && c->rect.y == bold.y &&
+            same_color(c->color, gates_theme_color(theme, GATES_COLOR_SELECTION_BG))) {
+            accent_on_bold = true; /* a button that is on: the accent border */
+        }
+        if ((c->kind == GATES_DRAW_BORDER || (c->kind == GATES_DRAW_RECT && c->rect.h > 1)) &&
+            gates_rect_contains(bar, (gates_point_t){ c->rect.x, c->rect.y }) && c->rect.y + c->rect.h > bar.y + bar.h - 1 &&
+            !(c->rect.x == bar.x && c->rect.w == bar.w)) {
+            box_over_line = true;
+        }
+    }
+    GT_ASSERT(line && accent_on_bold && !box_over_line);
+    gates_draw_list_deinit(&dl);
+    /* Hover on a button that is not on: the plain border. */
+    pointer(a.t, GATES_POINTER_MOVE, mid(tb_rect(&a, 0)));
+    paint_into(a.t, &dl);
+    gates_rect_t cut = tb_rect(&a, 0);
+    bool plain = false;
+    for (gates_u32 i = 0; i < gates_draw_list_len(&dl); i++) {
+        const gates_draw_cmd_t *c = gates_draw_list_at(&dl, i);
+        if (c->kind == GATES_DRAW_BORDER && c->rect.x == cut.x && c->rect.y == cut.y && c->rect.h == cut.h - 1)
+            plain = same_color(c->color, gates_theme_color(theme, GATES_COLOR_CONTROL_BORDER));
+    }
+    GT_ASSERT(plain);
+    gates_i32 x = 0;
+    GT_ASSERT(accent_bars(&dl, bar, &x) == 0); /* no tab accent in a toolbar */
+    gates_draw_list_deinit(&dl);
+    gates_tree_destroy(a.t);
+
+    /* The selected tab, and only it, carries the accent along its top. */
+    tabs_app_t b;
+    make_tabs(&b);
+    gates_rect_t strip = gates_node_layout_rect(b.t, b.strip);
+    paint_into(b.t, &dl);
+    gates_i32 x0 = -1;
+    GT_ASSERT(accent_bars(&dl, strip, &x0) == 1 && x0 == strip.x);
+    /* The page is framed on its other three sides: one sheet with its tab. */
+    gates_rect_t page = gates_node_layout_rect(b.t, gates_node_parent(b.t, b.page[0]));
+    int sides = 0;
+    for (gates_u32 i = 0; i < gates_draw_list_len(&dl); i++) {
+        const gates_draw_cmd_t *c = gates_draw_list_at(&dl, i);
+        if (c->kind != GATES_DRAW_RECT || !same_color(c->color, gates_theme_color(theme, GATES_COLOR_CONTROL_BORDER))) continue;
+        if ((c->rect.x == page.x || c->rect.x == page.x + page.w - 1) && c->rect.y == page.y && c->rect.w == 1 && c->rect.h == page.h) sides++;
+        if (c->rect.x == page.x && c->rect.y == page.y + page.h - 1 && c->rect.w == page.w && c->rect.h == 1) sides++;
+    }
+    GT_ASSERT(sides == 3);
+    gates_draw_list_deinit(&dl);
+    GT_ASSERT_OK(gates_tabs_set_selected(b.t, b.tabs, 2));
+    layout(b.t);
+    paint_into(b.t, &dl);
+    gates_i32 x2 = -1;
+    GT_ASSERT(accent_bars(&dl, strip, &x2) == 1 && x2 > x0);
+    gates_draw_list_deinit(&dl);
+    gates_tree_destroy(b.t);
+}
+
 /* -- the pointer's shape (0.13.0) ----------------------------------------------------------- */
 
 /* The first point on a line from `from` stepping by (dx, dy) with that shape, or {-1, -1}. */
@@ -2241,6 +2333,7 @@ int main(void) {
     test_state();
     test_state_sideways();
     test_allocation_failure();
+    test_toolbar_and_tabs_apart();
     test_cursors();
     return gt_report("test_frame");
 }

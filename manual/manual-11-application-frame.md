@@ -150,7 +150,9 @@ int main(void) {
 `gates_toolbar_add(tree, bar, id)` adds one bound to a command of `scope` (id 0 adds a
 separator). A button shows its command's label without the mnemonic markup, looks disabled
 while the command is disabled, and looks pressed while the command is checked - a toggle such
-as Bold is a checked command. Buttons are flat until the pointer is over them.
+as Bold is a checked command (with the accent border, 0.14.0). Buttons are flat until the
+pointer is over them, on a band with a line under it, so a row of text buttons does not read as
+a row of tabs; an icon per button (`gates_command_set_icon`) sets them apart further.
 
 A click invokes the command and leaves the keyboard focus where it was, so Cut and Paste
 buttons act on the text box the person is typing in. From the keyboard the toolbar is one Tab
@@ -272,7 +274,9 @@ int main(void) {
 `gates_tabs_create(tree, parent, &tabs)` makes a strip of titles over pages, and each
 `gates_tabs_add(tree, tabs, title, &page)` adds a tab and returns its page, a column panel for
 the controls. One page shows at a time; controls on the others are out of reach of the pointer,
-the keyboard and assistive technology.
+the keyboard and assistive technology. The selected tab and its page are one sheet (0.14.0): the
+page is framed, the selected tab opens into it with the accent along its top, and the other tabs
+are outlines behind it.
 
 The strip is one Tab stop. Left, Right, Home and End select at once; Ctrl+Tab and
 Ctrl+Shift+Tab (or Ctrl+PgDn and Ctrl+PgUp) switch from anywhere inside the tabs and wrap

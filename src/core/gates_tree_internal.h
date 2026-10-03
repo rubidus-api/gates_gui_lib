@@ -944,6 +944,8 @@ gates_err_t gates_i_tabs_pick(gates_tree_t *tree, gates_u32 tabs, gates_u32 inde
 gates_i32 gates_i_tab_page_index(const gates_tree_t *tree, gates_u32 idx, gates_u32 *out_tabs);
 gates_size_t gates_i_tabstrip_measure(const gates_tree_t *tree, const gates_node_slot_t *s,
                                       const gates_text_backend_t *text);
+gates_err_t gates_i_tabs_frame_paint(const gates_tree_t *tree, gates_u32 tabs, gates_draw_list_t *dl,
+                                     const gates_theme_t *theme);
 gates_err_t gates_i_tabstrip_paint(const gates_tree_t *tree, gates_u32 strip, gates_draw_list_t *dl,
                                    const gates_theme_t *theme, const gates_text_backend_t *text);
 gates_rect_t gates_i_tab_rect(const gates_tree_t *tree, gates_u32 strip, gates_u32 index);

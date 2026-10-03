@@ -337,13 +337,19 @@ gates_err_t gates_i_tabstrip_paint(const gates_tree_t *tree, gates_u32 strip, ga
         if (gates_rect_is_empty(t)) continue;
         bool on = i == sel;
         gates_rect_t box = on ? t : (gates_rect_t){ t.x, t.y + 2, t.w, t.h - 3 };
-        gates_color_token_t bg = on ? GATES_COLOR_PANEL_BG : GATES_COLOR_CONTROL_BG;
-        err = gates_draw_rect(dl, box, gates_theme_color(theme, bg));
+        /* Only the selected tab is a filled card joined to its page; the others are outlines
+         * that sit back (0.14.0: they were filled like buttons, next to a toolbar's). */
+        if (on) err = gates_draw_rect(dl, box, gates_theme_color(theme, GATES_COLOR_PANEL_BG));
         if (gates_is_ok(err)) err = gates_draw_border(dl, box, 1, line);
         if (gates_is_ok(err) && on) {
             /* The selected tab opens into its page: no line below it. */
             err = gates_draw_rect(dl, (gates_rect_t){ box.x + 1, box.y + box.h - 1, box.w - 2, 1 },
                                   gates_theme_color(theme, GATES_COLOR_PANEL_BG));
+        }
+        if (gates_is_ok(err) && on) {
+            /* ... and carries the accent along its top (0.14.0): the page shown, unlike a toolbar button. */
+            err = gates_draw_rect(dl, (gates_rect_t){ box.x, box.y, box.w, 3 },
+                                  gates_theme_color(theme, GATES_COLOR_SELECTION_BG));
         }
         if (gates_is_ok(err)) {
             err = gates_i_mn_draw(dl, text,
@@ -370,6 +376,21 @@ gates_err_t gates_i_tabstrip_paint(const gates_tree_t *tree, gates_u32 strip, ga
     }
     gates_err_t pop = gates_draw_clip_pop(dl);
     return gates_is_ok(err) ? pop : err;
+}
+
+/* The page under the strip framed on its other three sides (0.14.0): the selected
+ * tab and its page read as one sheet, apart from a toolbar's band above. */
+gates_err_t gates_i_tabs_frame_paint(const gates_tree_t *tree, gates_u32 tabs, gates_draw_list_t *dl,
+                                     const gates_theme_t *theme) {
+    gates_u32 stack = stack_of(tree, tabs);
+    if (stack == GATES_NONE) return GATES_OK;
+    gates_rect_t p = gates_i_slot(tree, stack)->layout_rect;
+    if (p.w <= 0 || p.h <= 0) return GATES_OK;
+    gates_color_t line = gates_theme_color(theme, GATES_COLOR_CONTROL_BORDER);
+    gates_err_t err = gates_draw_rect(dl, (gates_rect_t){ p.x, p.y, 1, p.h }, line);
+    if (gates_is_ok(err)) err = gates_draw_rect(dl, (gates_rect_t){ p.x + p.w - 1, p.y, 1, p.h }, line);
+    if (gates_is_ok(err)) err = gates_draw_rect(dl, (gates_rect_t){ p.x, p.y + p.h - 1, p.w, 1 }, line);
+    return err;
 }
 
 /* -- switching ---------------------------------------------------------------------------------- */

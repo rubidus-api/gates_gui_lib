@@ -372,6 +372,9 @@ static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
              c = gates_i_slot(tree, c)->next_sibling) {
             paint_node(ctx, c);
         }
+        if (s->kind == GATES_NODE_TABS) { /* the page's frame, over it (0.14.0) */
+            emit(ctx, gates_i_tabs_frame_paint(tree, idx, ctx->dl, ctx->theme));
+        }
         if (s->layout_kind == GATES_LAYOUT_SPLIT && s->child_count >= 1) {
             gates_rect_t handle = gates_i_split_handle(tree, idx);
             emit(ctx, gates_draw_rect(ctx->dl, handle,
