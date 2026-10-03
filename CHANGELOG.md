@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 This project follows Keep a Changelog.
 
+## [0.14.0] - 2026-10-03
+
+A toolbar no longer reads as another row of tabs.
+
+### Changed
+
+- Toolbars: a line under the band, button boxes above it; a button that is on (a checked
+  command) has the accent border instead of looking like a selected tab.
+- Tabs: the page is framed on its other three sides and the selected tab opens into it with the
+  accent along its top; the other tabs are outlines (they were filled like buttons). A text-only
+  toolbar right above tabs - two rows of short words - looked alike before.
+
 ## [0.13.0] - 2026-10-02
 
 The pointer shows what a press will do.
