@@ -28,3 +28,6 @@ secrets/
 *.log
 *.tmp
 .DS_Store
+/scripts/sot-check.sh
+/scripts/readme-topline.sh
+/scripts/commit-both.sh
