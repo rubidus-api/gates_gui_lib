@@ -31,3 +31,5 @@ secrets/
 /scripts/sot-check.sh
 /scripts/readme-topline.sh
 /scripts/commit-both.sh
+/scripts/claim.sh
+/scripts/install-hook.sh
