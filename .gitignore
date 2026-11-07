@@ -33,3 +33,5 @@ secrets/
 /scripts/commit-both.sh
 /scripts/claim.sh
 /scripts/install-hook.sh
+
+/MAP.md
