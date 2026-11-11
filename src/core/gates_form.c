@@ -72,7 +72,7 @@ gates_err_t gates_form_create(gates_tree_t *tree, gates_node_t parent, gates_nod
     }
     gates_node_desc_t nd = { .kind = GATES_NODE_FORM };
     gates_node_t form = GATES_NODE_NULL;
-    gates_err_t err = gates_node_create(tree, GATES_NODE_NULL, &nd, &form);
+    gates_err_t err = gates_i_node_create(tree, GATES_NODE_NULL, &nd, &form);
     if (!gates_is_ok(err)) {
         return err;
     }
@@ -135,7 +135,7 @@ static gates_err_t build_row(gates_tree_t *tree, field_kind_t kind, const gates_
                              gates_node_t *out_help) {
     gates_node_desc_t nd = { .kind = GATES_NODE_CUSTOM };
     gates_node_t row = GATES_NODE_NULL;
-    gates_err_t err = gates_node_create(tree, GATES_NODE_NULL, &nd, &row);
+    gates_err_t err = gates_i_node_create(tree, GATES_NODE_NULL, &nd, &row);
     if (!gates_is_ok(err)) {
         return err;
     }
@@ -159,7 +159,7 @@ static gates_err_t build_row(gates_tree_t *tree, field_kind_t kind, const gates_
     if (marked != nullptr) {
         tree->alloc.free_fn(tree->alloc.ctx, marked);
     }
-    if (gates_is_ok(err)) err = gates_node_create(tree, row, &nd, &cell);
+    if (gates_is_ok(err)) err = gates_i_node_create(tree, row, &nd, &cell);
     if (gates_is_ok(err)) err = gates_layout_set(tree, cell, GATES_LAYOUT_KIND_COLUMN);
     if (gates_is_ok(err)) err = gates_layout_set_gap(tree, cell, 2);
     if (gates_is_ok(err)) err = make_editor(tree, cell, kind, d, &editor);

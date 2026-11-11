@@ -21,6 +21,14 @@ PROVEN_SRC := \
   vendor/proven/src/proven/panic.c \
   vendor/proven/src/proven/arena.c \
   vendor/proven/src/proven/heap.c \
+  vendor/proven/src/proven/fmt.c \
+  vendor/proven/src/proven/utf.c \
+  vendor/proven/src/proven/u8str.c \
+  vendor/proven/src/proven/buffer.c \
+  vendor/proven/src/proven/u16str.c \
+  vendor/proven/src/proven/u16str_view.c \
+  vendor/proven/src/proven/float_format.c \
+  vendor/proven/src/proven/float_decimal.c \
   vendor/proven/platform/proven_sys_mem.c
 
 CORE_SRC := \

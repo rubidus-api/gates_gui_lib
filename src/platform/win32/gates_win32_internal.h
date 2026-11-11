@@ -13,6 +13,10 @@
 #include <windows.h>
 #include <objbase.h>
 
+#include <proven/heap.h>
+
+#include <string.h>
+
 #include <gates/app.h>
 #include <gates/window.h>
 #include <gates/frame.h>
@@ -178,5 +182,22 @@ void gates_win32_install_image_decoder(gates_window_t *win);
 void gates_win32_install_threads(gates_window_t *win); /* background tasks (0.6.0) */
 /* Capture lost or mode cancelled: forget held buttons, press and drags. */
 void gates_win32_cancel_pointer(gates_window_t *win);
+
+/* The backend's own memory (scratch buffers, COM objects, thread boxes) comes from the proven
+ * heap allocator, as the core's default does: thread-safe, one policy, no raw HeapAlloc.
+ * gates_w32_alloc returns zeroed memory or null; gates_w32_free accepts null. */
+static inline void *gates_w32_alloc(gates_usize_t n) {
+    gates_allocator_t a = proven_heap_allocator();
+    proven_result_mem_mut_t r = a.alloc_fn(a.ctx, n, 16);
+    if (!proven_is_ok(r.err)) return nullptr;
+    memset(r.value.ptr, 0, n);
+    return r.value.ptr;
+}
+
+static inline void gates_w32_free(void *p) {
+    if (p == nullptr) return;
+    gates_allocator_t a = proven_heap_allocator();
+    a.free_fn(a.ctx, p);
+}
 
 #endif /* GATES_WIN32_INTERNAL_H */

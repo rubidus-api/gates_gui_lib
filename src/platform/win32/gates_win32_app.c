@@ -13,13 +13,13 @@ static const wchar_t *GATES_POSTCLASS_NAME = L"gates_gui_lib_post";
 /* SRWLOCK behind the core's sync interface; it lives inside the sender, so it
  * outlives the app when workers still hold references. */
 static gates_err_t srw_init(void **lock) {
-    SRWLOCK *l = (SRWLOCK *)HeapAlloc(GetProcessHeap(), 0, sizeof(SRWLOCK));
+    SRWLOCK *l = (SRWLOCK *)gates_w32_alloc(sizeof(SRWLOCK));
     if (l == nullptr) return PROVEN_ERR_NOMEM;
     InitializeSRWLock(l);
     *lock = l;
     return GATES_OK;
 }
-static void srw_fini(void *lock) { HeapFree(GetProcessHeap(), 0, lock); }
+static void srw_fini(void *lock) { gates_w32_free(lock); }
 static void srw_lock(void *lock) { AcquireSRWLockExclusive((SRWLOCK *)lock); }
 static void srw_unlock(void *lock) { ReleaseSRWLockExclusive((SRWLOCK *)lock); }
 

@@ -3,7 +3,7 @@
 #include "gates_win32_internal.h"
 #include <dwmapi.h>
 
-#include <stdio.h>
+#include <proven/fmt.h>
 #include <string.h>
 
 #define GATES_WINDOW_DEFAULT_W 800
@@ -678,13 +678,16 @@ gates_err_t gates_window_placement(const gates_window_t *win, gates_u8 *buf, gat
     bool max = wp.showCmd == SW_SHOWMAXIMIZED || (IsZoomed(win->hwnd) && !IsIconic(win->hwnd)) ||
                (!win->shown && win->show_max); /* set before the loop showed it */
     char tmp[96];
-    int n = snprintf(tmp, sizeof tmp, "%ld,%ld,%ld,%ld,%s", (long)r.left, (long)r.top, (long)(r.right - r.left),
-                     (long)(r.bottom - r.top), max ? "maximized" : "normal");
-    if (n <= 0 || (gates_usize_t)n >= sizeof tmp) return PROVEN_ERR_INVALID_STATE;
-    *needed = (gates_usize_t)n;
+    proven_fmt_result_t fr = proven_fmt_to(tmp, sizeof tmp, "{},{},{},{},{}", PROVEN_ARG((gates_i64)r.left),
+                                           PROVEN_ARG((gates_i64)r.top), PROVEN_ARG((gates_i64)(r.right - r.left)),
+                                           PROVEN_ARG((gates_i64)(r.bottom - r.top)),
+                                           PROVEN_ARG(max ? "maximized" : "normal"));
+    if (!proven_is_ok(fr.err) || fr.written == 0) return PROVEN_ERR_INVALID_STATE;
+    gates_usize_t n = fr.written;
+    *needed = n;
     if (buf == nullptr) return GATES_OK;
-    if ((gates_usize_t)n > cap) return PROVEN_ERR_OVERFLOW;
-    memcpy(buf, tmp, (size_t)n);
+    if (n > cap) return PROVEN_ERR_OVERFLOW;
+    memcpy(buf, tmp, n);
     return GATES_OK;
 }
 

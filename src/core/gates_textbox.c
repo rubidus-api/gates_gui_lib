@@ -4,6 +4,7 @@
 #include <gates/widget.h>
 #include <gates/event.h>
 #include <gates/ui.h>
+#include <gates/encoding.h>
 #include "gates_tree_internal.h"
 
 #include <string.h>
@@ -329,6 +330,9 @@ gates_err_t gates_i_box_edit(gates_tree_t *tree, gates_u32 idx, gates_u32 b, gat
                              gates_str_t text, gates_i_unit_t unit, bool user) {
     gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
     gates_text_edit_t *ed = st->edit;
+    if (!gates_utf8_valid(text, nullptr)) {
+        return PROVEN_ERR_INVALID_ARG; /* checked first: nothing below may fail once the text changes */
+    }
     gates_str_t cur = gates_text_edit_text(ed);
     gates_u32 fixed = (gates_u32)cur.size - (e - b);
     gates_u32 new_len = fixed + (gates_u32)text.size;

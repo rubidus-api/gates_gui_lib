@@ -52,6 +52,10 @@ typedef struct gdi_text_t {
     gates_u32 *pixels;
     gates_i32 scratch_w;
     gates_i32 scratch_h;
+    /* The run being drawn: UTF-16 units and their pixel advances, kept between calls (UI thread only). */
+    wchar_t *wbuf;
+    INT *dx;
+    gates_usize_t run_cap;
 } gdi_text_t;
 
 static gdi_text_t g_gdi;
@@ -164,7 +168,7 @@ static void face_release(gdi_face_t *f) {
     for (unsigned i = 0; i < GDI_FALLBACKS; i++) {
         if (f->fallback[i] != nullptr) DeleteObject(f->fallback[i]);
     }
-    if (f->adv != nullptr) HeapFree(GetProcessHeap(), 0, f->adv);
+    gates_w32_free(f->adv);
     *f = (gdi_face_t){0};
 }
 
@@ -224,7 +228,7 @@ static gdi_face_t *face(gates_font_t font) {
     if (f->metrics.line_height < f->metrics.ascent + f->metrics.descent) {
         f->metrics.line_height = f->metrics.ascent + f->metrics.descent;
     }
-    f->adv = (gates_i16 *)HeapAlloc(GetProcessHeap(), 0, 0x10000 * sizeof(gates_i16));
+    f->adv = (gates_i16 *)gates_w32_alloc(0x10000 * sizeof(gates_i16));
     if (f->adv != nullptr) memset(f->adv, 0xFF, 0x10000 * sizeof(gates_i16)); /* all -1 */
     f->ready = true;
     return f;
@@ -426,13 +430,23 @@ static void draw_run(gates_pixels_t target, gates_rect_t rect, gates_rect_t clip
     if (wlen <= 0) {
         return;
     }
-    wchar_t *wbuf = (wchar_t *)HeapAlloc(GetProcessHeap(), 0, (SIZE_T)wlen * sizeof(wchar_t));
-    INT *dx = (INT *)HeapAlloc(GetProcessHeap(), 0, (SIZE_T)wlen * sizeof(INT));
-    if (wbuf == nullptr || dx == nullptr) {
-        if (wbuf != nullptr) HeapFree(GetProcessHeap(), 0, wbuf);
-        if (dx != nullptr) HeapFree(GetProcessHeap(), 0, dx);
-        return;
+    if ((gates_usize_t)wlen > g_gdi.run_cap) {
+        gates_usize_t cap = (gates_usize_t)wlen + 64u;
+        wchar_t *nw = (wchar_t *)gates_w32_alloc(cap * sizeof(wchar_t));
+        INT *nd = (INT *)gates_w32_alloc(cap * sizeof(INT));
+        if (nw == nullptr || nd == nullptr) {
+            gates_w32_free(nw);
+            gates_w32_free(nd);
+            return;
+        }
+        gates_w32_free(g_gdi.wbuf);
+        gates_w32_free(g_gdi.dx);
+        g_gdi.wbuf = nw;
+        g_gdi.dx = nd;
+        g_gdi.run_cap = cap;
     }
+    wchar_t *wbuf = g_gdi.wbuf;
+    INT *dx = g_gdi.dx;
     MultiByteToWideChar(CP_UTF8, 0, (const char *)text.ptr, (int)text.size, wbuf, wlen);
 
     gates_i32 pos = 0; /* logical offset of the next glyph */
@@ -453,59 +467,81 @@ static void draw_run(gates_pixels_t target, gates_rect_t rect, gates_rect_t clip
     }
     gates_i32 run_w = gates_px(pos, dpi);
     gates_i32 run_h = gates_px(f->metrics.line_height, dpi);
-    if (run_w <= 0 || !ensure_scratch(run_w, run_h)) {
-        HeapFree(GetProcessHeap(), 0, wbuf);
-        HeapFree(GetProcessHeap(), 0, dx);
+    /* Only the part of the run that survives the clip is rasterized, in strips no wider than the
+     * scratch: a long line scrolled sideways keeps its tail, and a window wider than the scratch
+     * (a 5K screen, a high scale) is drawn whole, strip after strip. */
+    gates_rect_t paint = gates_rect_intersect((gates_rect_t){ rect.x, rect.y, run_w, run_h }, bounds);
+    if (run_w <= 0 || gates_rect_is_empty(paint)) {
         return;
     }
-    if (run_w > g_gdi.scratch_w) {
-        run_w = g_gdi.scratch_w;
-    }
-
-    /* Rasterize white-on-black, then blend the coverage with the wanted color. */
-    for (gates_i32 y = 0; y < run_h; y++) {
-        memset(g_gdi.pixels + (gates_usize_t)y * g_gdi.scratch_w, 0, (gates_usize_t)run_w * 4u);
-    }
-    HGDIOBJ old_font = SelectObject(g_gdi.dc, hfont);
-    SetTextColor(g_gdi.dc, RGB(255, 255, 255));
-    /* ETO_CLIPPED keeps a glyph that overhangs its advance inside the run box. */
-    RECT run_rect = { 0, 0, (LONG)run_w, (LONG)run_h };
-    ExtTextOutW(g_gdi.dc, 0, top, ETO_CLIPPED, &run_rect, wbuf, (UINT)wlen, dx);
-    SelectObject(g_gdi.dc, old_font);
-    GdiFlush();
-
-    /* Blit in TARGET coordinates: `paint` is the part of the run box that
-     * survives the clip, and the scratch is indexed relative to the run
-     * origin. Keeping both indices explicit is what stops a source offset
-     * from being used as a destination offset (the 2026-07-26 defect). */
-    gates_rect_t paint = gates_rect_intersect((gates_rect_t){ rect.x, rect.y, run_w, run_h }, bounds);
-    for (gates_i32 ty = paint.y; ty < paint.y + paint.h; ty++) {
-        const gates_u32 *src = g_gdi.pixels + (gates_usize_t)(ty - rect.y) * g_gdi.scratch_w;
-        gates_u32 *dst = target_row(&target, ty);
-        for (gates_i32 tx = paint.x; tx < paint.x + paint.w; tx++) {
-            gates_u32 s = src[tx - rect.x] & 0x00FFFFFFu;
-            if (s == 0) {
-                continue; /* no coverage */
-            }
-            /* Coverage = brightest channel of the antialiased glyph mask. */
-            gates_u32 r = (s >> 16) & 0xFF, g = (s >> 8) & 0xFF, b = s & 0xFF;
-            gates_u32 cov = r > g ? r : g;
-            if (b > cov) cov = b;
-            gates_u32 a = (cov * color.a + 127u) / 255u;
-            gates_color_t d = gates_pixel_unpack(dst[tx]);
-            gates_u32 na = 255u - a;
-            gates_color_t out = {
-                .r = (gates_u8)((color.r * a + d.r * na + 127u) / 255u),
-                .g = (gates_u8)((color.g * a + d.g * na + 127u) / 255u),
-                .b = (gates_u8)((color.b * a + d.b * na + 127u) / 255u),
-                .a = (gates_u8)((a * 255u + (gates_u32)d.a * na + 127u) / 255u),
-            };
-            dst[tx] = gates_pixel_pack(out);
+    for (gates_i32 strip_x = paint.x; strip_x < paint.x + paint.w;) {
+        gates_i32 strip_w = paint.x + paint.w - strip_x;
+        if (strip_w > GDI_SCRATCH_MAX_W) strip_w = GDI_SCRATCH_MAX_W;
+        if (!ensure_scratch(strip_w, run_h)) {
+            break;
         }
-    }
+        gates_i32 skip = strip_x - rect.x; /* run pixels left of this strip (never negative) */
 
-    HeapFree(GetProcessHeap(), 0, wbuf);
-    HeapFree(GetProcessHeap(), 0, dx);
+        /* Only the units that reach the strip go to GDI (a surrogate pair stays whole). */
+        int u0 = 0;
+        gates_i32 u0_px = 0; /* pixel start of unit u0 */
+        while (u0 < wlen && u0_px + dx[u0] <= skip) { /* units that end before the strip */
+            u0_px += dx[u0];
+            u0++;
+        }
+        int u1 = u0;
+        gates_i32 u1_px = u0_px;
+        while (u1 < wlen && u1_px < skip + strip_w) {
+            u1_px += dx[u1];
+            u1++;
+        }
+        if (u1 > 0 && u1 < wlen && wbuf[u1 - 1] >= 0xD800 && wbuf[u1 - 1] <= 0xDBFF) u1++; /* the pair's low half */
+        if (u1 > wlen) u1 = wlen;
+
+        /* Rasterize white-on-black, then blend the coverage with the wanted color. */
+        for (gates_i32 y = 0; y < run_h; y++) {
+            memset(g_gdi.pixels + (gates_usize_t)y * g_gdi.scratch_w, 0, (gates_usize_t)strip_w * 4u);
+        }
+        HGDIOBJ prev = SelectObject(g_gdi.dc, hfont);
+        SetTextColor(g_gdi.dc, RGB(255, 255, 255));
+        /* ETO_CLIPPED keeps a glyph that overhangs its advance inside the strip. */
+        RECT run_rect = { 0, 0, (LONG)strip_w, (LONG)run_h };
+        if (u1 > u0) {
+            ExtTextOutW(g_gdi.dc, u0_px - skip, top, ETO_CLIPPED, &run_rect, wbuf + u0, (UINT)(u1 - u0), dx + u0);
+        }
+        SelectObject(g_gdi.dc, prev);
+        GdiFlush();
+
+        /* Blit in TARGET coordinates: the scratch is indexed from the strip's left edge
+         * (strip_x) and from the run's top (rect.y); keeping both indices explicit is
+         * what stops a source offset from being used as a destination offset (the
+         * 2026-07-26 defect). */
+        for (gates_i32 ty = paint.y; ty < paint.y + paint.h; ty++) {
+            const gates_u32 *src = g_gdi.pixels + (gates_usize_t)(ty - rect.y) * g_gdi.scratch_w;
+            gates_u32 *dst = target_row(&target, ty);
+            for (gates_i32 tx = strip_x; tx < strip_x + strip_w; tx++) {
+                gates_u32 s = src[tx - strip_x] & 0x00FFFFFFu;
+                if (s == 0) {
+                    continue; /* no coverage */
+                }
+                /* Coverage = brightest channel of the antialiased glyph mask. */
+                gates_u32 r = (s >> 16) & 0xFF, g = (s >> 8) & 0xFF, b = s & 0xFF;
+                gates_u32 cov = r > g ? r : g;
+                if (b > cov) cov = b;
+                gates_u32 a = (cov * color.a + 127u) / 255u;
+                gates_color_t d = gates_pixel_unpack(dst[tx]);
+                gates_u32 na = 255u - a;
+                gates_color_t out = {
+                    .r = (gates_u8)((color.r * a + d.r * na + 127u) / 255u),
+                    .g = (gates_u8)((color.g * a + d.g * na + 127u) / 255u),
+                    .b = (gates_u8)((color.b * a + d.b * na + 127u) / 255u),
+                    .a = (gates_u8)((a * 255u + (gates_u32)d.a * na + 127u) / 255u),
+                };
+                dst[tx] = gates_pixel_pack(out);
+            }
+        }
+        strip_x += strip_w;
+    }
 }
 
 static void gdi_draw(void *ctx, gates_pixels_t target, gates_rect_t rect, gates_rect_t clip,

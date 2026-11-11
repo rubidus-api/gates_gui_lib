@@ -240,7 +240,7 @@ gates_err_t gates_image_create(gates_tree_t *tree, gates_node_t parent, gates_im
     }
     gates_node_desc_t nd = { .kind = GATES_NODE_IMAGE };
     gates_node_t n;
-    gates_err_t err = gates_node_create(tree, parent, &nd, &n);
+    gates_err_t err = gates_i_node_create(tree, parent, &nd, &n);
     if (!gates_is_ok(err)) return err;
     gates_u32 state = GATES_NONE;
     err = gates_i_state_acquire(tree, &state);

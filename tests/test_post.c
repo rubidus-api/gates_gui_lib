@@ -277,6 +277,37 @@ static void test_growth(void) {
     gates_sender_release(s);
 }
 
+/* The queue counts its replaceable messages: a snapshot still replaces its twin after other
+ * messages came and went (the scan stops at the last replaceable one). */
+static void test_replaceable_after_dispatch(void) {
+    gates_sender_t *s = new_sender(16, 1000);
+    app_t x;
+    make_tree(&x);
+    GT_ASSERT_OK(gates_node_set_message_handler(x.t, x.b, handler, &x.seen));
+    GT_ASSERT_OK(gates_sender_attach(s, x.t));
+    payload_t p1 = { .value = 1 }, p2 = { .value = 2 }, p3 = { .value = 3 }, plain[6] = {0};
+    gates_message_t r = msg(gates_target(x.t, x.a), 9, &p1, 1);
+    r.replaceable = true;
+    GT_ASSERT_OK(gates_sender_post(s, &r));
+    for (int i = 0; i < 6; i++) {
+        gates_message_t m = msg(gates_target(x.t, x.a), 1, &plain[i], 1);
+        GT_ASSERT_OK(gates_sender_post(s, &m));
+    }
+    r.payload = &p2;
+    GT_ASSERT_OK(gates_sender_post(s, &r)); /* the oldest message is its twin, behind six plain ones */
+    GT_ASSERT(p1.releases == 1 && gates_sender_pending(s) == 7);
+    (void)gates_sender_dispatch(s, 0);      /* all delivered: nothing replaceable is queued */
+    GT_ASSERT(gates_sender_pending(s) == 0);
+    r.payload = &p3;
+    GT_ASSERT_OK(gates_sender_post(s, &r));
+    GT_ASSERT_OK(gates_sender_post(s, &r)); /* the same payload twice: replaces itself, one queued */
+    GT_ASSERT(gates_sender_pending(s) == 1);
+    (void)gates_sender_dispatch(s, 0);
+    gates_sender_close(s);
+    gates_sender_release(s);
+    gates_tree_destroy(x.t);
+}
+
 static void test_replaceable(void) {
     gates_sender_t *s = new_sender(8, 100);
     app_t x;
@@ -593,6 +624,7 @@ int main(void) {
     test_limits();
     test_growth();
     test_replaceable();
+    test_replaceable_after_dispatch();
     test_stale();
     test_bounded_and_reentrant();
     test_close();

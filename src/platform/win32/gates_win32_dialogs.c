@@ -15,12 +15,12 @@ static const GUID gates_iid_file_dialog = { 0x42f85136, 0xdb7e, 0x439c, { 0x85, 
 static const GUID gates_iid_file_open_dialog = { 0xd57c7288, 0xd4ad, 0x4768, { 0xbe, 0x02, 0x9d, 0x96, 0x95, 0x32, 0xd9, 0x60 } };
 static const GUID gates_iid_shell_item = { 0x43826d1e, 0xe718, 0x42ee, { 0xbc, 0x55, 0xa1, 0xe2, 0x61, 0xc3, 0x7b, 0xfe } };
 
-/* UTF-8 to a NUL-terminated UTF-16 string on the process heap (null for empty). */
+/* UTF-8 to a NUL-terminated UTF-16 string from the proven heap (null for empty). */
 static wchar_t *wide(gates_str_t s) {
     if (s.size == 0 || s.ptr == nullptr) return nullptr;
     int n = MultiByteToWideChar(CP_UTF8, 0, (const char *)s.ptr, (int)s.size, nullptr, 0);
     if (n <= 0) return nullptr;
-    wchar_t *w = (wchar_t *)HeapAlloc(GetProcessHeap(), 0, (SIZE_T)(n + 1) * sizeof(wchar_t));
+    wchar_t *w = (wchar_t *)gates_w32_alloc((gates_usize_t)(n + 1) * sizeof(wchar_t));
     if (w == nullptr) return nullptr;
     MultiByteToWideChar(CP_UTF8, 0, (const char *)s.ptr, (int)s.size, w, n);
     w[n] = L'\0';
@@ -28,7 +28,7 @@ static wchar_t *wide(gates_str_t s) {
 }
 
 static void wfree(void *p) {
-    if (p != nullptr) HeapFree(GetProcessHeap(), 0, p);
+    gates_w32_free(p);
 }
 
 /* The answer as UTF-8 into buf: OVERFLOW (nothing written) when it does not fit. */
@@ -37,7 +37,7 @@ static gates_err_t answer(const wchar_t *path, gates_u8 *buf, gates_usize_t cap,
     if (n <= 0) return PROVEN_ERR_INVALID_STATE;
     *len = (gates_usize_t)(n - 1);
     if (buf == nullptr || cap < *len) return PROVEN_ERR_OVERFLOW;
-    char *tmp = (char *)HeapAlloc(GetProcessHeap(), 0, (SIZE_T)n);
+    char *tmp = (char *)gates_w32_alloc((gates_usize_t)n);
     if (tmp == nullptr) return PROVEN_ERR_NOMEM;
     WideCharToMultiByte(CP_UTF8, 0, path, -1, tmp, n, nullptr, nullptr);
     memcpy(buf, tmp, *len);
@@ -193,8 +193,12 @@ typedef BOOL(WINAPI *choose_color_fn)(LPCHOOSECOLORW);
 gates_err_t gates_window_choose_color(gates_window_t *win, gates_color_t *color, bool *chosen) {
     if (win == nullptr || color == nullptr || chosen == nullptr) return PROVEN_ERR_INVALID_ARG;
     *chosen = false;
-    HMODULE lib = LoadLibraryW(L"comdlg32.dll");
-    choose_color_fn choose = lib != nullptr ? (choose_color_fn)(void (*)(void))GetProcAddress(lib, "ChooseColorW") : nullptr;
+    /* Loaded once and kept for the process: a library loaded on every call is a reference never released. */
+    static choose_color_fn choose;
+    if (choose == nullptr) {
+        HMODULE lib = LoadLibraryW(L"comdlg32.dll");
+        choose = lib != nullptr ? (choose_color_fn)(void (*)(void))GetProcAddress(lib, "ChooseColorW") : nullptr;
+    }
     if (choose == nullptr) return PROVEN_ERR_UNSUPPORTED;
     gates_tree_dismiss_menus(win->tree);
     static COLORREF custom[16]; /* the dialog's custom colours, kept for the process */

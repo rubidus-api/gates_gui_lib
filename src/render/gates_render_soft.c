@@ -126,23 +126,87 @@ static void put_px(soft_ctx_t *ctx, gates_i32 x, gates_i32 y, gates_color_t colo
     row[x] = blend_px(row[x], color);
 }
 
-/* Bresenham; endpoints inclusive; per-pixel clip. */
+/* Bresenham; endpoints inclusive. The error terms are 64-bit (2 * err overflows 32 bits for
+ * spans past 2^30). The pixels are those of the plain walk, but the walk starts where the line
+ * first reaches the clip and stops where it leaves it: along the major axis step n the minor
+ * coordinate is the closed form (2 n minor + major - 1) / (2 major) (checked against the walk),
+ * so a line with far-off endpoints costs only the pixels it can show. */
+__extension__ typedef __int128 gates_i128_t; /* 2 n minor reaches 2^66 for a line across all of 32 bits */
+static gates_i64 line_minor_after(gates_i64 n, gates_i64 minor, gates_i64 major) {
+    return (gates_i64)(((gates_i128_t)2 * n * minor + major - 1) / ((gates_i128_t)2 * major));
+}
+
 static void draw_line(soft_ctx_t *ctx, gates_point_t p0, gates_point_t p1, gates_color_t color) {
-    gates_i32 dx = p1.x > p0.x ? p1.x - p0.x : p0.x - p1.x;
-    gates_i32 dy = p1.y > p0.y ? p1.y - p0.y : p0.y - p1.y;
+    gates_rect_t c = ctx->clip;
+    if (c.w <= 0 || c.h <= 0) {
+        return;
+    }
+    gates_i64 cx0 = c.x, cx1 = (gates_i64)c.x + c.w - 1, cy0 = c.y, cy1 = (gates_i64)c.y + c.h - 1;
+    if ((p0.x < cx0 && p1.x < cx0) || (p0.x > cx1 && p1.x > cx1) || (p0.y < cy0 && p1.y < cy0) ||
+        (p0.y > cy1 && p1.y > cy1)) {
+        return;
+    }
+    gates_i64 dx = p1.x > p0.x ? (gates_i64)p1.x - p0.x : (gates_i64)p0.x - p1.x;
+    gates_i64 dy = p1.y > p0.y ? (gates_i64)p1.y - p0.y : (gates_i64)p0.y - p1.y;
     gates_i32 sx = p0.x < p1.x ? 1 : -1;
     gates_i32 sy = p0.y < p1.y ? 1 : -1;
-    gates_i32 err = dx - dy;
-    gates_i32 x = p0.x;
-    gates_i32 y = p0.y;
-    for (;;) {
-        put_px(ctx, x, y, color);
-        if (x == p1.x && y == p1.y) {
-            break;
+    bool xmajor = dx >= dy;
+    gates_i64 major = xmajor ? dx : dy;
+    gates_i64 minor = xmajor ? dy : dx;
+    if (major == 0) { /* one point */
+        put_px(ctx, p0.x, p0.y, color);
+        return;
+    }
+    /* The steps [lo, hi] along the major axis whose pixel can lie inside the clip. */
+    gates_i64 lo = 0, hi = major;
+    {
+        /* major coordinate window */
+        gates_i64 m0 = xmajor ? p0.x : p0.y;
+        gates_i64 ms = xmajor ? sx : sy;
+        gates_i64 w0 = xmajor ? cx0 : cy0, w1 = xmajor ? cx1 : cy1;
+        gates_i64 a = (w0 - m0) * ms, b = (w1 - m0) * ms; /* steps at which the major coordinate is w0 / w1 */
+        gates_i64 first = a < b ? a : b, last = a < b ? b : a;
+        if (first > lo) lo = first;
+        if (last < hi) hi = last;
+        if (lo > hi) {
+            return;
         }
-        gates_i32 e2 = 2 * err;
-        if (e2 > -dy) { err -= dy; x += sx; }
-        if (e2 < dx)  { err += dx; y += sy; }
+        /* minor coordinate window: the steps where the minor coordinate is inside */
+        gates_i64 n0 = xmajor ? p0.y : p0.x;
+        gates_i64 ns = xmajor ? sy : sx;
+        gates_i64 v0 = xmajor ? cy0 : cx0, v1 = xmajor ? cy1 : cx1;
+        gates_i64 k_lo = (v0 - n0) * ns, k_hi = (v1 - n0) * ns; /* minor steps to reach the window edges */
+        if (k_lo > k_hi) { gates_i64 t = k_lo; k_lo = k_hi; k_hi = t; }
+        /* minor steps made after n major steps: line_minor_after(n); find the first n with >= k_lo
+         * and the last n with <= k_hi by binary search (the function is non-decreasing). */
+        if (k_lo > line_minor_after(hi, minor, major) || k_hi < 0) {
+            return;
+        }
+        if (k_lo > 0) {
+            gates_i64 l = lo, h = hi;
+            while (l < h) {
+                gates_i64 mid = l + (h - l) / 2;
+                if (line_minor_after(mid, minor, major) >= k_lo) h = mid; else l = mid + 1;
+            }
+            if (l > lo) lo = l;
+        }
+        if (k_hi < line_minor_after(hi, minor, major)) {
+            gates_i64 l = lo, h = hi;
+            while (l < h) { /* the last n with minor <= k_hi */
+                gates_i64 mid = l + (h - l + 1) / 2;
+                if (line_minor_after(mid, minor, major) <= k_hi) l = mid; else h = mid - 1;
+            }
+            if (l < hi) hi = l;
+        }
+        if (lo > hi) {
+            return;
+        }
+    }
+    for (gates_i64 n = lo; n <= hi; n++) {
+        gates_i64 m = line_minor_after(n, minor, major);
+        gates_i32 x = xmajor ? (gates_i32)(p0.x + sx * n) : (gates_i32)(p0.x + sx * m);
+        gates_i32 y = xmajor ? (gates_i32)(p0.y + sy * m) : (gates_i32)(p0.y + sy * n);
+        put_px(ctx, x, y, color);
     }
 }
 

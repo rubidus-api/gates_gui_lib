@@ -242,12 +242,14 @@ bool gates_win32_handle_input(gates_window_t *win, UINT msg, WPARAM wparam, LPAR
         gates_u32 unit = (gates_u32)wparam;
         gates_u32 cp = unit;
         if (unit >= 0xD800 && unit <= 0xDBFF) {
-            win->pending_lead = unit;
+            win->pending_lead = unit; /* a newer lead replaces an unpaired one */
             return true;
         }
         if (unit >= 0xDC00 && unit <= 0xDFFF && win->pending_lead != 0) {
             cp = 0x10000 + ((win->pending_lead - 0xD800) << 10) + (unit - 0xDC00);
             win->pending_lead = 0;
+        } else {
+            win->pending_lead = 0; /* an unpaired lead must not pair with a later trail */
         }
         bool consumed = gates_input_char(win->tree, cp);
         if (!consumed && win->cb.on_char != nullptr) {
@@ -485,6 +487,8 @@ bool gates_win32_handle_ime(gates_window_t *win, UINT msg, WPARAM wparam, LPARAM
         if ((lparam & GCS_RESULTSTR) != 0 &&
             ime_read(win, himc, GCS_RESULTSTR, -1, &s, &len, &cur)) {
             if (len > 0) {
+                /* A refused commit (text limit, bad text, no memory) leaves its error in the tree:
+                 * gates_win32_after_input below hands it to on_input_error, as for typed characters. */
                 (void)gates_input_commit(win->tree, (gates_str_t){ .ptr = s, .size = len });
             }
             if (s != nullptr) {
@@ -497,6 +501,7 @@ bool gates_win32_handle_ime(gates_window_t *win, UINT msg, WPARAM wparam, LPARAM
                 cursor_units = ImmGetCompositionStringW(himc, GCS_CURSORPOS, nullptr, 0);
             }
             if (ime_read(win, himc, GCS_COMPSTR, cursor_units, &s, &len, &cur)) {
+                /* (a refused preedit leaves its error in the tree too: after_input reports it) */
                 (void)gates_input_preedit(win->tree, (gates_str_t){ .ptr = s, .size = len },
                                           cur);
                 if (s != nullptr) {

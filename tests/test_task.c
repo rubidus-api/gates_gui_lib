@@ -5,6 +5,7 @@
  * ThreadSanitizer. */
 #include <gates/task.h>
 #include <gates/post.h>
+#include <proven/heap.h>
 #include "gates_test.h"
 
 #include <pthread.h>
@@ -362,6 +363,67 @@ static void test_closed_queue(void) {
     gates_sender_release(w.sender);
 }
 
+/* The task and progress records come from the allocator the app gave its sender (a counting one
+ * here), and all of them are given back. */
+typedef struct counting_t {
+    atomic_long allocs, frees;
+} counting_t;
+
+static proven_result_mem_mut_t c_alloc(void *ctx, gates_usize_t n, gates_usize_t align) {
+    counting_t *c = ctx;
+    atomic_fetch_add(&c->allocs, 1);
+    gates_allocator_t h = proven_heap_allocator();
+    return h.alloc_fn(h.ctx, n, align);
+}
+static proven_result_mem_mut_t c_realloc(void *ctx, void *p, gates_usize_t old_n, gates_usize_t n, gates_usize_t align) {
+    gates_allocator_t h = proven_heap_allocator();
+    (void)ctx;
+    return h.realloc_fn(h.ctx, p, old_n, n, align);
+}
+static void c_free(void *ctx, void *p) {
+    counting_t *c = ctx;
+    atomic_fetch_add(&c->frees, 1);
+    gates_allocator_t h = proven_heap_allocator();
+    h.free_fn(h.ctx, p);
+}
+
+static void test_records_use_the_senders_allocator(void) {
+    counting_t c = {0};
+    gates_sender_desc_t sd = { .allocator = { .ctx = &c, .alloc_fn = c_alloc, .realloc_fn = c_realloc, .free_fn = c_free },
+                               .sync = { px_init, px_fini, px_lock, px_unlock } };
+    world_t w = {0};
+    GT_ASSERT_OK(gates_sender_create(&sd, &w.sender));
+    GT_ASSERT_OK(gates_tree_create(&(gates_tree_desc_t){0}, &w.tree));
+    GT_ASSERT_OK(gates_sender_attach(w.sender, w.tree));
+    gates_tree_set_threads(w.tree, &threads);
+    long before = atomic_load(&c.allocs);
+    job_t j = { .steps = 20, .result = GATES_OK, .monotonic = true };
+    gates_task_desc_t d = desc_for(&j);
+    GT_ASSERT_OK(gates_task_start(w.tree, &d, &j.task));
+    GT_ASSERT(atomic_load(&c.allocs) > before); /* the task record itself went through it */
+    run_until_done(&w);
+    GT_ASSERT(j.done_calls == 1);
+    gates_tree_destroy(w.tree);
+    gates_sender_close(w.sender);
+    gates_sender_release(w.sender);
+    GT_ASSERT(atomic_load(&c.allocs) == atomic_load(&c.frees)); /* progress records, the task, the sender: all returned */
+}
+
+/* A program's messages may not use the kinds the task code owns (its payload would be read as a
+ * task's record). */
+static void test_reserved_kinds_refused(void) {
+    world_t w;
+    world(&w, 0);
+    gates_message_t m = { .target = gates_target(w.tree, gates_tree_root(w.tree)), .kind = 0xFFFF0005u };
+    GT_ASSERT(gates_sender_post(w.sender, &m) == PROVEN_ERR_INVALID_ARG);
+    m.kind = 0xFFFF8000u;
+    GT_ASSERT(gates_sender_post(w.sender, &m) == PROVEN_ERR_INVALID_ARG);
+    m.kind = 0xFFFEFFFFu;
+    GT_ASSERT_OK(gates_sender_post(w.sender, &m));
+    (void)gates_sender_dispatch(w.sender, 0);
+    world_end(&w);
+}
+
 int main(void) {
     test_progress_and_done();
     test_coalescing();
@@ -371,5 +433,7 @@ int main(void) {
     test_destroy_while_running();
     test_destroy_with_full_queue();
     test_closed_queue();
+    test_records_use_the_senders_allocator();
+    test_reserved_kinds_refused();
     return gt_report("test_task");
 }

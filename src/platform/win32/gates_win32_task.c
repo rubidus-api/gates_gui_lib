@@ -16,13 +16,13 @@ static DWORD WINAPI run_box(LPVOID p) {
 
 static gates_err_t start(void *ctx, void (*fn)(void *), void *arg, void **out_thread) {
     (void)ctx;
-    thread_box_t *b = (thread_box_t *)HeapAlloc(GetProcessHeap(), 0, sizeof *b);
+    thread_box_t *b = (thread_box_t *)gates_w32_alloc(sizeof *b);
     if (b == nullptr) return PROVEN_ERR_NOMEM;
     b->fn = fn;
     b->arg = arg;
     b->handle = CreateThread(nullptr, 0, run_box, b, 0, nullptr);
     if (b->handle == nullptr) {
-        HeapFree(GetProcessHeap(), 0, b);
+        gates_w32_free(b);
         return PROVEN_ERR_IO;
     }
     *out_thread = b;
@@ -34,7 +34,7 @@ static void join(void *ctx, void *thread) {
     thread_box_t *b = (thread_box_t *)thread;
     WaitForSingleObject(b->handle, INFINITE);
     CloseHandle(b->handle);
-    HeapFree(GetProcessHeap(), 0, b);
+    gates_w32_free(b);
 }
 
 static void yield(void *ctx) {

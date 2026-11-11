@@ -33,7 +33,7 @@ static gates_err_t decode(void *ctx, gates_str_t src, bool is_file, gates_alloca
                                   (void **)&f);
     if (SUCCEEDED(hr) && is_file) {
         int n = MultiByteToWideChar(CP_UTF8, 0, (const char *)src.ptr, (int)src.size, nullptr, 0);
-        wpath = n > 0 ? (wchar_t *)HeapAlloc(GetProcessHeap(), 0, (SIZE_T)(n + 1) * sizeof(wchar_t)) : nullptr;
+        wpath = n > 0 ? (wchar_t *)gates_w32_alloc((gates_usize_t)(n + 1) * sizeof(wchar_t)) : nullptr;
         if (wpath == nullptr) {
             hr = E_INVALIDARG;
         } else {
@@ -78,7 +78,7 @@ static gates_err_t decode(void *ctx, gates_str_t src, bool is_file, gates_alloca
     if (dec != nullptr) IWICBitmapDecoder_Release(dec);
     if (stream != nullptr) IWICStream_Release(stream);
     if (f != nullptr) IWICImagingFactory_Release(f);
-    if (wpath != nullptr) HeapFree(GetProcessHeap(), 0, wpath);
+    gates_w32_free(wpath);
     if (!gates_is_ok(err)) return err;
     if (FAILED(hr)) return from_hr(hr);
     *out_w = (gates_i32)w;

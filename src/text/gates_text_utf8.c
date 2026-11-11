@@ -15,19 +15,24 @@ gates_u32 gates_text_decode(gates_str_t text, gates_u32 at, gates_u32 *out_cp) {
     gates_u32 avail = (gates_u32)text.size - at;
     gates_u8 b = p[0];
     gates_u32 need;
+    gates_u32 min_cp; /* the smallest value a sequence of this length may carry */
 
     if (b < 0x80) {
         cp = b;
         need = 0;
+        min_cp = 0;
     } else if ((b & 0xE0) == 0xC0) {
         need = 1;
         cp = b & 0x1Fu;
+        min_cp = 0x80;
     } else if ((b & 0xF0) == 0xE0) {
         need = 2;
         cp = b & 0x0Fu;
+        min_cp = 0x800;
     } else if ((b & 0xF8) == 0xF0) {
         need = 3;
         cp = b & 0x07u;
+        min_cp = 0x10000;
     } else {
         if (out_cp != nullptr) {
             *out_cp = 0xFFFD;
@@ -49,6 +54,14 @@ gates_u32 gates_text_decode(gates_str_t text, gates_u32 at, gates_u32 *out_cp) {
             return 1;
         }
         cp = (cp << 6) | (p[i] & 0x3Fu);
+    }
+    /* Overlong forms, surrogates and values past U+10FFFF are malformed: one
+     * byte, U+FFFD (the shared rule every backend and the edit core rely on). */
+    if (cp < min_cp || cp > 0x10FFFFu || (cp >= 0xD800u && cp <= 0xDFFFu)) {
+        if (out_cp != nullptr) {
+            *out_cp = 0xFFFD;
+        }
+        return 1;
     }
     if (out_cp != nullptr) {
         *out_cp = cp;
@@ -117,4 +130,17 @@ gates_u32 gates_text_prev_offset(gates_str_t text, gates_u32 at) {
         return at - 1; /* malformed: byte-wise fallback */
     }
     return start;
+}
+
+bool gates_text_utf8_valid(gates_str_t text, gates_usize_t *bad_at) {
+    for (gates_usize_t pos = 0; pos < text.size;) {
+        gates_u32 cp = 0;
+        gates_u32 used = gates_text_decode(text, (gates_u32)pos, &cp);
+        if (cp == 0xFFFDu && used == 1) { /* a real U+FFFD takes three bytes */
+            if (bad_at != nullptr) *bad_at = pos;
+            return false;
+        }
+        pos += used;
+    }
+    return true;
 }

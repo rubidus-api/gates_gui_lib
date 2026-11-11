@@ -72,7 +72,11 @@ bool gates_node_is_valid(const gates_tree_t *tree, gates_node_t node);
 
 /* -- node ops ---------------------------------------------- */
 
-/* parent == GATES_NODE_NULL creates a detached node (attach with append). */
+/* parent == GATES_NODE_NULL creates a detached node (attach with append).
+ * Only plain nodes: desc->kind GATES_NODE_CUSTOM, GATES_NODE_PANEL or
+ * GATES_NODE_SEPARATOR (null desc: CUSTOM); any other kind carries state that
+ * only its constructor (gates_button_create, gates_view_create, ...) attaches,
+ * so it is refused with INVALID_ARG. */
 [[nodiscard]] gates_err_t gates_node_create(gates_tree_t *tree, gates_node_t parent,
                                             const gates_node_desc_t *desc,
                                             gates_node_t *out_node);

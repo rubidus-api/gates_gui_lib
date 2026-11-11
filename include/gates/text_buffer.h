@@ -34,7 +34,8 @@ void gates_text_buffer_destroy(gates_text_buffer_t *b);
 
 /* Bytes of text. */
 gates_u32 gates_text_buffer_length(const gates_text_buffer_t *b);
-/* Replaces [begin, end) with text (copied). INVALID_ARG for a bad range,
+/* Replaces [begin, end) with text (copied). The buffer holds bytes and does not check them: a
+ * caller that keeps UTF-8 (the editor) validates first, with gates_text_utf8_valid. INVALID_ARG for a bad range,
  * OUT_OF_BOUNDS past GATES_TEXT_BUFFER_MAX, NOMEM; on failure nothing changes.
  * Read what a replace removes (for undo) before calling it. */
 [[nodiscard]] gates_err_t gates_text_buffer_replace(gates_text_buffer_t *b, gates_u32 begin, gates_u32 end,

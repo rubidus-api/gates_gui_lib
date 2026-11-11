@@ -12,6 +12,11 @@
 #include <gates/access.h>
 #include <gates/event.h>
 #include <gates/view.h>
+#include <gates/encoding.h>
+#include <gates/text.h>
+#include <gates/text_edit.h>
+#include <gates/text_buffer.h>
+#include <gates/undo.h>
 #include <gates/render.h>
 #include <proven/heap.h>
 #include "gates_test.h"
@@ -474,6 +479,119 @@ static void test_size_hints_and_access_points(void) {
     gates_tree_destroy(t);
 }
 
+/* -- second review (0.15.1) ------------------------------------------------------------------- */
+
+/* The public gates_node_create makes plain nodes only: another kind would be found by code that
+ * trusts the widget state its constructor attaches (it was a null dereference at layout). */
+static void test_node_create_plain_kinds_only(void) {
+    gates_tree_t *t = new_tree();
+    gates_node_kind_t bad[] = { GATES_NODE_VIEW, GATES_NODE_SLIDER, GATES_NODE_SPIN, GATES_NODE_GROUP,
+                                GATES_NODE_EDITOR, GATES_NODE_TEXTBOX, GATES_NODE_MENU, GATES_NODE_TABS };
+    for (gates_usize_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
+        gates_node_t n = { .index = 77, .generation = 9 };
+        GT_ASSERT(gates_node_create(t, gates_tree_root(t), &(gates_node_desc_t){ .kind = bad[i] }, &n) ==
+                  PROVEN_ERR_INVALID_ARG);
+        GT_ASSERT(gates_node_eq(n, GATES_NODE_NULL));
+    }
+    gates_node_t ok;
+    GT_ASSERT_OK(gates_node_create(t, gates_tree_root(t), &(gates_node_desc_t){ .kind = GATES_NODE_PANEL }, &ok));
+    GT_ASSERT_OK(gates_node_create(t, gates_tree_root(t), &(gates_node_desc_t){ .kind = GATES_NODE_SEPARATOR }, &ok));
+    GT_ASSERT_OK(gates_node_create(t, gates_tree_root(t), &(gates_node_desc_t){ .kind = GATES_NODE_CUSTOM }, &ok));
+    gates_u32 cmds;
+    (void)paint_count(t, (gates_size_t){ 200, 100 }, &cmds);
+    gates_tree_destroy(t);
+}
+
+/* One UTF-8 rule: overlong forms, surrogates and values past U+10FFFF are one byte of U+FFFD in
+ * the decoder, and every validity check (text, edit, encoding) agrees with it. */
+static void test_one_utf8_rule(void) {
+    static const char *bad[] = { "\xC0\x80", "\xC1\xBF", "\xE0\x80\x80", "\xED\xA0\x80", "\xED\xBF\xBF",
+                                 "\xF0\x80\x80\x80", "\xF4\x90\x80\x80", "\xF7\xBF\xBF\xBF", "\xFF", "\x80",
+                                 "\xE2\x82" };
+    for (gates_usize_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
+        gates_str_t b = { .ptr = (const gates_u8 *)bad[i], .size = strlen(bad[i]) };
+        gates_u32 cp = 0;
+        GT_ASSERT(gates_text_decode(b, 0, &cp) == 1 && cp == 0xFFFD);
+        gates_usize_t at = 99;
+        GT_ASSERT(!gates_text_utf8_valid(b, &at) && at == 0);
+        GT_ASSERT(!gates_utf8_valid(b, nullptr));
+    }
+    gates_str_t good = GATES_STR("h\xC3\xA9llo \xE2\x9C\x93 \xF0\x9F\x98\x80 \xEF\xBF\xBD");
+    GT_ASSERT(gates_text_utf8_valid(good, nullptr) && gates_utf8_valid(good, nullptr));
+    gates_u32 cp = 0;
+    GT_ASSERT(gates_text_decode(GATES_STR("\xEF\xBF\xBD"), 0, &cp) == 3 && cp == 0xFFFD); /* a real U+FFFD */
+    GT_ASSERT(gates_text_decode(GATES_STR("\xF4\x8F\xBF\xBF"), 0, &cp) == 4 && cp == 0x10FFFF);
+}
+
+/* The single-line text paths refuse malformed text and keep what they had. */
+static void test_textbox_refuses_bad_utf8(void) {
+    gates_tree_t *t = new_tree();
+    gates_node_t tb;
+    GT_ASSERT_OK(gates_layout_set(t, gates_tree_root(t), GATES_LAYOUT_KIND_COLUMN));
+    GT_ASSERT_OK(gates_textbox_create(t, gates_tree_root(t), GATES_STR("ab"), 10, &tb));
+    GT_ASSERT(gates_textbox_set_text(t, tb, GATES_STR("\xFF\xFE")) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_textbox_set_text(t, tb, GATES_STR("\xC0\x80")) == PROVEN_ERR_INVALID_ARG);
+    gates_str_t cur = gates_textbox_text(t, tb);
+    GT_ASSERT(cur.size == 2 && memcmp(cur.ptr, "ab", 2) == 0);
+    GT_ASSERT(gates_textbox_replace_selection(t, tb, GATES_STR("\xED\xA0\x80")) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_textbox_text(t, tb).size == 2);
+    GT_ASSERT_OK(gates_textbox_set_text(t, tb, GATES_STR("\xEA\xB0\x80"))); /* U+AC00 is fine */
+    gates_text_edit_t ed;
+    GT_ASSERT_OK(gates_text_edit_init(&ed, (gates_allocator_t){0}, GATES_STR("x")));
+    GT_ASSERT(gates_text_edit_insert(&ed, GATES_STR("\xF7\xBF\xBF\xBF")) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_text_edit_set_text(&ed, GATES_STR("\x80")) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_text_edit_text(&ed).size == 1);
+    gates_text_edit_deinit(&ed);
+    gates_tree_destroy(t);
+}
+
+/* A composition the editor cannot take (the text limit) is reported, not dropped silently. */
+static void test_ime_commit_failure_reported(void) {
+    gates_tree_t *t = new_tree();
+    GT_ASSERT_OK(gates_layout_set(t, gates_tree_root(t), GATES_LAYOUT_KIND_COLUMN));
+    gates_node_t ed;
+    GT_ASSERT_OK(gates_editor_create(t, gates_tree_root(t), &(gates_editor_desc_t){ .max_bytes = 4 }, &ed));
+    gates_tree_set_focus(t, ed);
+    (void)gates_input_commit(t, GATES_STR("abcdefgh")); /* past the limit: the composition ends, the error is kept */
+    GT_ASSERT(gates_input_take_error(t) == PROVEN_ERR_OUT_OF_BOUNDS);
+    GT_ASSERT(gates_input_commit(t, GATES_STR("\xFF\xFE")) == GATES_INPUT_FAILED); /* not text: it used to vanish */
+    GT_ASSERT(gates_input_take_error(t) == PROVEN_ERR_INVALID_ARG);
+    GT_ASSERT(gates_input_commit(t, GATES_STR("ab")) == GATES_INPUT_CONSUMED);
+    GT_ASSERT(gates_input_take_error(t) == GATES_OK);
+    gates_tree_destroy(t);
+}
+
+/* A very long typing run is split into entries: one entry could outgrow the history budget. */
+static void test_editor_history_long_run(void) {
+    gates_tree_t *t = new_tree();
+    GT_ASSERT_OK(gates_layout_set(t, gates_tree_root(t), GATES_LAYOUT_KIND_COLUMN));
+    gates_node_t ed;
+    GT_ASSERT_OK(gates_editor_create(t, gates_tree_root(t), &(gates_editor_desc_t){0}, &ed));
+    gates_tree_set_focus(t, ed);
+    for (int i = 0; i < 600000; i++) {
+        GT_ASSERT(gates_input_char(t, 'a') == GATES_INPUT_CONSUMED);
+    }
+    GT_ASSERT(gates_editor_length(t, ed) == 600000);
+    int undos = 0;
+    while (gates_editor_length(t, ed) > 0 && undos < 20 && gates_is_ok(gates_editor_undo(t, ed))) undos++;
+    GT_ASSERT(gates_editor_length(t, ed) == 0 && undos >= 2 && undos <= 5); /* split, but still a few steps */
+    gates_tree_destroy(t);
+}
+
+/* An allocator with a hole in it (alloc without free) is not used: the default heap is, as
+ * every other creator does. */
+static void test_half_allocator_falls_back(void) {
+    gates_allocator_t h = proven_heap_allocator();
+    gates_allocator_t half = { .ctx = h.ctx, .alloc_fn = h.alloc_fn };
+    gates_undo_t *u = nullptr;
+    GT_ASSERT_OK(gates_undo_create(half, 0, &u));
+    gates_undo_destroy(u);
+    gates_text_buffer_t *b = nullptr;
+    GT_ASSERT_OK(gates_text_buffer_create(half, &b));
+    GT_ASSERT_OK(gates_text_buffer_replace(b, 0, 0, GATES_STR("hello")));
+    gates_text_buffer_destroy(b);
+}
+
 int main(void) {
     be = gates_text_backend_builtin();
     theme = gates_theme_light();
@@ -487,5 +605,11 @@ int main(void) {
     test_log_limit_not_reserved();
     test_destroy_with_open_menu_inside();
     test_size_hints_and_access_points();
+    test_node_create_plain_kinds_only();
+    test_one_utf8_rule();
+    test_textbox_refuses_bad_utf8();
+    test_ime_commit_failure_reported();
+    test_editor_history_long_run();
+    test_half_allocator_falls_back();
     return gt_report("test_hardening");
 }

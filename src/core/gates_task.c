@@ -17,6 +17,7 @@
 struct gates_task {
     atomic_int refs;             /* the UI's and the worker's */
     atomic_bool cancel;
+    gates_allocator_t alloc;     /* the sender's (thread-safe), for this record and its progress records */
     atomic_bool orphaned;        /* the tree is being destroyed: nobody takes the end (R9-05) */
     gates_task_work_fn work;
     void *work_user;
@@ -33,6 +34,7 @@ struct gates_task {
 };
 
 typedef struct progress_t {
+    gates_allocator_t alloc;     /* the sender's: the record is freed on the UI thread through it */
     gates_task_t *task;          /* compared, never followed, until found in the tree's list */
     gates_u32 id;
     gates_u32 permille;
@@ -40,15 +42,13 @@ typedef struct progress_t {
     gates_u8 text[];
 } progress_t;
 
-static void heap_free(void *p) {
-    gates_allocator_t h = proven_heap_allocator();
-    h.free_fn(h.ctx, p);
-}
-
+/* Every record comes from the allocator the app gave its sender, which the contract makes
+ * thread-safe (the proven heap by default): the host's counting or limiting allocator sees them. */
 static void task_unref(gates_task_t *t) {
     if (atomic_fetch_sub(&t->refs, 1) == 1) {
+        gates_allocator_t a = t->alloc; /* the sender may go with the last reference */
         gates_sender_release(t->sender);
-        heap_free(t);
+        a.free_fn(a.ctx, t);
     }
 }
 
@@ -59,7 +59,9 @@ static void release_task(void *payload, void *ctx) {
 
 static void release_progress(void *payload, void *ctx) {
     (void)ctx;
-    heap_free(payload);
+    progress_t *p = (progress_t *)payload;
+    gates_allocator_t a = p->alloc;
+    a.free_fn(a.ctx, p);
 }
 
 static gates_u32 kind_of(const gates_task_t *t, bool done) {
@@ -74,7 +76,7 @@ static void task_main(void *arg) {
     /* The end must arrive: wait for room; a closed queue means nobody listens. */
     gates_message_t m = { .target = t->target, .kind = kind_of(t, true), .payload = t, .release = release_task };
     for (;;) {
-        gates_err_t err = gates_sender_post(t->sender, &m);
+        gates_err_t err = gates_i_sender_post(t->sender, &m);
         if (gates_is_ok(err)) return; /* the message holds the worker's reference now */
         if (err != GATES_POST_FULL) break;
         /* A tree being destroyed joins this thread and drains nothing: the end has no reader. */
@@ -86,17 +88,17 @@ static void task_main(void *arg) {
 
 gates_err_t gates_task_report(gates_task_t *t, gates_u32 permille, gates_str_t text) {
     if (t == nullptr || (text.size > 0 && text.ptr == nullptr) || text.size > 0xFFFFu) return PROVEN_ERR_INVALID_ARG;
-    gates_allocator_t h = proven_heap_allocator();
+    gates_allocator_t h = t->alloc;
     proven_result_mem_mut_t r = h.alloc_fn(h.ctx, sizeof(progress_t) + text.size, alignof(progress_t));
     if (!proven_is_ok(r.err)) return r.err;
     progress_t *p = (progress_t *)r.value.ptr;
-    *p = (progress_t){ .task = t, .id = t->id, .permille = permille < 1000u ? permille : 1000u,
+    *p = (progress_t){ .alloc = h, .task = t, .id = t->id, .permille = permille < 1000u ? permille : 1000u,
                        .len = (gates_u32)text.size };
     if (text.size > 0) memcpy(p->text, text.ptr, text.size);
     gates_message_t m = { .target = t->target, .kind = kind_of(t, false), .payload = p,
                           .bytes = sizeof(progress_t) + text.size, .release = release_progress, .replaceable = true };
-    gates_err_t err = gates_sender_post(t->sender, &m);
-    if (!gates_is_ok(err)) heap_free(p);
+    gates_err_t err = gates_i_sender_post(t->sender, &m);
+    if (!gates_is_ok(err)) h.free_fn(h.ctx, p);
     return err;
 }
 
@@ -117,11 +119,12 @@ gates_err_t gates_task_start(gates_tree_t *tree, const gates_task_desc_t *desc, 
     if (out_task != nullptr) *out_task = nullptr;
     if (tree == nullptr || desc == nullptr || desc->work == nullptr) return PROVEN_ERR_INVALID_ARG;
     if (tree->sender == nullptr || !tree->has_threads) return PROVEN_ERR_UNSUPPORTED;
-    gates_allocator_t h = proven_heap_allocator();
+    gates_allocator_t h = gates_i_sender_allocator(tree->sender);
     proven_result_mem_mut_t r = h.alloc_fn(h.ctx, sizeof(gates_task_t), alignof(gates_task_t));
     if (!proven_is_ok(r.err)) return r.err;
     gates_task_t *t = (gates_task_t *)r.value.ptr;
     memset(t, 0, sizeof *t);
+    t->alloc = h;
     atomic_init(&t->refs, 2);
     atomic_init(&t->cancel, false);
     atomic_init(&t->orphaned, false);
@@ -138,7 +141,7 @@ gates_err_t gates_task_start(gates_tree_t *tree, const gates_task_desc_t *desc, 
     gates_err_t err = t->threads.start(t->threads.ctx, task_main, t, &t->thread);
     if (!gates_is_ok(err)) {
         gates_sender_release(t->sender);
-        heap_free(t);
+        h.free_fn(h.ctx, t);
         return err;
     }
     t->next = tree->tasks;

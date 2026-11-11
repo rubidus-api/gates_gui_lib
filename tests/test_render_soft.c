@@ -274,6 +274,73 @@ static void test_text_delegation(void) {
     gates_draw_list_deinit(&dl);
 }
 
+/* The plain walk (the reference): every pixel of the line, endpoints included, clipped one by one. */
+static void ref_line(gates_u32 out[H][W + PAD_PX], gates_point_t p0, gates_point_t p1, gates_rect_t clip, gates_u32 v) {
+    long long dx = p1.x > p0.x ? (long long)p1.x - p0.x : (long long)p0.x - p1.x;
+    long long dy = p1.y > p0.y ? (long long)p1.y - p0.y : (long long)p0.y - p1.y;
+    int sx = p0.x < p1.x ? 1 : -1, sy = p0.y < p1.y ? 1 : -1;
+    long long err = dx - dy, x = p0.x, y = p0.y;
+    for (;;) {
+        if (x >= clip.x && x < clip.x + clip.w && y >= clip.y && y < clip.y + clip.h && x >= 0 && x < W && y >= 0 && y < H) {
+            out[y][x] = v;
+        }
+        if (x == p1.x && y == p1.y) break;
+        long long e2 = 2 * err;
+        if (e2 > -dy) { err -= dy; x += sx; }
+        if (e2 < dx) { err += dx; y += sy; }
+    }
+}
+
+/* RFC-0009 follow-up: lines are clipped by arithmetic, not by walking; the pixels are the plain walk's. */
+static void test_line_matches_walk(void) {
+    static gates_u32 want[H][W + PAD_PX];
+    gates_color_t c = GATES_RGB(200, 100, 50);
+    gates_u32 v = packed(c);
+    gates_u64 seed = 12345;
+    for (int iter = 0; iter < 3000; iter++) {
+        gates_point_t pt[2];
+        for (int k = 0; k < 2; k++) {
+            seed = seed * 6364136223846793005ull + 1442695040888963407ull;
+            int range = iter % 3 == 0 ? 400 : 60;
+            pt[k].x = (gates_i32)((seed >> 33) % (2u * range)) - range;
+            seed = seed * 6364136223846793005ull + 1442695040888963407ull;
+            pt[k].y = (gates_i32)((seed >> 33) % (2u * range)) - range;
+        }
+        seed = seed * 6364136223846793005ull + 1442695040888963407ull;
+        gates_rect_t clip = { (gates_i32)((seed >> 40) % 12), (gates_i32)((seed >> 48) % 10), 0, 0 };
+        clip.w = 1 + (gates_i32)((seed >> 52) % (W - clip.x));
+        clip.h = 1 + (gates_i32)((seed >> 56) % (H - clip.y));
+        clear_buf(0);
+        memset(want, 0, sizeof want);
+        gates_draw_list_t dl;
+        GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+        GT_ASSERT_OK(gates_draw_clip_push(&dl, clip));
+        GT_ASSERT_OK(gates_draw_line(&dl, pt[0], pt[1], c));
+        GT_ASSERT_OK(gates_draw_clip_pop(&dl));
+        GT_ASSERT_OK(gates_render_soft(&dl, target(), nullptr));
+        ref_line(want, pt[0], pt[1], clip, v);
+        bool same = true;
+        for (int y = 0; y < H && same; y++)
+            for (int x = 0; x < W && same; x++) same = buf[y][x] == want[y][x];
+        GT_ASSERT(same);
+        gates_draw_list_deinit(&dl);
+    }
+}
+
+/* A line across all of 32 bits crosses a small clip: it must finish at once (it used to walk 4e9 pixels). */
+static void test_line_far_endpoints(void) {
+    clear_buf(0);
+    gates_draw_list_t dl;
+    GT_ASSERT_OK(gates_draw_list_init(&dl, (gates_allocator_t){0}, 0));
+    gates_color_t c = GATES_RGB(1, 2, 3);
+    GT_ASSERT_OK(gates_draw_line(&dl, (gates_point_t){ -2000000000, -2000000000 }, (gates_point_t){ 2000000000, 2000000000 }, c));
+    GT_ASSERT_OK(gates_draw_line(&dl, (gates_point_t){ INT32_MIN, 5 }, (gates_point_t){ INT32_MAX, 7 }, c));
+    GT_ASSERT_OK(gates_render_soft(&dl, target(), nullptr));
+    GT_ASSERT(px(10, 10) == packed(c)); /* the diagonal passes through */
+    GT_ASSERT(count_pixels(packed(c)) >= W);
+    gates_draw_list_deinit(&dl);
+}
+
 int main(void) {
     test_pack_unpack();
     test_full_fill_and_stride();
@@ -282,6 +349,8 @@ int main(void) {
     test_border_no_double_draw();
     test_lines();
     test_line_clipped();
+    test_line_matches_walk();
+    test_line_far_endpoints();
     test_alpha_blend_exact();
     test_out_of_bounds_safe();
     test_unsupported_and_invalid();

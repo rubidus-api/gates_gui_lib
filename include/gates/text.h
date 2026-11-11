@@ -112,6 +112,10 @@ gates_u32 gates_text_offset_at_x(const gates_text_backend_t *backend, gates_font
  * Malformed input consumes one byte and yields U+FFFD. */
 gates_u32 gates_text_decode(gates_str_t text, gates_u32 at, gates_u32 *out_cp);
 
+/* True when every byte of text belongs to a well-formed UTF-8 sequence (the rule of
+ * gates_text_decode). When not, *bad_at (when not null) is the first bad byte. */
+bool gates_text_utf8_valid(gates_str_t text, gates_usize_t *bad_at);
+
 /* Display cells for one codepoint: 2 for Hangul/CJK/fullwidth, else 1. */
 gates_u32 gates_text_cell_width(gates_u32 codepoint);
 

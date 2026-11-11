@@ -12,7 +12,7 @@ static gates_err_t widget_create(gates_tree_t *tree, gates_node_t parent,
     }
     gates_node_desc_t desc = { .kind = kind };
     gates_node_t node = GATES_NODE_NULL;
-    gates_err_t err = gates_node_create(tree, parent, &desc, &node);
+    gates_err_t err = gates_i_node_create(tree, parent, &desc, &node);
     if (!gates_is_ok(err)) {
         return err;
     }
@@ -41,7 +41,7 @@ gates_err_t gates_panel_create(gates_tree_t *tree, gates_node_t parent,
         return PROVEN_ERR_INVALID_ARG;
     }
     gates_node_desc_t desc = { .kind = GATES_NODE_PANEL };
-    return gates_node_create(tree, parent, &desc, out_node);
+    return gates_i_node_create(tree, parent, &desc, out_node);
 }
 
 gates_err_t gates_label_create(gates_tree_t *tree, gates_node_t parent,
@@ -298,7 +298,7 @@ gates_err_t gates_separator_create(gates_tree_t *tree, gates_node_t parent,
         return PROVEN_ERR_INVALID_ARG;
     }
     gates_node_desc_t desc = { .kind = GATES_NODE_SEPARATOR };
-    return gates_node_create(tree, parent, &desc, out_node); /* no state: nothing to say */
+    return gates_i_node_create(tree, parent, &desc, out_node); /* no state: nothing to say */
 }
 
 static gates_i32 clamp_permille(gates_i32 v) {

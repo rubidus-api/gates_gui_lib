@@ -174,7 +174,7 @@ static ULONG el_release(uia_el_t *e) {
                 }
             }
         }
-        HeapFree(GetProcessHeap(), 0, e);
+        gates_w32_free(e);
     }
     return (ULONG)n;
 }
@@ -190,7 +190,7 @@ static uia_el_t *el_get_cell(gates_window_t *win, gates_access_ref_t ref, gates_
             return e;
         }
     }
-    uia_el_t *e = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof *e);
+    uia_el_t *e = gates_w32_alloc(sizeof *e);
     if (e == nullptr) return nullptr;
     e->simple.lpVtbl = (IRawElementProviderSimpleVtbl *)&simple_vtbl;
     e->frag.lpVtbl = (IRawElementProviderFragmentVtbl *)&frag_vtbl;
@@ -749,13 +749,13 @@ static HRESULT STDMETHODCALLTYPE value_set(IValueProvider *This, LPCWSTR text) {
     }
     int n = WideCharToMultiByte(CP_UTF8, 0, text, -1, nullptr, 0, nullptr, nullptr);
     if (n <= 0) return E_INVALIDARG;
-    char *buf = HeapAlloc(GetProcessHeap(), 0, (SIZE_T)n);
+    char *buf = gates_w32_alloc((gates_usize_t)n);
     if (buf == nullptr) return E_OUTOFMEMORY;
     WideCharToMultiByte(CP_UTF8, 0, text, -1, buf, n, nullptr, nullptr);
     gates_str_t v = { .ptr = (const gates_u8 *)buf, .size = (size_t)n - 1 };
     gates_err_t err = e->cell != 0 ? gates_access_cell_set_value(e->win->tree, e->ref.node, e->ref.item, e->cell, v)
                                    : gates_access_set_value(e->win->tree, e->ref.node, v);
-    HeapFree(GetProcessHeap(), 0, buf);
+    gates_w32_free(buf);
     return acted(e, err);
 }
 
@@ -1300,7 +1300,7 @@ typedef struct uia_range_t {
 static const ITextRangeProviderVtbl range_text_vtbl;
 
 static ITextRangeProvider *range_new(uia_el_t *el, LONG start, LONG end) {
-    uia_range_t *r = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof *r);
+    uia_range_t *r = gates_w32_alloc(sizeof *r);
     if (r == nullptr) return nullptr;
     r->iface.lpVtbl = (ITextRangeProviderVtbl *)&range_text_vtbl;
     r->refs = 1;
@@ -1443,7 +1443,7 @@ static ULONG STDMETHODCALLTYPE rt_release(ITextRangeProvider *This) {
     LONG n = InterlockedDecrement(&r->refs);
     if (n == 0) {
         el_release(r->el);
-        HeapFree(GetProcessHeap(), 0, r);
+        gates_w32_free(r);
     }
     return (ULONG)n;
 }

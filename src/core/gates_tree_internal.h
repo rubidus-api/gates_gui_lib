@@ -1006,10 +1006,18 @@ gates_u32 gates_i_editor_offset_at_point(gates_tree_t *tree, gates_u32 idx, gate
 bool gates_i_editor_row_of(gates_tree_t *tree, gates_u32 idx, gates_u32 offset, gates_u32 *begin, gates_u32 *end);
 gates_err_t gates_i_editor_user_set(gates_tree_t *tree, gates_u32 idx, gates_str_t text);
 void gates_i_node_undo(gates_tree_t *tree, gates_node_t node);
+/* gates_node_create without the kind check: the gates constructors make the
+ * stateful kinds (and attach their state) through this; the public call refuses them. */
+gates_err_t gates_i_node_create(gates_tree_t *tree, gates_node_t parent, const gates_node_desc_t *desc,
+                                gates_node_t *out_node);
 /* Background tasks (0.6.0): message kinds from GATES_I_TASK_KIND_BASE are
  * the tasks' own, handled by gates_i_task_message before node handlers; tree
  * destroy cancels and joins every task first. */
 #define GATES_I_TASK_KIND_BASE 0xFFFF0000u
+/* gates_sender_post without the kind check (gates' own task messages). */
+gates_err_t gates_i_sender_post(gates_sender_t *sender, const gates_message_t *msg);
+/* The allocator the app gave its sender (thread-safe by contract): the task records use it. */
+gates_allocator_t gates_i_sender_allocator(const gates_sender_t *sender);
 void gates_i_task_message(gates_tree_t *tree, gates_u32 kind, void *payload);
 void gates_i_tasks_shutdown(gates_tree_t *tree);
 gates_i64 gates_i_range_value(const gates_tree_t *tree, gates_u32 idx);

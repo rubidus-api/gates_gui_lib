@@ -43,7 +43,7 @@ static void *grow(gates_allocator_t a, void *p, gates_usize_t old_bytes, gates_u
 gates_err_t gates_text_buffer_create(gates_allocator_t alloc, gates_text_buffer_t **out) {
     if (out == nullptr) return PROVEN_ERR_INVALID_ARG;
     *out = nullptr;
-    if (alloc.alloc_fn == nullptr) alloc = proven_heap_allocator();
+    if (!proven_alloc_is_valid(alloc)) alloc = proven_heap_allocator();
     proven_result_mem_mut_t r = alloc.alloc_fn(alloc.ctx, sizeof(gates_text_buffer_t), alignof(gates_text_buffer_t));
     if (!proven_is_ok(r.err)) return r.err;
     gates_text_buffer_t *b = (gates_text_buffer_t *)r.value.ptr;

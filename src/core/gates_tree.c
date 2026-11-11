@@ -528,8 +528,8 @@ bool gates_node_is_valid(const gates_tree_t *tree, gates_node_t node) {
 
 /* -- node ops ---------------------------------------------------------------- */
 
-gates_err_t gates_node_create(gates_tree_t *tree, gates_node_t parent,
-                              const gates_node_desc_t *desc, gates_node_t *out_node) {
+gates_err_t gates_i_node_create(gates_tree_t *tree, gates_node_t parent,
+                                const gates_node_desc_t *desc, gates_node_t *out_node) {
     if (tree == nullptr || out_node == nullptr) {
         return PROVEN_ERR_INVALID_ARG;
     }
@@ -553,6 +553,20 @@ gates_err_t gates_node_create(gates_tree_t *tree, gates_node_t parent,
     }
     *out_node = gates_i_handle(tree, idx);
     return GATES_OK;
+}
+
+/* The public call makes plain nodes only: every other kind needs the widget
+ * state its constructor attaches, and code that finds the kind trusts the state. */
+gates_err_t gates_node_create(gates_tree_t *tree, gates_node_t parent,
+                              const gates_node_desc_t *desc, gates_node_t *out_node) {
+    if (desc != nullptr && desc->kind != GATES_NODE_CUSTOM && desc->kind != GATES_NODE_PANEL &&
+        desc->kind != GATES_NODE_SEPARATOR) {
+        if (out_node != nullptr) {
+            *out_node = GATES_NODE_NULL;
+        }
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    return gates_i_node_create(tree, parent, desc, out_node);
 }
 
 gates_err_t gates_node_append(gates_tree_t *tree, gates_node_t parent, gates_node_t child) {

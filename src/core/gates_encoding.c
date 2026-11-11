@@ -4,6 +4,7 @@
  * result is allocated once, exactly, and nothing is allocated on an error.
  * Platform-free. */
 #include <gates/encoding.h>
+#include <gates/text.h>
 #include <proven/heap.h>
 
 #include <string.h>
@@ -43,27 +44,13 @@ static gates_usize_t next_cp(gates_encoding_kind_t kind, const gates_u8 *in, gat
     *cp = REPLACEMENT;
     switch (kind) {
     case GATES_ENCODING_UTF8: {
-        gates_u8 b = p[0];
-        if (b < 0x80) {
-            *cp = b;
-            *bad = false;
-            return 1;
-        }
-        gates_usize_t need;
-        gates_u32 v, min;
-        if ((b & 0xE0) == 0xC0) { need = 1; v = b & 0x1Fu; min = 0x80; }
-        else if ((b & 0xF0) == 0xE0) { need = 2; v = b & 0x0Fu; min = 0x800; }
-        else if ((b & 0xF8) == 0xF0) { need = 3; v = b & 0x07u; min = 0x10000; }
-        else return 1;
-        if (need >= left) return 1;
-        for (gates_usize_t i = 1; i <= need; i++) {
-            if ((p[i] & 0xC0) != 0x80) return 1;
-            v = (v << 6) | (p[i] & 0x3Fu);
-        }
-        if (v < min || v > 0x10FFFF || (v >= 0xD800 && v <= 0xDFFF)) return 1; /* overlong, too big, surrogate */
+        /* the one UTF-8 rule lives in gates_text_decode (a malformed byte: U+FFFD, one byte) */
+        gates_u32 v = REPLACEMENT;
+        gates_u32 used = gates_text_decode((gates_str_t){ .ptr = in, .size = size }, (gates_u32)pos, &v);
+        if (v == REPLACEMENT && used == 1) return 1;
         *cp = v;
         *bad = false;
-        return need + 1;
+        return used;
     }
     case GATES_ENCODING_UTF16LE:
     case GATES_ENCODING_UTF16BE: {
@@ -270,18 +257,7 @@ gates_err_t gates_encoding_from_utf8(gates_encoding_t enc, gates_str_t text, gat
 }
 
 bool gates_utf8_valid(gates_str_t text, gates_usize_t *bad_at) {
-    const gates_u8 *p = text.ptr;
-    for (gates_usize_t pos = 0; pos < text.size;) {
-        gates_u32 cp;
-        bool bad;
-        gates_usize_t used = next_cp(GATES_ENCODING_UTF8, p, text.size, pos, &cp, &bad);
-        if (bad) {
-            if (bad_at != nullptr) *bad_at = pos;
-            return false;
-        }
-        pos += used;
-    }
-    return true;
+    return gates_text_utf8_valid(text, bad_at);
 }
 
 gates_usize_t gates_encoding_detect(const void *in, gates_usize_t size, gates_encoding_t *out) {

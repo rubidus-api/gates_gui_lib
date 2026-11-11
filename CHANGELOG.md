@@ -4,6 +4,60 @@ All notable changes to this project will be documented in this file.
 
 This project follows Keep a Changelog.
 
+## [0.15.2] - 2026-11-11
+
+A second review of the whole source (correctness, memory, allocators, error handling), fixed.
+
+### Changed
+
+- `gates_node_create` makes plain nodes only (`CUSTOM`, `PANEL`, `SEPARATOR`); any other kind is
+  `INVALID_ARG` and `*out_node` is `GATES_NODE_NULL`. A button, view, slider, spin box, group or
+  editor made this way had no widget state, and the first layout, paint or key event dereferenced
+  null; use the constructors (`gates_button_create`, ...), which attach it.
+- `gates_sender_post` refuses a message kind from `0xFFFF0000` up (`INVALID_ARG`): those are the
+  task code's own, and dispatch read their payload as a task record. A worker that posted one
+  made dispatch follow an arbitrary pointer.
+- The text box paths (`gates_textbox_set_text`, `replace_selection`, typing, paste, accessibility
+  `SetValue`, `gates_text_edit_set_text`, `gates_text_edit_insert`) refuse malformed UTF-8
+  (`INVALID_ARG`, the old text kept), as the editor already did; they stored it before.
+- `gates_text_decode` follows one rule everywhere: an overlong form, a surrogate (`ED A0 80`) or a
+  value past U+10FFFF is one byte of U+FFFD, as the header said. The editor, the encoding
+  functions and the text box now use it through `gates_text_utf8_valid` (new, `gates/text.h`)
+  instead of their own copies. The text module no longer includes the core's encoding header.
+- Background task records (and their progress records) are allocated from the allocator the app
+  gave its sender (thread-safe by contract; the proven heap by default), not always from the proven
+  heap, so a counting or limiting host allocator sees them.
+- The Win32 backend takes its own memory (the scratch run buffers, COM objects, thread boxes, the
+  lock) from the proven heap allocator instead of `HeapAlloc`; the code-page conversions use the
+  caller's allocator for their scratch buffer too. The run buffers of text drawing are kept between
+  calls instead of two heap allocations per drawn run.
+- `gates_undo_create` and `gates_text_buffer_create` treat an allocator with a missing function
+  like the other creators do (the proven heap); one with `alloc_fn` set and `free_fn` null
+  crashed at destroy.
+- Line numbers in the editor and the window placement string are formatted with `proven_fmt_to`
+  (checked, bounded) instead of `snprintf`; the proven fmt, string and buffer code joins the
+  libraries.
+
+### Fixed
+
+- `draw_line` walked the whole line even when most of it lay outside the clip: a line from
+  (-2e9, -2e9) to (2e9, 2e9) took billions of steps and froze the window; its error terms also
+  overflowed past 2^30. A line is now clipped by arithmetic (the same pixels as the plain walk;
+  checked against it on thousands of random lines) and costs only the pixels it can show.
+- Windows: text drawing handled at most 4096 device pixels of a run and dropped the rest (a long
+  line scrolled sideways, a window wider than 4096 pixels). The visible part is drawn in strips,
+  and only the units that reach each strip go to GDI.
+- Windows: a lone high surrogate from `WM_CHAR` waited for any later low surrogate and made a
+  bogus character with it; it is dropped when another character arrives first.
+- Windows: an IME result the editor refused (a limit, bad text) now reaches `on_input_error`; the
+  editor's commit left no error behind for a refused text.
+- The editor's undo history could grow one entry past its budget in a single long typing or
+  deleting run, and was never trimmed; a run now ends its entry at a quarter of the budget, and
+  the history is trimmed after every join.
+- A replaceable post scanned the whole queue under the sender's lock; the queue counts its
+  replaceable messages and the scan goes newest first and stops at the last of them.
+- The colour dialog loaded `comdlg32.dll` on every call and never let it go; it is loaded once.
+
 ## [0.15.1] - 2026-11-11
 
 ### Fixed

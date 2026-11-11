@@ -51,7 +51,7 @@ gates_err_t gates_menubar_create(gates_tree_t *tree, gates_node_t parent, gates_
     *mb = (gates_i_menubar){ .scope_index = scope.index, .scope_generation = scope.generation };
     gates_node_desc_t nd = { .kind = GATES_NODE_MENUBAR };
     gates_node_t bar = GATES_NODE_NULL;
-    gates_err_t err = gates_node_create(tree, parent, &nd, &bar);
+    gates_err_t err = gates_i_node_create(tree, parent, &nd, &bar);
     gates_u32 state = GATES_NONE;
     if (gates_is_ok(err)) {
         err = gates_i_state_acquire(tree, &state);

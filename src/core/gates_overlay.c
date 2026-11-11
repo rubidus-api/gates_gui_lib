@@ -103,7 +103,7 @@ gates_err_t gates_dialog_open(gates_tree_t *tree, const gates_dialog_desc_t *des
     }
     gates_node_desc_t nd = { .kind = GATES_NODE_DIALOG };
     gates_node_t dlg = GATES_NODE_NULL;
-    gates_err_t err = gates_node_create(tree, GATES_NODE_NULL, &nd, &dlg);
+    gates_err_t err = gates_i_node_create(tree, GATES_NODE_NULL, &nd, &dlg);
     if (!gates_is_ok(err)) {
         return err;
     }
@@ -451,7 +451,7 @@ static gates_err_t menu_create(gates_tree_t *tree, gates_point_t at, gates_i32 a
     memcpy(copy, ids, count * sizeof *copy);
     gates_node_desc_t nd = { .kind = GATES_NODE_MENU };
     gates_node_t m = GATES_NODE_NULL;
-    gates_err_t err = gates_node_create(tree, GATES_NODE_NULL, &nd, &m);
+    gates_err_t err = gates_i_node_create(tree, GATES_NODE_NULL, &nd, &m);
     gates_u32 state = GATES_NONE;
     if (gates_is_ok(err)) {
         err = gates_i_state_acquire(tree, &state);

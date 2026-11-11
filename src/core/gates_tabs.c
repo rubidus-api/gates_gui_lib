@@ -40,7 +40,7 @@ static gates_u32 stack_of(const gates_tree_t *tree, gates_u32 tabs) {
 
 static gates_err_t make_node(gates_tree_t *tree, gates_node_t parent, gates_node_kind_t kind, gates_node_t *out) {
     gates_node_desc_t nd = { .kind = kind };
-    gates_err_t err = gates_node_create(tree, parent, &nd, out);
+    gates_err_t err = gates_i_node_create(tree, parent, &nd, out);
     if (!gates_is_ok(err)) return err;
     gates_u32 state = GATES_NONE;
     err = gates_i_state_acquire(tree, &state);

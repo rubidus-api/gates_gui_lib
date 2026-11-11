@@ -519,7 +519,11 @@ gates_input_result_t gates_input_commit(gates_tree_t *tree, gates_str_t text) {
         if (text.size > 0 && text.ptr == nullptr) return GATES_INPUT_IGNORED;
         gates_err_t err = gates_i_editor_commit(tree, editor, text);
         if (err == PROVEN_ERR_PERMISSION) return GATES_INPUT_IGNORED;
-        return gates_is_ok(err) ? GATES_INPUT_CONSUMED : GATES_INPUT_FAILED;
+        if (!gates_is_ok(err)) {
+            tree->input_error = err; /* a committed composition that was dropped must be reported */
+            return GATES_INPUT_FAILED;
+        }
+        return GATES_INPUT_CONSUMED;
     }
     gates_widget_state_t *st = composing_box(tree);
     if (st == nullptr || (text.size > 0 && text.ptr == nullptr)) {

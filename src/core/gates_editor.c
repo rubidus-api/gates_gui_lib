@@ -8,7 +8,8 @@
 #include <gates/ui.h>
 #include "gates_tree_internal.h"
 
-#include <stdio.h>
+#include <proven/fmt.h>
+
 #include <string.h>
 
 #define ED_PAD 3                     /* text inset inside the border */
@@ -193,24 +194,9 @@ static gates_u32 word_left(const struct gates_i_editor *e, gates_u32 off) {
     return p;
 }
 
-/* True when text is well-formed UTF-8 (no overlongs, surrogates or values past U+10FFFF). */
+/* True when text is well-formed UTF-8 (the one rule: gates_text_decode). */
 static bool utf8_ok(gates_str_t t) {
-    for (gates_usize_t i = 0; i < t.size;) {
-        gates_u8 c = t.ptr[i];
-        gates_u32 n = c < 0x80 ? 1 : (c & 0xE0) == 0xC0 ? 2 : (c & 0xF0) == 0xE0 ? 3 : (c & 0xF8) == 0xF0 ? 4 : 0;
-        if (n == 0 || i + n > t.size) return false;
-        gates_u32 cp = n == 1 ? c : n == 2 ? (c & 0x1Fu) : n == 3 ? (c & 0x0Fu) : (c & 0x07u);
-        for (gates_u32 k = 1; k < n; k++) {
-            if ((t.ptr[i + k] & 0xC0) != 0x80) return false;
-            cp = (cp << 6) | (t.ptr[i + k] & 0x3Fu);
-        }
-        if ((n == 2 && cp < 0x80) || (n == 3 && cp < 0x800) || (n == 4 && cp < 0x10000) || cp > 0x10FFFF ||
-            (cp >= 0xD800 && cp <= 0xDFFF)) {
-            return false;
-        }
-        i += n;
-    }
-    return true;
+    return gates_text_utf8_valid(t, nullptr);
 }
 
 static bool on_boundary(const struct gates_i_editor *e, gates_u32 off) {
@@ -557,7 +543,7 @@ gates_err_t gates_editor_create(gates_tree_t *tree, gates_node_t parent, const g
     }
     gates_node_t node = GATES_NODE_NULL;
     gates_node_desc_t nd = { .kind = GATES_NODE_EDITOR };
-    err = gates_node_create(tree, GATES_NODE_NULL, &nd, &node);
+    err = gates_i_node_create(tree, GATES_NODE_NULL, &nd, &node);
     gates_u32 state = GATES_NONE;
     bool owned = false;
     if (gates_is_ok(err)) {
@@ -671,10 +657,13 @@ static gates_err_t hist_record(gates_tree_t *tree, struct gates_i_editor *e, gat
                                gates_str_t inserted, gates_u32 caret0, gates_u32 anchor0, run_t run) {
     gates_allocator_t a = tree->alloc;
     hist_t *top = e->hist_pos > 0 && e->hist_pos == e->nhist ? &e->hist[e->hist_pos - 1] : nullptr;
-    if (e->run_open && top != nullptr && run == top->run && e->clean != (gates_i64)e->hist_pos) {
+    /* A run joins its entry only while the entry is a small part of the budget: an entry that grew
+     * without end could not be trimmed (trimming drops whole old entries), so a long run is split. */
+    if (e->run_open && top != nullptr && run == top->run && e->clean != (gates_i64)e->hist_pos &&
+        (gates_u64)top->rlen + top->ilen + removed.size + inserted.size <= ED_HISTORY_BYTES / 4u) {
         if (run == RUN_TYPE && removed.size == 0 && top->at + top->ilen == at) {
             gates_err_t err = grow_text(a, &top->inserted, &top->ilen, inserted, false);
-            if (gates_is_ok(err)) e->hist_bytes += inserted.size;
+            if (gates_is_ok(err)) { e->hist_bytes += inserted.size; hist_trim(tree, e); }
             return err;
         }
         if (run == RUN_DEL_BACK && inserted.size == 0 && top->at == at + removed.size) {
@@ -682,12 +671,13 @@ static gates_err_t hist_record(gates_tree_t *tree, struct gates_i_editor *e, gat
             if (gates_is_ok(err)) {
                 top->at = at;
                 e->hist_bytes += removed.size;
+                hist_trim(tree, e);
             }
             return err;
         }
         if (run == RUN_DEL_FWD && inserted.size == 0 && top->at == at) {
             gates_err_t err = grow_text(a, &top->removed, &top->rlen, removed, false);
-            if (gates_is_ok(err)) e->hist_bytes += removed.size;
+            if (gates_is_ok(err)) { e->hist_bytes += removed.size; hist_trim(tree, e); }
             return err;
         }
     }
@@ -1134,8 +1124,11 @@ gates_err_t gates_i_editor_paint(const gates_tree_t *tree, gates_u32 idx, gates_
         gates_color_t nc = gates_theme_color(theme, GATES_COLOR_CONTROL_DISABLED_FG);
         for (gates_u32 i = 0; i < nnumbers; i++) {
             char buf[16];
-            int n = snprintf(buf, sizeof buf, "%u", numbers[i]);
-            gates_str_t num = { .ptr = (const gates_u8 *)buf, .size = (gates_usize_t)n };
+            proven_fmt_result_t fr = proven_fmt_to(buf, sizeof buf, "{}", PROVEN_ARG(numbers[i]));
+            if (!proven_is_ok(fr.err)) {
+                return fr.err; /* a u32 always fits: this is a bug, not a state to draw through */
+            }
+            gates_str_t num = { .ptr = (const gates_u8 *)buf, .size = fr.written };
             gates_i32 w = gates_text_width(text, font, num);
             TRY_DRAW(gates_draw_text(dl, (gates_rect_t){ g.gutter.x + g.gutter.w - ED_PAD - w,
                                                          g.text.y + (gates_i32)number_rows[i] * g.row_h +

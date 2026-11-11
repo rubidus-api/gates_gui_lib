@@ -91,8 +91,8 @@ gates_u32 gates_text_edit_sel_end(const gates_text_edit_t *ed) {
 }
 
 gates_err_t gates_text_edit_set_text(gates_text_edit_t *ed, gates_str_t text) {
-    if (ed == nullptr || (text.size > 0 && text.ptr == nullptr)) {
-        return PROVEN_ERR_INVALID_ARG;
+    if (ed == nullptr || (text.size > 0 && text.ptr == nullptr) || !gates_text_utf8_valid(text, nullptr)) {
+        return PROVEN_ERR_INVALID_ARG; /* the buffer only ever holds well-formed UTF-8 */
     }
     gates_err_t err = reserve(&ed->buf, &ed->cap, ed->alloc, (gates_u32)text.size);
     if (!gates_is_ok(err)) {
@@ -135,8 +135,8 @@ gates_err_t gates_text_edit_reserve(gates_text_edit_t *ed, gates_u32 total_bytes
 }
 
 gates_err_t gates_text_edit_insert(gates_text_edit_t *ed, gates_str_t text) {
-    if (ed == nullptr || (text.size > 0 && text.ptr == nullptr)) {
-        return PROVEN_ERR_INVALID_ARG;
+    if (ed == nullptr || (text.size > 0 && text.ptr == nullptr) || !gates_text_utf8_valid(text, nullptr)) {
+        return PROVEN_ERR_INVALID_ARG; /* the buffer only ever holds well-formed UTF-8 */
     }
     /* Reserve before mutating so a failed insert leaves the text intact. */
     gates_u32 sel = gates_text_edit_sel_end(ed) - gates_text_edit_sel_begin(ed);

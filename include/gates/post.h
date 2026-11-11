@@ -24,7 +24,8 @@
  * the app down: they must only free the payload, never touch UI state.
  * gates_sender_retain / _release / _post may be called from any thread; every
  * other function here is for the UI thread. The allocator given to the app
- * must be thread-safe (the default one is). Platform-free. */
+ * must be thread-safe (the default one is): the sender's allocator also holds the
+ * records of background tasks (gates/task.h). Platform-free. */
 #ifndef GATES_POST_H
 #define GATES_POST_H
 
@@ -72,7 +73,8 @@ typedef struct gates_message_t {
 void gates_sender_retain(gates_sender_t *sender);
 void gates_sender_release(gates_sender_t *sender);
 /* OK: gates owns the payload now. GATES_POST_FULL / GATES_POST_CLOSED, or
- * OUT_OF_BOUNDS for a message larger than the byte limit: the caller keeps it. */
+ * OUT_OF_BOUNDS for a message larger than the byte limit, or INVALID_ARG for a kind
+ * from 0xFFFF0000 up (those are gates' own task messages): the caller keeps it. */
 [[nodiscard]] gates_err_t gates_sender_post(gates_sender_t *sender, const gates_message_t *msg);
 
 /* The node's message handler (null removes it). The payload is borrowed for

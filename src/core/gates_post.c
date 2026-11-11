@@ -25,6 +25,7 @@ struct gates_sender {
     bool want_grow;
     gates_u32 head;
     gates_u32 count;
+    gates_u32 nrepl;             /* queued messages that are replaceable (under the lock) */
     gates_usize_t bytes;
     gates_usize_t max_bytes;
     /* Attached trees (UI thread only). */
@@ -112,7 +113,7 @@ static bool same_target(gates_target_t x, gates_target_t y) {
     return x.tree == y.tree && gates_node_eq(x.node, y.node);
 }
 
-gates_err_t gates_sender_post(gates_sender_t *s, const gates_message_t *msg) {
+gates_err_t gates_i_sender_post(gates_sender_t *s, const gates_message_t *msg) {
     if (s == nullptr || msg == nullptr) {
         return PROVEN_ERR_INVALID_ARG;
     }
@@ -126,9 +127,13 @@ gates_err_t gates_sender_post(gates_sender_t *s, const gates_message_t *msg) {
         s->sync.unlock(s->lock);
         return GATES_POST_CLOSED;
     }
-    if (msg->replaceable) {
-        for (gates_u32 i = 0; i < s->count; i++) {
-            gates_message_t *q = &s->ring[(s->head + i) % s->cap];
+    if (msg->replaceable && s->nrepl > 0) {
+        /* Newest first (a stream of snapshots is found at the tail), and no further than the last
+         * replaceable message in the queue: a queue of plain messages is not scanned at all. */
+        gates_u32 seen = 0;
+        for (gates_u32 i = s->count; i > 0 && seen < s->nrepl; i--) {
+            gates_message_t *q = &s->ring[(s->head + i - 1) % s->cap];
+            if (q->replaceable) seen++;
             if (q->replaceable && q->kind == msg->kind && same_target(q->target, msg->target)) {
                 if (s->bytes - q->bytes + msg->bytes > s->max_bytes) {
                     s->sync.unlock(s->lock);
@@ -151,6 +156,7 @@ gates_err_t gates_sender_post(gates_sender_t *s, const gates_message_t *msg) {
         s->ring[(s->head + s->count) % s->cap] = *msg;
         s->count++;
         s->bytes += msg->bytes;
+        if (msg->replaceable) s->nrepl++;
         if (s->count >= s->cap - s->cap / 4 && s->cap < s->max_cap) s->want_grow = true;
         if (was_empty && s->wake != nullptr) {
             s->wake(s->wake_ctx); /* under the lock: close cannot slip in between */
@@ -161,6 +167,19 @@ gates_err_t gates_sender_post(gates_sender_t *s, const gates_message_t *msg) {
         release_msg(&replaced); /* outside the lock: it may post again */
     }
     return GATES_OK;
+}
+
+/* A program's messages use kinds below GATES_I_TASK_KIND_BASE: dispatch hands
+ * the payload of a higher kind to the task code as its own record. */
+gates_err_t gates_sender_post(gates_sender_t *s, const gates_message_t *msg) {
+    if (msg != nullptr && msg->kind >= GATES_I_TASK_KIND_BASE) {
+        return PROVEN_ERR_INVALID_ARG;
+    }
+    return gates_i_sender_post(s, msg);
+}
+
+gates_allocator_t gates_i_sender_allocator(const gates_sender_t *s) {
+    return s->alloc;
 }
 
 gates_err_t gates_sender_attach(gates_sender_t *s, gates_tree_t *tree) {
@@ -265,6 +284,7 @@ gates_u32 gates_sender_dispatch(gates_sender_t *s, gates_u32 max) {
         s->head = (s->head + 1) % s->cap;
         s->count--;
         s->bytes -= batch[i].bytes;
+        if (batch[i].replaceable) s->nrepl--;
     }
     s->sync.unlock(s->lock);
     for (gates_u32 i = 0; i < n; i++) {
@@ -299,6 +319,7 @@ void gates_sender_close(gates_sender_t *s) {
         s->head = (s->head + 1) % s->cap;
         s->count--;
         s->bytes -= m.bytes;
+        if (m.replaceable) s->nrepl--;
         release_msg(&m);
     }
     for (gates_u32 i = 0; i < s->tree_count; i++) {

@@ -91,7 +91,7 @@ gates_err_t gates_propgrid_create(gates_tree_t *tree, gates_node_t parent, gates
     memset(pg, 0, sizeof *pg);
     gates_node_t grid = GATES_NODE_NULL;
     gates_node_desc_t nd = { .kind = GATES_NODE_PANEL };
-    gates_err_t err = gates_node_create(tree, GATES_NODE_NULL, &nd, &grid);
+    gates_err_t err = gates_i_node_create(tree, GATES_NODE_NULL, &nd, &grid);
     gates_u32 state = GATES_NONE;
     bool owned = false;
     if (gates_is_ok(err)) {
@@ -104,7 +104,7 @@ gates_err_t gates_propgrid_create(gates_tree_t *tree, gates_node_t parent, gates
         }
     }
     if (gates_is_ok(err)) err = gates_layout_set(tree, grid, GATES_LAYOUT_KIND_COLUMN);
-    if (gates_is_ok(err)) err = gates_node_create(tree, grid, &nd, &pg->general);
+    if (gates_is_ok(err)) err = gates_i_node_create(tree, grid, &nd, &pg->general);
     if (gates_is_ok(err)) err = make_grid(tree, pg->general);
     if (gates_is_ok(err)) err = gates_node_set_bubble_handler(tree, grid, on_bubble, pg);
     if (gates_is_ok(err) && !gates_node_eq(parent, GATES_NODE_NULL)) err = gates_node_append(tree, parent, grid);

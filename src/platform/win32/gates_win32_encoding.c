@@ -40,11 +40,14 @@ static gates_err_t cp_to_utf8(void *ctx, gates_u32 codepage, const gates_u8 *in,
         }
         return e == ERROR_INVALID_PARAMETER || e == ERROR_INVALID_FLAGS ? PROVEN_ERR_UNSUPPORTED : PROVEN_ERR_IO;
     }
-    wchar_t *w = (wchar_t *)HeapAlloc(GetProcessHeap(), 0, (SIZE_T)n * sizeof(wchar_t));
-    if (w == nullptr) return PROVEN_ERR_NOMEM;
+    /* The scratch UTF-16 comes from the caller's allocator, like the result (zero -> proven heap). */
+    gates_allocator_t a = proven_alloc_is_valid(alloc) ? alloc : proven_heap_allocator();
+    proven_result_mem_mut_t sr = a.alloc_fn(a.ctx, (gates_usize_t)n * sizeof(wchar_t), alignof(wchar_t));
+    if (!proven_is_ok(sr.err)) return sr.err;
+    wchar_t *w = (wchar_t *)sr.value.ptr;
     MultiByteToWideChar(cp, flags, (LPCCH)in, (int)size, w, n);
-    gates_err_t err = gates_encoding_to_utf8(wide, w, (gates_usize_t)n * 2u, 0, alloc, out, out_size, nullptr);
-    HeapFree(GetProcessHeap(), 0, w);
+    gates_err_t err = gates_encoding_to_utf8(wide, w, (gates_usize_t)n * 2u, 0, a, out, out_size, nullptr);
+    a.free_fn(a.ctx, w);
     return err;
 }
 
@@ -58,13 +61,14 @@ static int wide_to_cp(UINT cp, const wchar_t *w, int wn, char *out, int cap, BOO
 static gates_err_t cp_from_utf8(void *ctx, gates_u32 codepage, gates_str_t text, bool strict, gates_allocator_t alloc,
                                 gates_u8 **out, gates_usize_t *out_size, gates_usize_t *bad_at) {
     (void)ctx;
-    gates_allocator_t heap = proven_heap_allocator();
+    /* Scratch and result both come from the caller's allocator (zero -> proven heap). */
+    gates_allocator_t heap = proven_alloc_is_valid(alloc) ? alloc : proven_heap_allocator();
     gates_u8 *wbuf = nullptr;
     gates_usize_t wbytes = 0;
     gates_err_t err = gates_encoding_from_utf8((gates_encoding_t){ .kind = GATES_ENCODING_UTF16LE }, text, 0, heap,
                                                &wbuf, &wbytes, nullptr);
     if (!gates_is_ok(err)) return err;
-    gates_allocator_t a = proven_alloc_is_valid(alloc) ? alloc : heap;
+    gates_allocator_t a = heap;
     if (wbytes / 2u > INT_MAX) {
         heap.free_fn(heap.ctx, wbuf);
         return PROVEN_ERR_OVERFLOW;
@@ -156,7 +160,7 @@ gates_err_t gates_args_utf8_win32(gates_allocator_t alloc, int *argc, char ***ar
     if (argc == nullptr || argv == nullptr) return PROVEN_ERR_INVALID_ARG;
     const wchar_t *cl = GetCommandLineW();
     gates_usize_t n = cl != nullptr ? wcslen(cl) : 0;
-    gates_allocator_t heap = proven_heap_allocator();
+    gates_allocator_t heap = proven_alloc_is_valid(alloc) ? alloc : proven_heap_allocator(); /* the caller's, scratch too */
     gates_u8 *line = nullptr;
     gates_usize_t size = 0;
     gates_err_t err = gates_encoding_to_utf8((gates_encoding_t){ .kind = GATES_ENCODING_UTF16LE }, cl, n * 2u, 0, heap,

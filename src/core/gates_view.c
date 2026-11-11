@@ -357,7 +357,7 @@ gates_err_t gates_view_create(gates_tree_t *tree, gates_node_t parent, const gat
     bool owned = false;          /* the node's state holds v: discarding the node frees it */
     if (gates_is_ok(err)) {
         gates_node_desc_t nd = { .kind = GATES_NODE_VIEW };
-        err = gates_node_create(tree, GATES_NODE_NULL, &nd, &node);
+        err = gates_i_node_create(tree, GATES_NODE_NULL, &nd, &node);
     }
     if (gates_is_ok(err)) {
         err = gates_i_state_acquire(tree, &state);

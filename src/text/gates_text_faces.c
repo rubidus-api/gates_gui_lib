@@ -12,7 +12,7 @@ static gates_u32 g_count;
 
 gates_err_t gates_font_named(gates_str_t name, gates_font_t *out_face) {
     if (out_face == nullptr || name.ptr == nullptr || name.size == 0 || name.size > GATES_FONT_NAME_MAX ||
-        !gates_utf8_valid(name, nullptr) || memchr(name.ptr, 0, name.size) != nullptr) {
+        !gates_text_utf8_valid(name, nullptr) || memchr(name.ptr, 0, name.size) != nullptr) {
         return PROVEN_ERR_INVALID_ARG;
     }
     for (gates_u32 i = 0; i < g_count; i++) {

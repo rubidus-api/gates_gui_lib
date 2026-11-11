@@ -1712,7 +1712,8 @@ Release functions may run on a posting thread or on the thread that shuts
 the app down: they must only free the payload, never touch UI state.
 gates_sender_retain / _release / _post may be called from any thread; every
 other function here is for the UI thread. The allocator given to the app
-must be thread-safe (the default one is). Platform-free.
+must be thread-safe (the default one is): the sender's allocator also holds the
+records of background tasks (gates/task.h). Platform-free.
 
 The tree's serial number, and a target for a node of it (UI thread).
 
@@ -1730,7 +1731,8 @@ void gates_sender_release(gates_sender_t *sender);
 ```
 
 OK: gates owns the payload now. GATES_POST_FULL / GATES_POST_CLOSED, or
-OUT_OF_BOUNDS for a message larger than the byte limit: the caller keeps it.
+OUT_OF_BOUNDS for a message larger than the byte limit, or INVALID_ARG for a kind
+from 0xFFFF0000 up (those are gates' own task messages): the caller keeps it.
 
 ```c
 [[nodiscard]] gates_err_t gates_sender_post(gates_sender_t *sender, const gates_message_t *msg);
@@ -2070,6 +2072,13 @@ Malformed input consumes one byte and yields U+FFFD.
 gates_u32 gates_text_decode(gates_str_t text, gates_u32 at, gates_u32 *out_cp);
 ```
 
+True when every byte of text belongs to a well-formed UTF-8 sequence (the rule of
+gates_text_decode). When not, \*bad_at (when not null) is the first bad byte.
+
+```c
+bool gates_text_utf8_valid(gates_str_t text, gates_usize_t *bad_at);
+```
+
 Display cells for one codepoint: 2 for Hangul/CJK/fullwidth, else 1.
 
 ```c
@@ -2145,7 +2154,8 @@ Bytes of text.
 gates_u32 gates_text_buffer_length(const gates_text_buffer_t *b);
 ```
 
-Replaces [begin, end) with text (copied). INVALID_ARG for a bad range,
+Replaces [begin, end) with text (copied). The buffer holds bytes and does not check them: a
+caller that keeps UTF-8 (the editor) validates first, with gates_text_utf8_valid. INVALID_ARG for a bad range,
 OUT_OF_BOUNDS past GATES_TEXT_BUFFER_MAX, NOMEM; on failure nothing changes.
 Read what a replace removes (for undo) before calling it.
 
@@ -2432,6 +2442,10 @@ bool gates_node_is_valid(const gates_tree_t *tree, gates_node_t node);
 ### node ops
 
 parent == GATES_NODE_NULL creates a detached node (attach with append).
+Only plain nodes: desc->kind GATES_NODE_CUSTOM, GATES_NODE_PANEL or
+GATES_NODE_SEPARATOR (null desc: CUSTOM); any other kind carries state that
+only its constructor (gates_button_create, gates_view_create, ...) attaches,
+so it is refused with INVALID_ARG.
 
 ```c
 [[nodiscard]] gates_err_t gates_node_create(gates_tree_t *tree, gates_node_t parent, const gates_node_desc_t *desc, gates_node_t *out_node);
