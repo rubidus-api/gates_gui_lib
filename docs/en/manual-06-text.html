@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>6 Text entry - gates Manual</title><link rel="stylesheet" href="../book.css">
+<script>(function(){try{var s=JSON.parse(localStorage.getItem('rp-read')||'{}');var r=document.documentElement;if(s.theme&&s.theme!=='auto')r.setAttribute('data-theme',s.theme);if(s.fg)r.style.setProperty('--fg',s.fg);if(s.bg)r.style.setProperty('--bg',s.bg);if(s.link)r.style.setProperty('--link',s.link);if(s.width)r.setAttribute('data-measure','on');}catch(e){}})();</script></head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<div class="bar"><strong><a href="index.html">gates Manual</a></strong><button class="here-btn" type="button" aria-expanded="false" aria-controls="here-panel">ch. 6 <span class="caret">&#9662;</span></button><span class="sp"></span><span class="bar-nav"><a href="manual-05-views.html" title="Prev" aria-label="Prev">&larr;</a><a href="index.html" title="Contents" aria-label="Contents">&uarr;</a><a href="manual-07-workers-timers.html" title="Next" aria-label="Next">&rarr;</a></span></div><div id="here-panel" class="here-panel" hidden><div class="tools"><span class="ver">0.15.0</span><button class="tool" type="button" id="set-open">&#9881; Settings</button><a class="tool" href="toc.html">&#9636; Detailed contents</a><a class="tool" href="../ko/manual-06-text.html">Ko</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.15.0/gates-manual-0.15.0-en.pdf">&#10515; PDF</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib" title="gates_gui_lib on GitHub">Git</a><a class="tool" href="https://rubidus-api.github.io/" title="rubidus-api.github.io - every published project">&#8962; All projects</a><a class="tool" href="https://github.com/rubidus-api" title="github.com/rubidus-api - every repository">&#8801; All repos</a></div><div class="setbox" id="setbox" hidden><label class="setrow"><input type="checkbox" id="s-width"><span>Limit line width</span></label><div class="setrow"><span class="setlbl">Theme</span><span class="seg"><button type="button" class="segb" data-theme="auto">System</button><button type="button" class="segb" data-theme="light">Light</button><button type="button" class="segb" data-theme="dark">Dark</button></span></div><div class="setrow"><span class="setlbl">Colours</span><label class="col"><span>Text</span><input type="color" id="s-fg"></label><label class="col"><span>Background</span><input type="color" id="s-bg"></label><label class="col"><span>Link</span><input type="color" id="s-link"></label></div><p class="setnote">Settings are kept in this browser only.</p></div><div class="here-head"><strong>In this chapter</strong></div><div class="here-body"><a class="lv3" href="#the-text-box"><span class="tf-no">6.1</span>The text box</a><a class="lv3" href="#the-limit-is-a-question"><span class="tf-no">6.2</span>The limit is a question</a><a class="lv3" href="#the-installed-input-method"><span class="tf-no">6.3</span>The installed input method</a><a class="lv3" href="#unicode-limits-in-0110"><span class="tf-no">6.4</span>Unicode limits in 0.11.0</a><a class="lv3" href="#the-clipboard"><span class="tf-no">6.5</span>The clipboard</a><a class="lv3" href="#other-encodings-at-the-edge"><span class="tf-no">6.6</span>Other encodings at the edge</a><a class="lv3" href="#many-lines-the-editor"><span class="tf-no">6.7</span>Many lines: the editor</a><a class="lv3" href="#large-texts"><span class="tf-no">6.8</span>Large texts</a></div></div>
+<main id="content"><div class="wrap">
+<h2 id="top">6 Text entry</h2>
+<div class="chapter-toc"><div class="rail-label">In this chapter</div><div class="rail-body"><a class="lv3" href="#the-text-box"><span class="tf-no">6.1</span>The text box</a><a class="lv3" href="#the-limit-is-a-question"><span class="tf-no">6.2</span>The limit is a question</a><a class="lv3" href="#the-installed-input-method"><span class="tf-no">6.3</span>The installed input method</a><a class="lv3" href="#unicode-limits-in-0110"><span class="tf-no">6.4</span>Unicode limits in 0.11.0</a><a class="lv3" href="#the-clipboard"><span class="tf-no">6.5</span>The clipboard</a><a class="lv3" href="#other-encodings-at-the-edge"><span class="tf-no">6.6</span>Other encodings at the edge</a><a class="lv3" href="#many-lines-the-editor"><span class="tf-no">6.7</span>Many lines: the editor</a><a class="lv3" href="#large-texts"><span class="tf-no">6.8</span>Large texts</a></div></div>
+<p>Headers: <code>gates/widget.h</code> (text box), <code>gates/text_edit.h</code>, <code>gates/clipboard.h</code>, <code>gates/input.h</code>, <code>gates/ui.h</code>.</p>
+<h3 id="the-text-box">6.1 The text box<a class="plink" href="#the-text-box" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>A text box edits one line of UTF-8 text. The person types, selects with Shift and the pointer (Shift+click extends, a double click takes a word, a triple click all of it), moves by character and to the start or end (Home, End), copies, cuts and pastes (Ctrl+C, Ctrl+X, Ctrl+V), and undoes and redoes (Ctrl+Z, Ctrl+Y). Each successful edit queues TEXT_CHANGED with the committed text; the program's own <code>gates_textbox_set_text</code> is silent and clears the undo history. Under every text box is the edit core (<code>gates/text_edit.h</code>): text, caret, selection and an open composition, all as byte offsets into UTF-8.</p>
+<div class="tblwrap"><table><tr><th>Setting</th><th>Effect</th></tr><tr><td><code>gates_textbox_set_read_only</code></td><td>focus, selection and copy work; editing, paste, cut, undo and composition are refused</td></tr><tr><td><code>gates_textbox_set_password</code></td><td>one <code>*</code> per character, no copy or cut, events carry no text, no undo, no IME</td></tr><tr><td><code>gates_textbox_set_max_bytes</code></td><td>a maximum length in UTF-8 bytes (see below)</td></tr><tr><td><code>gates_textbox_set_undo_limits</code></td><td>undo history bounds; defaults 64 entries, 16384 bytes</td></tr><tr><td><code>gates_textbox_set_invalid</code></td><td>the error look (a form sets it for you)</td></tr></table></div>
+<h3 id="the-limit-is-a-question">6.2 The limit is a question<a class="plink" href="#the-limit-is-a-question" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>When input would pass the maximum length, gates inserts nothing and asks: a LIMIT_EXCEEDED event carries the refused input and how many of its bytes would fit. The program puts the question to the person - keep what fits, or drop it - and answers with <code>gates_textbox_accept_fit</code> or <code>gates_textbox_discard_rejected</code>. Silently cutting a pasted account number in half is the failure this avoids.</p>
+<pre><code class="lang-c">/* manual example (host): a text box with a limit - the overflow is a question.
+ * expect: offered 7 bytes, 5 fit; kept "Seoul" */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+static gates_u32 offered, fit;
+
+static void on_box(gates_tree_t *tree, const gates_event_t *ev, void *user) {
+    (void)tree;
+    (void)user;
+    if (ev-&gt;kind == GATES_EVENT_LIMIT_EXCEEDED) {
+        offered = (gates_u32)ev-&gt;text.size;
+        fit = ev-&gt;fit_bytes;
+    }
+}
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;t))) return 1;
+    gates_node_t city;
+    if (!gates_is_ok(gates_textbox_create(t, gates_tree_root(t), GATES_STR(""), 20, &amp;city)) ||
+        !gates_is_ok(gates_textbox_set_max_bytes(t, city, 5)) ||
+        !gates_is_ok(gates_widget_set_handler(t, city, on_box, nullptr))) {
+        return 1;
+    }
+    gates_tree_set_focus(t, city);
+    /* Typed or pasted input (an IME delivers its result the same way). */
+    (void)gates_input_commit(t, GATES_STR("Seoul!!"));
+    (void)gates_tree_dispatch_events(t, 0);
+    /* Nothing was inserted: the box holds the input as an offer. Here the
+     * answer is "keep what fits"; gates_textbox_discard_rejected drops it. */
+    if (!gates_is_ok(gates_textbox_accept_fit(t, city))) return 1;
+    gates_str_t text = gates_textbox_text(t, city);
+    printf("offered %u bytes, %u fit; kept \"%.*s\"\n", offered, fit, (int)text.size, (const char *)text.ptr);
+    gates_tree_destroy(t);
+    return 0;
+}</code></pre>
+<h3 id="the-installed-input-method">6.3 The installed input method<a class="plink" href="#the-installed-input-method" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>gates implements no input method. On Windows the installed IME (Korean, Japanese, Chinese, ...) works in every text box through IMM32: the syllable being composed is shown inline at the caret, the candidate window opens under the caret, and the finished text arrives as one edit. A read-only or password box turns the IME off while it has focus. For a program that feeds text itself - tests, automation - <code>gates_input_commit</code> delivers text as an IME would, and <code>gates_input_preedit</code> shows a composition.</p>
+<h3 id="unicode-limits-in-0110">6.4 Unicode limits in 0.11.0<a class="plink" href="#unicode-limits-in-0110" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<ul><li>Text is UTF-8 everywhere; invalid input is refused, never repaired silently. Text in other encodings is converted at the edge (below).</li><li>Every character has its own advance, taken from the font: text is proportional in the UI font and fixed-pitch in the mono font (chapter 8). A string is exactly as wide as the sum of its characters, so the caret, a selection and a click always land between characters.</li><li>There is no kerning, no ligatures and no shaping: scripts that need shaping (Arabic, the Indic scripts, Thai) show their characters one by one, and right-to-left text is not reordered.</li><li>Editing moves by code point, not by grapheme cluster: a base letter and a combining mark are two steps.</li><li>The Win32 backend draws real system glyphs, taking characters its face lacks (Hangul in Segoe UI) from the system's fallback fonts; the builtin backend (tests, headless) is fixed-pitch and draws ASCII, with a box of the right width for everything else.</li><li>A text box is one line; many lines are the editor's (below).</li></ul>
+<h3 id="the-clipboard">6.5 The clipboard<a class="plink" href="#the-clipboard" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>The window provides the platform clipboard (<code>gates/clipboard.h</code>): text crosses it as UTF-8 and is converted at the edge. A tree without a clipboard provider (headless) makes copy, cut and paste do nothing.</p>
+<h3 id="other-encodings-at-the-edge">6.6 Other encodings at the edge<a class="plink" href="#other-encodings-at-the-edge" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>Inside a program everything is UTF-8 - the API, the text box, the editor, the text buffer. The outside is not always: a file may be UTF-16 with a byte order mark, a console on Korean Windows uses code page 949, an older program writes EUC-KR. <code>gates/encoding.h</code> converts at the edge, so the program keeps one encoding inside and meets each environment in its own (0.10.0):</p>
+<ul><li><code>gates_encoding_to_utf8(enc, bytes, size, flags, alloc, &amp;out, &amp;out_size, &amp;bad_at)</code> brings text in; a byte order mark of that encoding is skipped. <code>gates_encoding_from_utf8</code> takes it out again (with a mark first when <code>enc.bom</code>). Results come from <code>alloc</code> ({0} = the heap), end with zero bytes that are not counted (a C string, or a wide string, as it is), and are freed by the caller.</li><li>UTF-8, UTF-16 and UTF-32 in both byte orders are done by gates everywhere. Code pages go by their Windows numbers (<code>GATES_CODEPAGE_CP949</code> 949, <code>GATES_CODEPAGE_EUC_KR</code> 51949, 932, 936, 1252, ...; 0 = the system's) and need the platform's tables: the Win32 app installs a converter when it is created; without one they are UNSUPPORTED. <code>gates_encoding_system_codepage</code> and <code>gates_encoding_console_codepage</code> say what the system and the console use.</li><li>Broken input becomes U+FFFD; with <code>GATES_ENCODING_STRICT</code> the call refuses it instead and <code>bad_at</code> says which byte. A character a code page cannot hold becomes its <code>?</code>, or a refusal when strict.</li><li><code>gates_encoding_detect</code> guesses for bytes of unknown origin: a byte order mark decides, then UTF-16 by its zero bytes, then valid UTF-8, else the system code page. <code>gates_utf8_valid</code> checks text before it goes into the editor (which refuses anything else).</li><li>With no OS to ask (a microcontroller, an RTOS GUI), <code>gates_codepage_converter_cp949()</code> is a converter of gates' own for 949 (CP949) and 51949 (EUC-KR), from tables measured on Windows 11, so it converts as Windows does (0.11.0). Install it with <code>gates_encoding_set_codepage_converter</code>; only a program that calls it carries its tables (about 120 KB).</li><li>Without allocating, for targets that count their memory: <code>gates_encoding_to_utf8_buf</code> / <code>_from_utf8_buf</code> write into your buffer (a call with none asks for the size), and a <code>gates_encoding_stream_t</code> converts in pieces - a file read in blocks, bytes from a serial line - carrying a character cut at a piece's end over to the next. Both take the UTF forms.</li><li>On Windows, <code>main</code>'s arguments are in the ANSI code page and <code>printf</code> of UTF-8 shows garbled on a console that is not set to UTF-8: <code>gates_args_utf8_win32</code> gives the command line as UTF-8 arguments (split by <code>gates_args_split</code>, the Windows rules, usable anywhere), and <code>gates_console_write_win32</code> writes UTF-8 to the console, or the bytes as they are when the output is redirected.</li></ul>
+<pre><code class="lang-c">/* manual example (host): text from outside in another encoding, UTF-8 inside, back out.
+ * expect: UTF-16LE with a 2-byte mark; 9 characters in 13 UTF-8 bytes; out as UTF-32BE in 36 bytes; strict refuses byte 2; code page 949 here: unsupported */
+#include &lt;gates/gates.h&gt;
+#include &lt;proven/heap.h&gt;
+
+#include &lt;stdio.h&gt;
+
+static const char *name(gates_encoding_kind_t k) {
+    static const char *const names[] = { "UTF-8", "UTF-16LE", "UTF-16BE", "UTF-32LE", "UTF-32BE", "a code page" };
+    return names[k];
+}
+
+int main(void) {
+    /* A file's bytes: a UTF-16LE mark, then "Hi, " and two Hangul syllables U+D55C U+AE00, then "!". */
+    static const unsigned char file[] = { 0xFF, 0xFE, 'H', 0, 'i', 0, ',', 0, ' ', 0, 0x5C, 0xD5, 0x00, 0xAE,
+                                          '!', 0, '\r', 0, '\n', 0 };
+    gates_encoding_t enc;
+    gates_usize_t mark = gates_encoding_detect(file, sizeof file, &amp;enc);
+    printf("%s with a %u-byte mark; ", name(enc.kind), (unsigned)mark);
+
+    /* In: one encoding inside the program from here on (the mark is skipped). */
+    gates_u8 *text = nullptr;
+    gates_usize_t size = 0;
+    if (!gates_is_ok(gates_encoding_to_utf8(enc, file, sizeof file, 0, (gates_allocator_t){0}, &amp;text, &amp;size, nullptr))) {
+        return 1;
+    }
+    gates_str_t s = { .ptr = text, .size = size };
+    unsigned chars = 0;
+    for (gates_u32 at = 0; at &lt; size; chars++) at += gates_text_decode(s, at, &amp;(gates_u32){0});
+    printf("%u characters in %u UTF-8 bytes; ", chars, (unsigned)size);
+
+    /* Out: whatever the other side wants. */
+    gates_u8 *wide = nullptr;
+    gates_usize_t wide_size = 0;
+    if (!gates_is_ok(gates_encoding_from_utf8((gates_encoding_t){ .kind = GATES_ENCODING_UTF32BE }, s, 0,
+                                              (gates_allocator_t){0}, &amp;wide, &amp;wide_size, nullptr))) {
+        return 1;
+    }
+    printf("out as UTF-32BE in %u bytes; ", (unsigned)wide_size);
+
+    /* Broken input: replaced with U+FFFD by default, or refused with where it broke. */
+    gates_usize_t bad_at = 0;
+    gates_u8 *junk = nullptr;
+    gates_err_t err = gates_encoding_to_utf8((gates_encoding_t){ .kind = GATES_ENCODING_UTF8 }, "ok\xFF", 3,
+                                             GATES_ENCODING_STRICT, (gates_allocator_t){0}, &amp;junk, &amp;size, &amp;bad_at);
+    printf("strict refuses byte %u; ", err == PROVEN_ERR_INVALID_ENCODING ? (unsigned)bad_at : 99u);
+
+    /* Code pages (949 = Korean Windows, EUC-KR and more) need a converter: on Windows the app
+     * installs the platform's; gates_codepage_converter_cp949() is a built-in one for 949 and
+     * 51949. This program installs none, so the call says so. */
+    err = gates_encoding_to_utf8((gates_encoding_t){ .kind = GATES_ENCODING_CODEPAGE, .codepage = GATES_CODEPAGE_CP949 },
+                                 "\xC7\xD1", 2, 0, (gates_allocator_t){0}, &amp;junk, &amp;size, nullptr);
+    printf("code page 949 here: %s\n", err == PROVEN_ERR_UNSUPPORTED ? "unsupported" : "converted");
+
+    gates_allocator_t heap = proven_heap_allocator();
+    heap.free_fn(heap.ctx, text);
+    heap.free_fn(heap.ctx, wide);
+    return 0;
+}</code></pre>
+<h3 id="many-lines-the-editor">6.7 Many lines: the editor<a class="plink" href="#many-lines-the-editor" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p><code>gates_editor_create</code> (gates/editor.h) makes a multi-line editor over a text buffer. It paints only the lines it shows, so a long file costs what the window costs. Arrows, Home/End, PageUp/PageDown and Ctrl with them move the caret (Shift selects; Shift+click extends, a double click takes a word, a triple click the line with its break), Enter keeps the text's own line ending, Tab moves focus unless the description asks for tabs to be typed, and Ctrl+A/C/X/V/Z/Y work as everywhere. A person's edits are undoable - a typing or deleting run is one step - and <code>gates_editor_modified</code> tells whether the text differs from what was set or saved. The program reads the text through <code>gates_editor_buffer</code> and changes it with <code>gates_editor_set_text</code> or <code>gates_editor_replace</code>; TEXT_CHANGED carries no text, so a long file is never copied into an event.</p>
+<pre><code class="lang-c">/* manual example (host): a multi-line editor - typing, lines, undo and the modified mark.
+ * expect: 3 lines, caret on line 2; after undo: 2 lines, modified: no */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+static void press(gates_tree_t *t, gates_key_t key, bool ctrl) {
+    gates_key_event_t ev = { .key = key, .ctrl = ctrl, .down = true };
+    (void)gates_input_key(t, &amp;ev);
+    ev.down = false;
+    (void)gates_input_key(t, &amp;ev);
+}
+
+static void type(gates_tree_t *t, const char *s) {
+    for (; *s != 0; s++) (void)gates_input_char(t, (gates_u32)(unsigned char)*s);
+}
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;t))) return 1;
+    gates_node_t notes;
+    gates_editor_desc_t desc = { .rows = 8, .cols = 40 };
+    if (!gates_is_ok(gates_editor_create(t, gates_tree_root(t), &amp;desc, &amp;notes)) ||
+        !gates_is_ok(gates_editor_set_text(t, notes, GATES_STR("Shopping\nMilk"))) ||
+        !gates_is_ok(gates_node_set_access_name(t, notes, GATES_STR("Notes"))) ||
+        !gates_is_ok(gates_layout_run(t, (gates_size_t){ 360, 200 }, gates_text_backend_builtin()))) {
+        return 1;
+    }
+    /* A person goes to the end, starts a new line and types. */
+    gates_tree_set_focus(t, notes);
+    press(t, GATES_KEY_END, true);
+    press(t, GATES_KEY_ENTER, false);
+    type(t, "Bread");
+    const gates_text_buffer_t *text = gates_editor_buffer(t, notes);
+    gates_u32 caret = 0;
+    gates_editor_selection(t, notes, nullptr, &amp;caret);
+    printf("%u lines, caret on line %u; ", gates_text_buffer_line_count(text), gates_text_buffer_line_of(text, caret));
+
+    /* Ctrl+Z takes the typing back, then the new line: the text is as it was set. */
+    press(t, GATES_KEY_Z, true);
+    press(t, GATES_KEY_Z, true);
+    printf("after undo: %u lines, modified: %s\n", gates_text_buffer_line_count(text),
+           gates_editor_modified(t, notes) ? "yes" : "no");
+    gates_tree_destroy(t);
+    return 0;
+}</code></pre>
+<p>The description turns on soft wrap (rows break after the last blank that fits; Up and Down then move by rows, Home and End go to the row's start and end before the line's, and a caret at the end of a row stays drawn there), a line number gutter and auto-indent. When Tab types tabs, Tab and Shift+Tab indent and unindent the selected lines and Ctrl+Tab moves focus on, so the keyboard is never trapped. Highlighting is the program's: <code>gates_editor_set_styles</code> maps style bytes to colours, and a styler (<code>gates_editor_set_styler</code>) is asked, just before painting, to style the lines about to show whose styles are stale - an edit makes its line stale again - so style work follows the view, not the length of the text. <code>gates_editor_find</code> selects the next match; marks (<code>gates_editor_mark_add</code>) keep a place while the text around it changes. An input method composes at the caret, drawn underlined in the text; the result arrives as one edit. Screen readers read the editor's text by character, word and line - a line as shown, a wrapped row (<code>gates_access_text_line</code>); a paragraph is a text line - with one rectangle per row for a range (<code>gates_access_text_rects</code>).</p>
+<pre><code class="lang-c">/* manual example (host): highlighting through a styler, and find.
+ * expect: styled up to line 11 of 200; "TODO" found on line 150 */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+enum { PLAIN, NUMBER, KEYWORD };
+
+/* The program's highlighter: numbers and the word "TODO". It only styles the
+ * range it is given - the editor asks for what is about to show. */
+static gates_u32 styled_to;
+static void highlight(void *user, gates_text_buffer_t *text, gates_u32 from, gates_u32 to) {
+    (void)user;
+    gates_text_buffer_set_style(text, from, to, PLAIN);
+    for (gates_u32 i = from; i &lt; to; i++) {
+        gates_u8 c = gates_text_buffer_byte(text, i);
+        if (c &gt;= '0' &amp;&amp; c &lt;= '9') gates_text_buffer_set_style(text, i, i + 1, NUMBER);
+    }
+    gates_u32 at = from;
+    while (gates_text_buffer_find(text, at, GATES_STR("TODO"), 0, &amp;at) &amp;&amp; at + 4 &lt;= to) {
+        gates_text_buffer_set_style(text, at, at + 4, KEYWORD);
+        at += 4;
+    }
+    styled_to = to;
+}
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;t))) return 1;
+    static char text[8000];
+    int n = 0;
+    for (int i = 1; i &lt;= 200; i++) n += snprintf(text + n, sizeof text - (size_t)n, i == 150 ? "TODO %d\n" : "step %d\n", i);
+    gates_node_t ed;
+    gates_editor_desc_t desc = { .rows = 10, .line_numbers = true, .wrap = true };
+    const gates_editor_style_t styles[] = { {0}, { .token = GATES_COLOR_FOCUS_RING }, { .token = GATES_COLOR_ERROR } };
+    if (!gates_is_ok(gates_editor_create(t, gates_tree_root(t), &amp;desc, &amp;ed)) ||
+        !gates_is_ok(gates_editor_set_text(t, ed, (gates_str_t){ (const gates_u8 *)text, (gates_usize_t)n })) ||
+        !gates_is_ok(gates_editor_set_styles(t, ed, styles, 3)) ||
+        !gates_is_ok(gates_editor_set_styler(t, ed, highlight, nullptr)) ||
+        !gates_is_ok(gates_layout_run(t, (gates_size_t){ 320, 200 }, gates_text_backend_builtin()))) {
+        return 1;
+    }
+    /* Painting styles only the lines shown (and the next one). */
+    gates_draw_list_t dl;
+    if (!gates_is_ok(gates_draw_list_init(&amp;dl, (gates_allocator_t){0}, 0)) ||
+        !gates_is_ok(gates_paint_tree(t, &amp;dl, gates_theme_light(), gates_text_backend_builtin()))) {
+        return 1;
+    }
+    const gates_text_buffer_t *buf = gates_editor_buffer(t, ed);
+    printf("styled up to line %u of %u; ", gates_text_buffer_line_of(buf, styled_to), gates_text_buffer_line_count(buf) - 1);
+
+    /* Find selects the match and scrolls to it. */
+    if (gates_editor_find(t, ed, GATES_STR("todo"), GATES_FIND_IGNORE_CASE, true)) {
+        gates_u32 caret = 0;
+        gates_editor_selection(t, ed, nullptr, &amp;caret);
+        printf("\"TODO\" found on line %u\n", gates_text_buffer_line_of(buf, caret) + 1);
+    }
+    gates_draw_list_deinit(&amp;dl);
+    gates_tree_destroy(t);
+    return 0;
+}</code></pre>
+<h3 id="large-texts">6.8 Large texts<a class="plink" href="#large-texts" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p><code>gates/text_buffer.h</code> holds UTF-8 text of any length a tool edits (up to 1 GiB): a gap buffer with an index of line starts, a style byte per byte, marks that move with edits, and search. Reading never moves the gap - a range comes back as at most two spans - so a program can read the lines it shows while editing elsewhere. The multi-line editor is built on it; a program can also use it alone to load, search and change a large text.</p>
+<div class="nav"><a href="manual-05-views.html">&larr; Prev</a><span class="sp"></span><a href="index.html">Contents</a><span class="sp"></span><a href="manual-07-workers-timers.html">Next &rarr;</a></div>
+</div></main>
+<script>(function(){var b=document.querySelector('.here-btn'),p=document.getElementById('here-panel');function open(o){if(!p)return;p.hidden=!o;if(b)b.setAttribute('aria-expanded',o);}if(b)b.addEventListener('click',function(){open(p.hidden);});if(p)p.addEventListener('click',function(e){if(e.target.tagName==='A'&&e.target.getAttribute('href').charAt(0)==='#')open(false);});document.addEventListener('keydown',function(e){if(e.key==='Escape')open(false);});var box=document.getElementById('setbox'),so=document.getElementById('set-open');if(!box||!so)return;var r=document.documentElement;function load(){try{return JSON.parse(localStorage.getItem('rp-read')||'{}');}catch(e){return {};}}function save(s){try{localStorage.setItem('rp-read',JSON.stringify(s));}catch(e){}}function css(n){return getComputedStyle(r).getPropertyValue(n).trim();}function hex(v){var m=v.match(/^rgba?\((\d+)[ ,]+(\d+)[ ,]+(\d+)/);if(!m)return v.charAt(0)==='#'?v:'#000000';return '#'+[1,2,3].map(function(i){return ('0'+parseInt(m[i],10).toString(16)).slice(-2);}).join('');}function paint(){var s=load();document.getElementById('s-width').checked=!!s.width;var t=s.theme||'auto';[].forEach.call(box.querySelectorAll('.segb'),function(x){x.setAttribute('aria-pressed',x.dataset.theme===t);});document.getElementById('s-fg').value=s.fg||hex(css('--fg'));document.getElementById('s-bg').value=s.bg||hex(css('--bg'));document.getElementById('s-link').value=s.link||hex(css('--link'));}so.addEventListener('click',function(){box.hidden=!box.hidden;so.setAttribute('aria-expanded',!box.hidden);if(!box.hidden)paint();});document.getElementById('s-width').addEventListener('change',function(){var s=load();s.width=this.checked;save(s);if(s.width)r.setAttribute('data-measure','on');else r.removeAttribute('data-measure');});[].forEach.call(box.querySelectorAll('.segb'),function(x){x.addEventListener('click',function(){var s=load();s.theme=x.dataset.theme;delete s.fg;delete s.bg;delete s.link;save(s);['--fg','--bg','--link'].forEach(function(n){r.style.removeProperty(n);});if(s.theme==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',s.theme);setTimeout(paint,0);});});[['s-fg','--fg','fg'],['s-bg','--bg','bg'],['s-link','--link','link']].forEach(function(a){document.getElementById(a[0]).addEventListener('input',function(){var s=load();s[a[2]]=this.value;save(s);r.style.setProperty(a[1],this.value);});});})();</script><script>
+(function(){
+  var q=document.getElementById('q'), out=document.getElementById('qr');
+  if(!q||!out) return;
+  var data=null, NONE="Nothing found";
+  function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+  function run(){
+    var v=q.value.trim().toLowerCase();
+    out.innerHTML='';
+    if(!v||!data) return;
+    var hits=[];
+    for(var i=0;i<data.length && hits.length<40;i++){
+      if(data[i][0].toLowerCase().indexOf(v)>=0) hits.push(data[i]);
+    }
+    if(!hits.length){ out.innerHTML='<li>'+NONE+'</li>'; return; }
+    out.innerHTML=hits.map(function(h){
+      return '<li><a href="'+h[1]+'">'+esc(h[0])+'</a>'+
+             (h[2]?'<span class="where">'+esc(h[2])+'</span>':'')+'</li>';
+    }).join('');
+  }
+  q.addEventListener('input',function(){
+    if(data){ run(); return; }
+    fetch('search-index.json').then(function(r){return r.json();})
+      .then(function(j){ data=j; run(); })
+      .catch(function(){ out.innerHTML='<li>'+NONE+'</li>'; });
+  });
+})();
+</script></body></html>

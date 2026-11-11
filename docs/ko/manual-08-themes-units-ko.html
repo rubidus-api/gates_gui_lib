@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>8 테마, 단위, 배율 - gates 매뉴얼</title><link rel="stylesheet" href="../book.css">
+<script>(function(){try{var s=JSON.parse(localStorage.getItem('rp-read')||'{}');var r=document.documentElement;if(s.theme&&s.theme!=='auto')r.setAttribute('data-theme',s.theme);if(s.fg)r.style.setProperty('--fg',s.fg);if(s.bg)r.style.setProperty('--bg',s.bg);if(s.link)r.style.setProperty('--link',s.link);if(s.width)r.setAttribute('data-measure','on');}catch(e){}})();</script></head>
+<body>
+<a class="skip" href="#content">본문으로 건너뛰기</a>
+<div class="bar"><strong><a href="index.html">gates 매뉴얼</a></strong><button class="here-btn" type="button" aria-expanded="false" aria-controls="here-panel">8장 <span class="caret">&#9662;</span></button><span class="sp"></span><span class="bar-nav"><a href="manual-07-workers-timers-ko.html" title="이전" aria-label="이전">&larr;</a><a href="index.html" title="목차로" aria-label="목차로">&uarr;</a><a href="manual-09-accessibility-ko.html" title="다음" aria-label="다음">&rarr;</a></span></div><div id="here-panel" class="here-panel" hidden><div class="tools"><span class="ver">0.15.0</span><button class="tool" type="button" id="set-open">&#9881; 설정</button><a class="tool" href="toc.html">&#9636; 상세 차례</a><a class="tool" href="../en/manual-08-themes-units-ko.html">En</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.15.0/gates-manual-0.15.0-ko.pdf">&#10515; PDF</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib" title="gates_gui_lib 의 GitHub 저장소">Git</a><a class="tool" href="https://rubidus-api.github.io/" title="rubidus-api.github.io - 공개된 모든 프로젝트">&#8962; 전체 사이트</a><a class="tool" href="https://github.com/rubidus-api" title="github.com/rubidus-api - 모든 저장소">&#8801; 저장소 목록</a></div><div class="setbox" id="setbox" hidden><label class="setrow"><input type="checkbox" id="s-width"><span>가로폭 제한</span></label><div class="setrow"><span class="setlbl">테마</span><span class="seg"><button type="button" class="segb" data-theme="auto">시스템</button><button type="button" class="segb" data-theme="light">밝게</button><button type="button" class="segb" data-theme="dark">어둡게</button></span></div><div class="setrow"><span class="setlbl">색</span><label class="col"><span>글자</span><input type="color" id="s-fg"></label><label class="col"><span>배경</span><input type="color" id="s-bg"></label><label class="col"><span>링크</span><input type="color" id="s-link"></label></div><p class="setnote">설정은 이 브라우저에만 저장된다.</p></div><div class="here-head"><strong>이 장의 차례</strong></div><div class="here-body"><a class="lv3" href="#논리-단위"><span class="tf-no">8.1</span>논리 단위</a><a class="lv3" href="#테마"><span class="tf-no">8.2</span>테마</a><a class="lv3" href="#글꼴"><span class="tf-no">8.3</span>글꼴</a><a class="lv3" href="#그리기와-글자-백엔드"><span class="tf-no">8.4</span>그리기와 글자 백엔드</a></div></div>
+<main id="content"><div class="wrap">
+<h2 id="top">8 테마, 단위, 배율</h2>
+<div class="chapter-toc"><div class="rail-label">이 장의 차례</div><div class="rail-body"><a class="lv3" href="#논리-단위"><span class="tf-no">8.1</span>논리 단위</a><a class="lv3" href="#테마"><span class="tf-no">8.2</span>테마</a><a class="lv3" href="#글꼴"><span class="tf-no">8.3</span>글꼴</a><a class="lv3" href="#그리기와-글자-백엔드"><span class="tf-no">8.4</span>그리기와 글자 백엔드</a></div></div>
+<p>헤더: <code>gates/theme.h</code>, <code>gates/geometry.h</code>, <code>gates/draw.h</code>, <code>gates/render.h</code>, <code>gates/text.h</code>.</p>
+<h3 id="논리-단위">8.1 논리 단위<a class="plink" href="#논리-단위" aria-label="이 절의 주소" title="이 절의 주소">#</a></h3>
+<p>API 의 모든 좌표와 크기는 논리 단위, 1/96 인치다. 배치 값, 노드 사각형, 바라는 크기, 창 크기, 포인터 위치가 다 그렇다. 창은 가장자리에서 한 번 바꾼다. 그릴 때는 장치 픽셀로, 포인터를 알릴 때는 다시 단위로 바꾼다. 그래서 같은 프로그램이 100 % 화면과 200 % 화면에서 같은 실제 크기다. <code>gates_px</code> 와 <code>gates_logical</code> 이 그 변환이다(정수 단위에서는 정확한 역).</p>
+<pre><code class="lang-c">/* manual example (host): logical units and themes.
+ * expect: 100 units = 150 px at 144 dpi; 150 px = 100 units; light theme: 0 issues */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+int main(void) {
+    /* Every coordinate in the API is a logical unit, 1/96 inch. A window
+     * scales once, at its edge: to pixels when drawing, back when reading
+     * pointer positions. */
+    gates_u32 dpi = 144; /* 150 % */
+    gates_i32 px = gates_px(100, dpi);
+    gates_i32 back = gates_logical(px, dpi);
+    /* A theme is checked against the enforced rules: contrast and cues. */
+    gates_access_issue_t issues[8];
+    gates_u32 n = gates_theme_audit(gates_theme_light(), issues, 8);
+    printf("100 units = %d px at %u dpi; %d px = %d units; light theme: %u issues\n", px, dpi, px, back, n);
+    return n == 0 ? 0 : 1;
+}</code></pre>
+<p>창은 자기 모니터(모니터별 DPI, 모니터 사이 옮기기), Windows 의 "텍스트 크기" 설정, 응용의 확대 (<code>gates_window_set_zoom</code>, 25 % 부터 400 % 까지)를 따른다. 셋 모두 확대한 쪽처럼 화면 전체를 키운다.</p>
+<h3 id="테마">8.2 테마<a class="plink" href="#테마" aria-label="이 절의 주소" title="이 절의 주소">#</a></h3>
+<p>색은 값이 아니라 토큰(<code>gates_color_token_t</code>)이다. 프로그램은 "글자", "포커스", "오류"라고 말하고, 그것이 무슨 색인지는 테마가 말한다. 창은 시스템을 따른다. 밝은 모드와 어두운 모드, 시스템 자신의 색으로 만든 고대비를 따르며, 사람이 바꾸면 곧바로 바뀐다. 제목 표시줄도 따라간다. <code>gates_window_set_theme_mode</code> 는 모드를 고정하고, <code>gates_window_set_theme</code> 는 응용의 테마를 정한다. 모든 테마는 9장의 대비·표시 규칙을 지켜야 하며, <code>gates_theme_audit</code> 이 테마 하나를 검사한다.</p>
+<p>포커스와 오류는 색으로만 보이지 않는다. 포커스 테두리와 오류 테두리에는 너비(적어도 2 단위)가 있어서 어떤 테마에서도 읽힌다.</p>
+<h3 id="글꼴">8.3 글꼴<a class="plink" href="#글꼴" aria-label="이 절의 주소" title="이 절의 주소">#</a></h3>
+<p>글은 두 글꼴 가운데 하나를 쓴다(<code>gates/text.h</code> 의 <code>gates_font_t</code>).</p>
+<div class="tblwrap"><table class="key"><tr><th>글꼴</th><th>무엇</th><th>Windows 에서</th></tr><tr><td><code>GATES_FONT_UI</code>(기본)</td><td>플랫폼의 UI 글꼴, 비례폭</td><td>시스템 메시지 글꼴: Segoe UI, 한국어 Windows 에서는 맑은 고딕</td></tr><tr><td><code>GATES_FONT_MONO</code></td><td>고정폭. 코드, 로그, 열을 맞춰야 하는 글</td><td>Consolas</td></tr><tr><td>이름 붙은 글꼴(0.12.0)</td><td><code>gates_font_named</code> 로 이름을 댄 글꼴</td><td>그 글꼴을 UI 크기로. 설치되어 있지 않으면 UI 글꼴</td></tr></table></div>
+<p><code>gates_node_set_font</code> 는 노드의 글꼴을 정하고, CSS 의 <code>font-family</code> 처럼 그 아래에서 제 글꼴을 정하지 않은 모든 것에도 적용된다. <code>GATES_FONT_INHERIT</code> 는 부모의 것으로 돌아가고, <code>gates_node_font</code> 는 실제로 쓰이는 글꼴을 읽는다. 패널에 정하면 한 구역 전체가 바뀌고, 뷰 하나에 정하면 로그 하나가 바뀐다. 대화상자와 메뉴는 창의 루트 아래에 있지 않으므로, 따로 정하지 않으면 UI 글꼴에서 시작한다.</p>
+<p>이름으로 글꼴을 정하는 길(0.12.0)은 둘이다. <strong>전체를 한 글꼴로</strong> 하려면 응용의 UI 글꼴을 정한다. 만들 때는 <code>gates_app_desc_t.ui_font</code>, 실행 중에는 <code>gates_app_set_ui_font(app, name)</code> 이다(설정 화면의 글꼴 고르기. 설치되지 않은 글꼴이면 <code>PROVEN_ERR_NOT_FOUND</code> 를 돌려주고, 빈 이름은 시스템 글꼴로 돌아간다). <code>GATES_FONT_UI</code> 를 쓰는 모든 것이, 대화상자와 메뉴까지, 그 글꼴을 시스템 UI 크기로 쓴다. <strong>요소마다 글꼴을</strong> 정하려면 <code>gates_font_named(name, &amp;face)</code> 로 이름을 한 번 등록하고, 그 face 를 <code>GATES_FONT_MONO</code> 처럼 정한다. 노드 하나에, 패널에 정하면 한 구역에, 루트에 정하면 창 전체에 적용된다. 같은 이름은 늘 같은 face 를 준다. 이름은 <code>GATES_FONT_NAMED_MAX</code>(62)개까지다. 이름은 시스템의 글꼴 패밀리 이름이고, 영어 이름도 시스템 언어 이름도 된다(Windows 에서 "Malgun Gothic" 과 "맑은 고딕" 이 둘 다 된다).</p>
+<pre><code class="lang-c">gates_app_desc_t desc = { .ui_font = GATES_STR("Malgun Gothic") };  /* one face for the program */
+gates_font_t serif;
+if (gates_is_ok(gates_font_named(GATES_STR("Georgia"), &amp;serif))) {
+    (void)gates_node_set_font(tree, quote, serif);                  /* one element */
+}</code></pre>
+<p>크기(0.10.0)는 시스템 글자 크기의 백분율이라 사람이 고른 Windows "텍스트 크기"를 그대로 따른다. <code>gates_node_set_font_size(tree, node, percent)</code> 는 <code>GATES_FONT_SIZE_MIN</code>(50)부터 <code>GATES_FONT_SIZE_MAX</code>(400) 사이로 크기를 정한다. 흔히 쓰는 값은 <code>GATES_FONT_SIZE_SMALL</code>(85), <code>GATES_FONT_SIZE_LARGE</code>(125), <code>GATES_FONT_SIZE_HEADING</code>(150)이고, 0 은 부모의 것으로 돌아간다. 크기는 글꼴처럼 물려받지만 글꼴과는 따로다. 제목 패널 안의 MONO 뷰는 150 % 고정폭이다. 노드가 재고 그리는 모든 것이 그 크기를 따른다. 글, 줄과 행의 높이, 캐럿, 텍스트 상자의 <code>cols</code> 가 그렇다. <code>gates_node_font_size</code> 는 실제 크기를 읽고, <code>gates_node_font</code> 는 글꼴과 크기를 함께 돌려준다(<code>gates_font_face</code>, <code>gates_font_percent</code>).</p>
+<pre><code class="lang-c">(void)gates_node_set_font(tree, log_view, GATES_FONT_MONO);            /* aligned log lines */
+(void)gates_node_set_font_size(tree, title, GATES_FONT_SIZE_HEADING); /* a page heading */
+(void)gates_node_set_font_size(tree, note, GATES_FONT_SIZE_SMALL);    /* small print */</code></pre>
+<h3 id="그리기와-글자-백엔드">8.4 그리기와 글자 백엔드<a class="plink" href="#그리기와-글자-백엔드" aria-label="이 절의 주소" title="이 절의 주소">#</a></h3>
+<p>창은 트리를 그리기 목록(<code>gates/draw.h</code>)에 그리고, 소프트웨어 그리기(<code>gates/render.h</code>)가 그것을 픽셀로 바꾼다. 글은 글자 백엔드(<code>gates/text.h</code>)를 거친다. 백엔드는 글꼴마다 줄 높이, 평균 글자 폭 (크기 가늠용: 텍스트 상자의 <code>cols</code>), 글자마다의 폭을 알린다. 글줄의 폭은 글자 폭의 합과 정확히 같고, 백엔드는 글자를 그 자리에 그린다. 그래서 어느 백엔드에서든, 어느 배율에서든 배치, 그리기, 캐럿, 누른 자리가 서로 맞는다. 내장 백엔드는 모든 글꼴이 고정폭이어서 시험이 결정적으로 돈다(크기는 8 x 16 칸을 늘이고, 이름 붙은 글꼴은 UI 글꼴로 그린다). 직접 만든 백엔드는 <code>gates_font_face(font)</code> 로 글꼴을, <code>gates_font_face_name(font)</code> 로 이름 붙은 글꼴의 이름을 읽고 <code>gates_font_percent(font)</code> 만큼 키운다. 응용은 창의 그리기 콜백에서 제 것을 더 그릴 수 있다. 거기서 위젯 상태를 읽지는 않는다.</p>
+<div class="nav"><a href="manual-07-workers-timers-ko.html">&larr; 이전</a><span class="sp"></span><a href="index.html">목차로</a><span class="sp"></span><a href="manual-09-accessibility-ko.html">다음 &rarr;</a></div>
+</div></main>
+<script>(function(){var b=document.querySelector('.here-btn'),p=document.getElementById('here-panel');function open(o){if(!p)return;p.hidden=!o;if(b)b.setAttribute('aria-expanded',o);}if(b)b.addEventListener('click',function(){open(p.hidden);});if(p)p.addEventListener('click',function(e){if(e.target.tagName==='A'&&e.target.getAttribute('href').charAt(0)==='#')open(false);});document.addEventListener('keydown',function(e){if(e.key==='Escape')open(false);});var box=document.getElementById('setbox'),so=document.getElementById('set-open');if(!box||!so)return;var r=document.documentElement;function load(){try{return JSON.parse(localStorage.getItem('rp-read')||'{}');}catch(e){return {};}}function save(s){try{localStorage.setItem('rp-read',JSON.stringify(s));}catch(e){}}function css(n){return getComputedStyle(r).getPropertyValue(n).trim();}function hex(v){var m=v.match(/^rgba?\((\d+)[ ,]+(\d+)[ ,]+(\d+)/);if(!m)return v.charAt(0)==='#'?v:'#000000';return '#'+[1,2,3].map(function(i){return ('0'+parseInt(m[i],10).toString(16)).slice(-2);}).join('');}function paint(){var s=load();document.getElementById('s-width').checked=!!s.width;var t=s.theme||'auto';[].forEach.call(box.querySelectorAll('.segb'),function(x){x.setAttribute('aria-pressed',x.dataset.theme===t);});document.getElementById('s-fg').value=s.fg||hex(css('--fg'));document.getElementById('s-bg').value=s.bg||hex(css('--bg'));document.getElementById('s-link').value=s.link||hex(css('--link'));}so.addEventListener('click',function(){box.hidden=!box.hidden;so.setAttribute('aria-expanded',!box.hidden);if(!box.hidden)paint();});document.getElementById('s-width').addEventListener('change',function(){var s=load();s.width=this.checked;save(s);if(s.width)r.setAttribute('data-measure','on');else r.removeAttribute('data-measure');});[].forEach.call(box.querySelectorAll('.segb'),function(x){x.addEventListener('click',function(){var s=load();s.theme=x.dataset.theme;delete s.fg;delete s.bg;delete s.link;save(s);['--fg','--bg','--link'].forEach(function(n){r.style.removeProperty(n);});if(s.theme==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',s.theme);setTimeout(paint,0);});});[['s-fg','--fg','fg'],['s-bg','--bg','bg'],['s-link','--link','link']].forEach(function(a){document.getElementById(a[0]).addEventListener('input',function(){var s=load();s[a[2]]=this.value;save(s);r.style.setProperty(a[1],this.value);});});})();</script><script>
+(function(){
+  var q=document.getElementById('q'), out=document.getElementById('qr');
+  if(!q||!out) return;
+  var data=null, NONE="찾은 것이 없다";
+  function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+  function run(){
+    var v=q.value.trim().toLowerCase();
+    out.innerHTML='';
+    if(!v||!data) return;
+    var hits=[];
+    for(var i=0;i<data.length && hits.length<40;i++){
+      if(data[i][0].toLowerCase().indexOf(v)>=0) hits.push(data[i]);
+    }
+    if(!hits.length){ out.innerHTML='<li>'+NONE+'</li>'; return; }
+    out.innerHTML=hits.map(function(h){
+      return '<li><a href="'+h[1]+'">'+esc(h[0])+'</a>'+
+             (h[2]?'<span class="where">'+esc(h[2])+'</span>':'')+'</li>';
+    }).join('');
+  }
+  q.addEventListener('input',function(){
+    if(data){ run(); return; }
+    fetch('search-index.json').then(function(r){return r.json();})
+      .then(function(j){ data=j; run(); })
+      .catch(function(){ out.innerHTML='<li>'+NONE+'</li>'; });
+  });
+})();
+</script></body></html>

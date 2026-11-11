@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>12 Numbers, groups and layouts - gates Manual</title><link rel="stylesheet" href="../book.css">
+<script>(function(){try{var s=JSON.parse(localStorage.getItem('rp-read')||'{}');var r=document.documentElement;if(s.theme&&s.theme!=='auto')r.setAttribute('data-theme',s.theme);if(s.fg)r.style.setProperty('--fg',s.fg);if(s.bg)r.style.setProperty('--bg',s.bg);if(s.link)r.style.setProperty('--link',s.link);if(s.width)r.setAttribute('data-measure','on');}catch(e){}})();</script></head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<div class="bar"><strong><a href="index.html">gates Manual</a></strong><button class="here-btn" type="button" aria-expanded="false" aria-controls="here-panel">ch. 12 <span class="caret">&#9662;</span></button><span class="sp"></span><span class="bar-nav"><a href="manual-11-application-frame.html" title="Prev" aria-label="Prev">&larr;</a><a href="index.html" title="Contents" aria-label="Contents">&uarr;</a><a href="manual-13-images-dialogs.html" title="Next" aria-label="Next">&rarr;</a></span></div><div id="here-panel" class="here-panel" hidden><div class="tools"><span class="ver">0.15.0</span><button class="tool" type="button" id="set-open">&#9881; Settings</button><a class="tool" href="toc.html">&#9636; Detailed contents</a><a class="tool" href="../ko/manual-12-numbers-layouts.html">Ko</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.15.0/gates-manual-0.15.0-en.pdf">&#10515; PDF</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib" title="gates_gui_lib on GitHub">Git</a><a class="tool" href="https://rubidus-api.github.io/" title="rubidus-api.github.io - every published project">&#8962; All projects</a><a class="tool" href="https://github.com/rubidus-api" title="github.com/rubidus-api - every repository">&#8801; All repos</a></div><div class="setbox" id="setbox" hidden><label class="setrow"><input type="checkbox" id="s-width"><span>Limit line width</span></label><div class="setrow"><span class="setlbl">Theme</span><span class="seg"><button type="button" class="segb" data-theme="auto">System</button><button type="button" class="segb" data-theme="light">Light</button><button type="button" class="segb" data-theme="dark">Dark</button></span></div><div class="setrow"><span class="setlbl">Colours</span><label class="col"><span>Text</span><input type="color" id="s-fg"></label><label class="col"><span>Background</span><input type="color" id="s-bg"></label><label class="col"><span>Link</span><input type="color" id="s-link"></label></div><p class="setnote">Settings are kept in this browser only.</p></div><div class="here-head"><strong>In this chapter</strong></div><div class="here-body"><a class="lv3" href="#one-handler-for-many-controls"><span class="tf-no">12.1</span>One handler for many controls</a><a class="lv3" href="#once-per-turn-deferred-calls"><span class="tf-no">12.2</span>Once per turn: deferred calls</a><a class="lv3" href="#spin-box-and-slider"><span class="tf-no">12.3</span>Spin box and slider</a><a class="lv3" href="#group-box"><span class="tf-no">12.4</span>Group box</a><a class="lv3" href="#grid-and-wrap-layouts"><span class="tf-no">12.5</span>Grid and wrap layouts</a><a class="lv3" href="#accessibility"><span class="tf-no">12.6</span>Accessibility</a></div></div>
+<main id="content"><div class="wrap">
+<h2 id="top">12 Numbers, groups and layouts</h2>
+<div class="chapter-toc"><div class="rail-label">In this chapter</div><div class="rail-body"><a class="lv3" href="#one-handler-for-many-controls"><span class="tf-no">12.1</span>One handler for many controls</a><a class="lv3" href="#once-per-turn-deferred-calls"><span class="tf-no">12.2</span>Once per turn: deferred calls</a><a class="lv3" href="#spin-box-and-slider"><span class="tf-no">12.3</span>Spin box and slider</a><a class="lv3" href="#group-box"><span class="tf-no">12.4</span>Group box</a><a class="lv3" href="#grid-and-wrap-layouts"><span class="tf-no">12.5</span>Grid and wrap layouts</a><a class="lv3" href="#accessibility"><span class="tf-no">12.6</span>Accessibility</a></div></div>
+<p>Headers: <code>gates/inputs.h</code>, <code>gates/event.h</code>, <code>gates/widget.h</code>, <code>gates/layout.h</code>.</p>
+<h3 id="one-handler-for-many-controls">12.1 One handler for many controls<a class="plink" href="#one-handler-for-many-controls" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>A calculator has twenty buttons; a settings page has a dozen fields that all mean "something changed". <code>gates_node_set_bubble_handler(tree, node, fn, user)</code> puts one handler on a container</p>
+<ul><li>a panel, a form, the root - and it hears the events of every descendant that has no handler</li></ul>
+<p>of its own, with <code>ev-&gt;source</code> naming the control. Only the nearest such container hears an event, and an overlay is a root of its own: a dialog's buttons never reach the window's handler, only a handler inside the dialog.</p>
+<h3 id="once-per-turn-deferred-calls">12.2 Once per turn: deferred calls<a class="plink" href="#once-per-turn-deferred-calls" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>Some work should follow a burst of changes, not each of them: a total over many fields, a filter over a list. <code>gates_tree_defer(tree, key, fn, user)</code> asks for <code>fn</code> to run once at the next safe point - after the events queued now are delivered - however often it is asked before then; the key names the job (<code>gates_tree_cancel_defer</code> drops it). A job asked for while deferred jobs run waits for the next turn, so a job cannot keep the program busy.</p>
+<h3 id="spin-box-and-slider">12.3 Spin box and slider<a class="plink" href="#spin-box-and-slider" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>Both edit an integer in a range (<code>gates_range_t</code>: <code>min</code>, <code>max</code>, <code>step</code>, <code>page</code>, <code>value</code>). A decimal quantity uses a <code>scale</code>: with scale 100 the value 125 is shown as <code>1.25</code>, so money and measurements never meet floating-point rounding. A person's change reports GATES_EVENT_VALUE_CHANGED with <code>ev-&gt;value</code>; <code>gates_range_set_value</code> changes the value silently and <code>gates_range_set</code> changes the limits.</p>
+<p><code>gates_spin_create</code> makes a text box with up/down arrows. Up and Down step, PgUp and PgDn page, and the arrows step with a click and repeat while held; Left, Right, Home and End stay with the text. The wheel steps a spin box or slider only while it has focus - unfocused, it scrolls the page, so reading a form never changes a value by accident. While typed text is not a number in range the box is marked invalid; Enter or leaving the box commits it, and text that is still not a number in range goes back to the value. <code>gates_spin_box</code> returns the text box, for a label's target or a width.</p>
+<p><code>gates_slider_create</code> makes a track with a thumb, horizontal or vertical (up is more). Arrows step, PgUp and PgDn page, Home and End go to the ends, dragging the thumb moves in whole steps, and a press on the track pages toward the pointer. <code>gates_slider_set_ticks</code> draws a mark every n steps.</p>
+<p><code>gates_range_format</code> and <code>gates_range_parse</code> convert values and text the way the spin box does (<code>,</code> is read as <code>.</code>).</p>
+<pre><code class="lang-c">/* manual example (host): a spin box and a slider, one bubble handler, one deferred total.
+ * expect: width 2.50, volume 30; the panel heard 2 reports, the total was computed 1 time: 2.50 x 30 = 75.00 */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+typedef struct app_t {
+    gates_node_t width, volume;
+    int heard, totals;
+    char total[128];
+} app_t;
+
+/* Runs once after all the changes of a turn, however many there were. */
+static void recompute(gates_tree_t *tree, gates_u32 key, void *user) {
+    (void)key;
+    app_t *a = user;
+    a-&gt;totals++;
+    char w[32];
+    gates_i64 wv = gates_range_value(tree, a-&gt;width), vv = gates_range_value(tree, a-&gt;volume);
+    (void)gates_range_format(wv, 100, w, sizeof w);
+    char t[32];
+    (void)gates_range_format(wv * vv, 100, t, sizeof t);
+    snprintf(a-&gt;total, sizeof a-&gt;total, "%s x %lld = %s", w, (long long)vv, t);
+}
+
+/* One handler on the panel hears every control in it (ev-&gt;source says which). */
+static void on_change(gates_tree_t *tree, const gates_event_t *ev, void *user) {
+    app_t *a = user;
+    if (ev-&gt;kind != GATES_EVENT_VALUE_CHANGED) return;
+    a-&gt;heard++;
+    (void)gates_tree_defer(tree, 1, recompute, a);
+}
+
+static bool key(gates_tree_t *t, gates_key_t k) {
+    gates_key_event_t e = { .key = k, .down = true };
+    return gates_input_key(t, &amp;e);
+}
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;t))) return 1;
+    gates_node_t root = gates_tree_root(t);
+    app_t a = {0};
+    /* Width in hundredths: 1.50 to 5.00 in steps of 0.25. */
+    gates_range_t width = { .min = 150, .max = 500, .step = 25, .value = 200, .scale = 100 };
+    gates_range_t volume = { .min = 0, .max = 100, .step = 5, .page = 20, .value = 10 };
+    if (!gates_is_ok(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN)) ||
+        !gates_is_ok(gates_spin_create(t, root, &amp;width, &amp;a.width)) ||
+        !gates_is_ok(gates_slider_create(t, root, &amp;volume, false, &amp;a.volume)) ||
+        !gates_is_ok(gates_node_set_bubble_handler(t, root, on_change, &amp;a)) ||
+        !gates_is_ok(gates_layout_run(t, (gates_size_t){ 400, 200 }, gates_text_backend_builtin()))) {
+        return 1;
+    }
+    /* The person: two steps up in the spin box, a page up on the slider. */
+    gates_tree_set_focus(t, gates_spin_box(t, a.width));
+    (void)key(t, GATES_KEY_UP);
+    (void)key(t, GATES_KEY_UP);
+    gates_tree_set_focus(t, a.volume);
+    (void)key(t, GATES_KEY_PAGE_UP);
+    (void)gates_tree_dispatch_events(t, 0);
+
+    char w[32];
+    (void)gates_range_format(gates_range_value(t, a.width), 100, w, sizeof w);
+    /* The spin box's two steps coalesce into one report of the latest value. */
+    printf("width %s, volume %lld; the panel heard %d reports, the total was computed %d time: %s\n", w,
+           (long long)gates_range_value(t, a.volume), a.heard, a.totals, a.total);
+    gates_tree_destroy(t);
+    return 0;
+}</code></pre>
+<h3 id="group-box">12.4 Group box<a class="plink" href="#group-box" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p><code>gates_group_create(tree, parent, title, collapsible, &amp;group, &amp;content)</code> draws a titled frame around a column panel; put related controls in <code>content</code>. The title takes mnemonic markup: in a plain group Alt+x goes to the first control inside, like a label with a target. A collapsible group's title is a Tab stop with an open/closed mark: Space, Enter, a click or its mnemonic shows or hides the content, whose controls then take no room and cannot be reached. A person's toggle reports VALUE_CHANGED on the group with <code>ev-&gt;checked</code> = expanded; <code>gates_group_set_expanded</code> is silent.</p>
+<h3 id="grid-and-wrap-layouts">12.5 Grid and wrap layouts<a class="plink" href="#grid-and-wrap-layouts" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p><code>GATES_LAYOUT_KIND_GRID</code> puts children in rows of <code>gates_layout_set_grid</code> columns (two by default): each column as wide as its widest child, each row as tall as its tallest, children centred in their row and filling the cell's width unless their align asks for their own width. <code>gates_layout_set_grid_column_grow</code> gives spare width to columns - the usual choice is labels in a fixed column and fields in a growing one - <code>gates_layout_set_grid_row_grow</code> gives spare height to rows (the first <code>GATES_GRID_MAX_GROW_ROWS</code>), and <code>gates_layout_set_child_span</code> lets a child cover several columns. <code>GATES_LAYOUT_KIND_WRAP</code> places children left to right at their own size and starts a new line when the next does not fit, like words on a page; its height follows the width it is given. The gap applies both ways in both.</p>
+<pre><code class="lang-c">/* manual example (host): a grid form inside a collapsible group, and wrapped chips.
+ * expect: labels in column 1, fields in column 2 at x 40; 7 chips on 3 lines; folded: 0 fields reachable */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;t))) return 1;
+    gates_node_t root = gates_tree_root(t), group, content, grid, chips, field[2], chip[7];
+    const gates_text_backend_t *be = gates_text_backend_builtin(); /* 8 units a character */
+    bool ok = gates_is_ok(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN)) &amp;&amp;
+              gates_is_ok(gates_group_create(t, root, GATES_STR("&amp;Connection"), true, &amp;group, &amp;content)) &amp;&amp;
+              gates_is_ok(gates_panel_create(t, content, &amp;grid)) &amp;&amp;
+              gates_is_ok(gates_layout_set(t, grid, GATES_LAYOUT_KIND_GRID)) &amp;&amp;   /* two columns */
+              gates_is_ok(gates_layout_set_gap(t, grid, 8)) &amp;&amp;
+              gates_is_ok(gates_layout_set_grid_column_grow(t, grid, 1, 1));    /* fields take the rest */
+    static const char *names[2] = { "Host", "Port" };
+    for (int i = 0; ok &amp;&amp; i &lt; 2; i++) {
+        gates_node_t l;
+        ok = gates_is_ok(gates_label_create(t, grid, (gates_str_t){ .ptr = (const gates_u8 *)names[i], .size = 4 }, &amp;l)) &amp;&amp;
+             gates_is_ok(gates_textbox_create(t, grid, GATES_STR(""), 12, &amp;field[i])) &amp;&amp;
+             gates_is_ok(gates_node_set_labelled_by(t, field[i], l));
+    }
+    ok = ok &amp;&amp; gates_is_ok(gates_panel_create(t, root, &amp;chips)) &amp;&amp;
+         gates_is_ok(gates_layout_set(t, chips, GATES_LAYOUT_KIND_WRAP)) &amp;&amp;
+         gates_is_ok(gates_layout_set_gap(t, chips, 4));
+    for (int i = 0; ok &amp;&amp; i &lt; 7; i++) {
+        ok = gates_is_ok(gates_button_create(t, chips, GATES_STR("tag"), nullptr, nullptr, &amp;chip[i]));
+    }
+    if (!ok || !gates_is_ok(gates_layout_run(t, (gates_size_t){ 160, 400 }, be))) return 1;
+
+    gates_rect_t g = gates_node_layout_rect(t, grid), f = gates_node_layout_rect(t, field[0]);
+    int lines = 1;
+    for (int i = 1; i &lt; 7; i++) {
+        lines += gates_node_layout_rect(t, chip[i]).y &gt; gates_node_layout_rect(t, chip[i - 1]).y;
+    }
+    /* Folding the group hides its content: nothing inside takes room or focus. */
+    if (!gates_is_ok(gates_group_set_expanded(t, group, false)) ||
+        !gates_is_ok(gates_layout_run(t, (gates_size_t){ 160, 400 }, be))) {
+        return 1;
+    }
+    int shown = gates_widget_focusable(t, field[0]) + gates_widget_focusable(t, field[1]);
+    printf("labels in column 1, fields in column 2 at x %d; 7 chips on %d lines; folded: %d fields reachable\n",
+           f.x - g.x, lines, shown);
+    gates_tree_destroy(t);
+    return 0;
+}</code></pre>
+<h3 id="accessibility">12.6 Accessibility<a class="plink" href="#accessibility" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>A spin box is a Spinner with a RangeValue in the units it shows (1.25 for a scaled value of 125, with the step and page as its small and large change), and its text box is an edit named after it; a slider is a Slider with a RangeValue. Screen readers and automation can set either value; it is clamped into the range and reported like a person's change. A group box is a Group named by its title; a collapsible one has ExpandCollapse, and its title's focus is the group's.</p>
+<div class="nav"><a href="manual-11-application-frame.html">&larr; Prev</a><span class="sp"></span><a href="index.html">Contents</a><span class="sp"></span><a href="manual-13-images-dialogs.html">Next &rarr;</a></div>
+</div></main>
+<script>(function(){var b=document.querySelector('.here-btn'),p=document.getElementById('here-panel');function open(o){if(!p)return;p.hidden=!o;if(b)b.setAttribute('aria-expanded',o);}if(b)b.addEventListener('click',function(){open(p.hidden);});if(p)p.addEventListener('click',function(e){if(e.target.tagName==='A'&&e.target.getAttribute('href').charAt(0)==='#')open(false);});document.addEventListener('keydown',function(e){if(e.key==='Escape')open(false);});var box=document.getElementById('setbox'),so=document.getElementById('set-open');if(!box||!so)return;var r=document.documentElement;function load(){try{return JSON.parse(localStorage.getItem('rp-read')||'{}');}catch(e){return {};}}function save(s){try{localStorage.setItem('rp-read',JSON.stringify(s));}catch(e){}}function css(n){return getComputedStyle(r).getPropertyValue(n).trim();}function hex(v){var m=v.match(/^rgba?\((\d+)[ ,]+(\d+)[ ,]+(\d+)/);if(!m)return v.charAt(0)==='#'?v:'#000000';return '#'+[1,2,3].map(function(i){return ('0'+parseInt(m[i],10).toString(16)).slice(-2);}).join('');}function paint(){var s=load();document.getElementById('s-width').checked=!!s.width;var t=s.theme||'auto';[].forEach.call(box.querySelectorAll('.segb'),function(x){x.setAttribute('aria-pressed',x.dataset.theme===t);});document.getElementById('s-fg').value=s.fg||hex(css('--fg'));document.getElementById('s-bg').value=s.bg||hex(css('--bg'));document.getElementById('s-link').value=s.link||hex(css('--link'));}so.addEventListener('click',function(){box.hidden=!box.hidden;so.setAttribute('aria-expanded',!box.hidden);if(!box.hidden)paint();});document.getElementById('s-width').addEventListener('change',function(){var s=load();s.width=this.checked;save(s);if(s.width)r.setAttribute('data-measure','on');else r.removeAttribute('data-measure');});[].forEach.call(box.querySelectorAll('.segb'),function(x){x.addEventListener('click',function(){var s=load();s.theme=x.dataset.theme;delete s.fg;delete s.bg;delete s.link;save(s);['--fg','--bg','--link'].forEach(function(n){r.style.removeProperty(n);});if(s.theme==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',s.theme);setTimeout(paint,0);});});[['s-fg','--fg','fg'],['s-bg','--bg','bg'],['s-link','--link','link']].forEach(function(a){document.getElementById(a[0]).addEventListener('input',function(){var s=load();s[a[2]]=this.value;save(s);r.style.setProperty(a[1],this.value);});});})();</script><script>
+(function(){
+  var q=document.getElementById('q'), out=document.getElementById('qr');
+  if(!q||!out) return;
+  var data=null, NONE="Nothing found";
+  function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+  function run(){
+    var v=q.value.trim().toLowerCase();
+    out.innerHTML='';
+    if(!v||!data) return;
+    var hits=[];
+    for(var i=0;i<data.length && hits.length<40;i++){
+      if(data[i][0].toLowerCase().indexOf(v)>=0) hits.push(data[i]);
+    }
+    if(!hits.length){ out.innerHTML='<li>'+NONE+'</li>'; return; }
+    out.innerHTML=hits.map(function(h){
+      return '<li><a href="'+h[1]+'">'+esc(h[0])+'</a>'+
+             (h[2]?'<span class="where">'+esc(h[2])+'</span>':'')+'</li>';
+    }).join('');
+  }
+  q.addEventListener('input',function(){
+    if(data){ run(); return; }
+    fetch('search-index.json').then(function(r){return r.json();})
+      .then(function(j){ data=j; run(); })
+      .catch(function(){ out.innerHTML='<li>'+NONE+'</li>'; });
+  });
+})();
+</script></body></html>

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2 컨트롤과 배치 - gates 매뉴얼</title><link rel="stylesheet" href="../book.css">
+<script>(function(){try{var s=JSON.parse(localStorage.getItem('rp-read')||'{}');var r=document.documentElement;if(s.theme&&s.theme!=='auto')r.setAttribute('data-theme',s.theme);if(s.fg)r.style.setProperty('--fg',s.fg);if(s.bg)r.style.setProperty('--bg',s.bg);if(s.link)r.style.setProperty('--link',s.link);if(s.width)r.setAttribute('data-measure','on');}catch(e){}})();</script></head>
+<body>
+<a class="skip" href="#content">본문으로 건너뛰기</a>
+<div class="bar"><strong><a href="index.html">gates 매뉴얼</a></strong><button class="here-btn" type="button" aria-expanded="false" aria-controls="here-panel">2장 <span class="caret">&#9662;</span></button><span class="sp"></span><span class="bar-nav"><a href="manual-01-concepts-ko.html" title="이전" aria-label="이전">&larr;</a><a href="index.html" title="목차로" aria-label="목차로">&uarr;</a><a href="manual-03-forms-ko.html" title="다음" aria-label="다음">&rarr;</a></span></div><div id="here-panel" class="here-panel" hidden><div class="tools"><span class="ver">0.15.0</span><button class="tool" type="button" id="set-open">&#9881; 설정</button><a class="tool" href="toc.html">&#9636; 상세 차례</a><a class="tool" href="../en/manual-02-controls-layout-ko.html">En</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.15.0/gates-manual-0.15.0-ko.pdf">&#10515; PDF</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib" title="gates_gui_lib 의 GitHub 저장소">Git</a><a class="tool" href="https://rubidus-api.github.io/" title="rubidus-api.github.io - 공개된 모든 프로젝트">&#8962; 전체 사이트</a><a class="tool" href="https://github.com/rubidus-api" title="github.com/rubidus-api - 모든 저장소">&#8801; 저장소 목록</a></div><div class="setbox" id="setbox" hidden><label class="setrow"><input type="checkbox" id="s-width"><span>가로폭 제한</span></label><div class="setrow"><span class="setlbl">테마</span><span class="seg"><button type="button" class="segb" data-theme="auto">시스템</button><button type="button" class="segb" data-theme="light">밝게</button><button type="button" class="segb" data-theme="dark">어둡게</button></span></div><div class="setrow"><span class="setlbl">색</span><label class="col"><span>글자</span><input type="color" id="s-fg"></label><label class="col"><span>배경</span><input type="color" id="s-bg"></label><label class="col"><span>링크</span><input type="color" id="s-link"></label></div><p class="setnote">설정은 이 브라우저에만 저장된다.</p></div><div class="here-head"><strong>이 장의 차례</strong></div><div class="here-body"><a class="lv3" href="#컨트롤-표"><span class="tf-no">2.1</span>컨트롤 표</a><a class="lv3" href="#배치"><span class="tf-no">2.2</span>배치</a></div></div>
+<main id="content"><div class="wrap">
+<h2 id="top">2 컨트롤과 배치</h2>
+<div class="chapter-toc"><div class="rail-label">이 장의 차례</div><div class="rail-body"><a class="lv3" href="#컨트롤-표"><span class="tf-no">2.1</span>컨트롤 표</a><a class="lv3" href="#배치"><span class="tf-no">2.2</span>배치</a></div></div>
+<p>헤더: <code>gates/widget.h</code>, <code>gates/layout.h</code>, <code>gates/geometry.h</code>.</p>
+<h3 id="컨트롤-표">2.1 컨트롤 표<a class="plink" href="#컨트롤-표" aria-label="이 절의 주소" title="이 절의 주소">#</a></h3>
+<p>컨트롤은 저마다 노드 하나다. 아래 표가 0.15.0 의 유한한 컨트롤 전부다. 사람이 그것으로 하는 일, 키, 프로그램이 받는 이벤트, 화면 읽기 프로그램이 듣는 것(9장)을 적었다.</p>
+<div class="tblwrap"><table class="key"><tr><th>컨트롤</th><th>만들기</th><th>사람은</th><th>키</th><th>이벤트</th><th>접근성으로는</th></tr><tr><td>패널</td><td><code>gates_panel_create</code></td><td>묶음을 본다</td><td>-</td><td>-</td><td>없음, 이름을 주면 그룹</td></tr><tr><td>이름표</td><td><code>gates_label_create</code></td><td>글을 읽는다</td><td>-</td><td>-</td><td>텍스트</td></tr><tr><td>버튼</td><td><code>gates_button_create</code></td><td>동작 하나를 청한다</td><td>Space(뗄 때), Enter</td><td>ACTIVATED</td><td>버튼(Invoke)</td></tr><tr><td>체크박스</td><td><code>gates_checkbox_create</code></td><td>선택 사항을 켜고 끈다</td><td>Space</td><td>VALUE_CHANGED</td><td>체크박스(Toggle)</td></tr><tr><td>텍스트 상자</td><td><code>gates_textbox_create</code></td><td>한 줄을 입력한다</td><td>편집 키, Ctrl+C/X/V/Z/Y, IME; 두 번 누르면 단어, 세 번 누르면 전부, Shift+클릭은 넓힌다</td><td>TEXT_CHANGED, PREEDIT_CHANGED, LIMIT_EXCEEDED</td><td>편집(Value, Text)</td></tr><tr><td>편집기</td><td><code>gates_editor_create</code></td><td>여러 줄을 쓴다</td><td>편집 키, Ctrl+화살표, PageUp/PageDown, Ctrl+C/X/V/Z/Y, IME; 청하면 Tab; 두 번 누르면 단어, 세 번 누르면 줄, Shift+클릭은 넓힌다</td><td>TEXT_CHANGED, SELECTION_CHANGED, PREEDIT_CHANGED</td><td>편집(Value, 줄 단위 Text)(6장)</td></tr><tr><td>라디오 그룹</td><td><code>gates_radio_create</code></td><td>몇 개 중 하나를 고른다</td><td>화살표, Home, End, Space</td><td>VALUE_CHANGED(result = 선택지 id)</td><td>라디오 버튼의 그룹</td></tr><tr><td>선택 상자</td><td><code>gates_choice_create</code></td><td>목록에서 하나를 고른다</td><td>Space, Enter, Alt+Down 으로 열기; 화살표, Enter, Escape</td><td>VALUE_CHANGED</td><td>콤보 상자(Selection, Expand)</td></tr><tr><td>진행 막대</td><td><code>gates_progress_create</code></td><td>일이 얼마나 되었는지 본다</td><td>-</td><td>-</td><td>진행 막대(백분율)</td></tr><tr><td>구분선</td><td><code>gates_separator_create</code></td><td>나뉨을 본다</td><td>-</td><td>-</td><td>구분선</td></tr><tr><td>뷰</td><td><code>gates_view_create</code>, <code>gates_log_create</code></td><td>목록·표·트리·로그에서 고른다</td><td>화살표, PageUp/PageDown, Home, End, Enter; 트리는 Left/Right; 글자를 치면 그 줄로 간다; Ctrl+C 는 줄을 복사한다; Ctrl+Left/Right 는 F2 와 Space 가 쓰는 열을 고른다; multi_select 이면 Shift/Ctrl 로 여럿, Ctrl+A 로 전부</td><td>SELECTION_CHANGED, ACTIVATED, SORT_REQUESTED, EXPAND_REQUESTED, CELL_EDITED</td><td>목록, 표, 트리(5장)</td></tr><tr><td>폼</td><td><code>gates_form_create</code></td><td>이름표 달린 필드를 채운다</td><td>-</td><td>편집기들의 이벤트</td><td>필드의 그룹(3장)</td></tr><tr><td>속성 격자</td><td><code>gates_propgrid_create</code></td><td>레코드의 형식 있는 필드를 고친다</td><td>Tab, 편집기들의 키</td><td>VALUE_CHANGED(result = 속성 id)</td><td>이름 붙은 편집기의 그룹(5장)</td></tr><tr><td>대화상자, 메뉴</td><td><code>gates_dialog_open</code>, <code>gates_menu_open</code></td><td>한 번 답한다, 명령을 고른다</td><td>Enter, Escape, 화살표</td><td>DIALOG_CLOSED, MENU_CLOSED</td><td>창, 메뉴(4장)</td></tr><tr><td>메뉴 막대</td><td><code>gates_menubar_create</code></td><td>메뉴에서 명령을 고른다</td><td>F10 또는 Alt, 화살표, 글자, Escape</td><td>MENU_CLOSED, 명령</td><td>메뉴 막대(11장)</td></tr><tr><td>도구 막대</td><td><code>gates_toolbar_create</code></td><td>한 번 클릭으로 명령을 실행한다</td><td>화살표, Space, Enter</td><td>명령</td><td>도구 막대(11장)</td></tr><tr><td>상태 줄</td><td><code>gates_statusbar_create</code></td><td>프로그램의 상태를 읽는다</td><td>-</td><td>-</td><td>상태 줄(11장)</td></tr><tr><td>스핀 상자</td><td><code>gates_spin_create</code></td><td>숫자를 입력하거나 한 칸씩 바꾼다</td><td>Up/Down, PgUp/PgDn, Enter; 화살표를 누르고 있으면 되풀이; 포커스가 있을 때 휠</td><td>VALUE_CHANGED(value)</td><td>스피너(RangeValue)(12장)</td></tr><tr><td>슬라이더</td><td><code>gates_slider_create</code></td><td>트랙을 따라 숫자를 끈다</td><td>화살표, PgUp/PgDn, Home, End; 포커스가 있을 때 휠</td><td>VALUE_CHANGED(value)</td><td>슬라이더(RangeValue)(12장)</td></tr><tr><td>그룹 상자</td><td><code>gates_group_create</code></td><td>컨트롤 묶음을 보고 접는다</td><td>제목에서 Space, Enter</td><td>VALUE_CHANGED(checked = 펼침)</td><td>그룹(ExpandCollapse)(12장)</td></tr><tr><td>이미지</td><td><code>gates_image_create</code></td><td>그림을 본다</td><td>-</td><td>-</td><td>이름이 있으면 이미지(13장)</td></tr><tr><td>탭</td><td><code>gates_tabs_create</code></td><td>페이지 사이를 오간다</td><td>화살표, Ctrl+Tab, Ctrl+PgUp/PgDn</td><td>VALUE_CHANGED(result = 번호)</td><td>탭(Selection)(11장)</td></tr></table></div>
+<p>Tab 과 Shift+Tab 은 켜져 있고 보이는 컨트롤을 트리 차례대로 오간다. <code>gates_widget_set_focusable</code> 로 차례에서 뺄 수 있다. 끈 컨트롤(<code>gates_widget_set_disabled</code>)은 흐리게 그려지고, 입력을 무시하고, Tab 이 건너뛴다. 숨긴 노드(<code>gates_node_set_hidden</code>)와 그 아래 전부는 자리를 차지하지 않고, 그려지지 않고, 닿을 수 없다. 라디오 그룹과 선택 상자는 선택지를 자리가 아닌 변하지 않는 id(<code>gates_option_t</code>)로 부른다. id 0 은 "고른 것 없음"이다.</p>
+<p>만들기 함수의 옛 <code>on_click</code> / <code>on_toggle</code> 인자는 입력 전달 안에서 돌며 호환을 위해 남아 있다. 새 코드는 null 을 주고 처리기를 쓴다.</p>
+<h3 id="배치">2.2 배치<a class="plink" href="#배치" aria-label="이 절의 주소" title="이 절의 주소">#</a></h3>
+<p>배치(layout)는 내재적이다. 컨트롤은 저마다 원하는 크기를 알고, 담는 쪽이 자식을 놓는다. 프로그램은 담는 쪽의 종류를 고른다(<code>gates_layout_set</code>).</p>
+<div class="tblwrap"><table><tr><th>종류</th><th>자식을 놓는 법</th></tr><tr><td><code>GATES_LAYOUT_KIND_COLUMN</code></td><td>위에서 아래로, 저마다 세로줄만큼 넓게</td></tr><tr><td><code>GATES_LAYOUT_KIND_ROW</code></td><td>왼쪽에서 오른쪽으로, 저마다 가로줄만큼 높게</td></tr><tr><td><code>GATES_LAYOUT_KIND_STACK</code></td><td>겹쳐서, 활성인 하나만 보인다(쪽)</td></tr><tr><td><code>GATES_LAYOUT_KIND_SPLIT</code></td><td>두 칸과 사람이 끄는 손잡이</td></tr><tr><td><code>GATES_LAYOUT_KIND_SCROLL</code></td><td>휠과 스크롤 막대가 있는 창구 안의 세로줄(트랙을 누르면 한 쪽씩)</td></tr><tr><td><code>GATES_LAYOUT_KIND_FORM</code></td><td>줄마다 이름표 옆에 편집기(3장)</td></tr><tr><td><code>GATES_LAYOUT_KIND_ABSOLUTE</code></td><td>프로그램이 준 사각형에</td></tr></table></div>
+<p>안쪽 여백(padding)과 간격(gap)은 담는 쪽마다 정한다. <code>gates_layout_set_child_grow</code> 는 남는 공간의 몫을 자식에게 주고, <code>gates_layout_set_child_align</code> 은 늘어나지 않는 자식의 자리를 정한다. 보통 흐름에서 자식들은 겹치지 않는다. 창은 그리기 전에 논리 단위로 트리를 배치한다. 창이 없으면 <code>gates_layout_run</code> 이 한다.</p>
+<p>넘겨주는 숫자에는 어떤 창도 닿지 않을 한계가 있다(0.15.0). 안쪽 여백이나 간격이 <code>GATES_EXTENT_MAX</code>(65,536)를 넘으면 음수처럼 거절되고, 뷰포트·절대 사각형·스크롤 위치·포인터 위치는 +-<code>GATES_COORD_MAX</code>(16,777,216)로 제한된다. 배치 계산이 32비트 안에 머물게 하려는 것이다.</p>
+<p>마우스 포인터는 누르면 무슨 일이 일어날지 보여 준다(0.13.0). 분할 핸들과 표의 열 경계 위에서는 크기 조절 화살표(좌우, 위아래로 쌓인 창이면 상하)로, 텍스트 상자와 편집기의 글자 위에서는 I자 모양으로 바뀌고, 끄는 동안 내내 그 모양을 유지한다. 창은 이것을 스스로 한다. 직접 만든 플랫폼에서는 <code>gates_cursor_at(tree, point)</code> 가 같은 물음에 답한다.</p>
+<pre><code class="lang-c">/* manual example (host): layout - a column with a growing row.
+ * expect: the list takes the rest; buttons in a row */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+#define TRY(x) do { if (!gates_is_ok(x)) return 1; } while (0)
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    TRY(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;t));
+    gates_node_t root = gates_tree_root(t), title, list, bar, ok, cancel;
+    TRY(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN));
+    TRY(gates_layout_set_padding(t, root, 8));   /* logical units: 1/96 inch */
+    TRY(gates_layout_set_gap(t, root, 6));
+    TRY(gates_label_create(t, root, GATES_STR("Files"), &amp;title));
+    TRY(gates_panel_create(t, root, &amp;list));
+    TRY(gates_layout_set_child_grow(t, list, 1)); /* takes the space left over */
+    TRY(gates_panel_create(t, root, &amp;bar));
+    TRY(gates_layout_set(t, bar, GATES_LAYOUT_KIND_ROW));
+    TRY(gates_layout_set_gap(t, bar, 6));
+    TRY(gates_button_create(t, bar, GATES_STR("OK"), nullptr, nullptr, &amp;ok));
+    TRY(gates_button_create(t, bar, GATES_STR("Cancel"), nullptr, nullptr, &amp;cancel));
+    TRY(gates_layout_run(t, (gates_size_t){ 240, 320 }, gates_text_backend_builtin()));
+
+    gates_rect_t l = gates_node_layout_rect(t, list), a = gates_node_layout_rect(t, ok),
+                 b = gates_node_layout_rect(t, cancel), r = gates_node_layout_rect(t, bar);
+    /* The list ends one gap above the button row, which ends at the padding. */
+    bool rest = l.y + l.h + 6 == r.y &amp;&amp; r.y + r.h == 320 - 8;
+    printf("%s; buttons %s\n", rest ? "the list takes the rest" : "the list does not grow",
+           a.y == b.y &amp;&amp; b.x &gt; a.x ? "in a row" : "not in a row");
+    gates_tree_destroy(t);
+    return 0;
+}</code></pre>
+<p>스크롤 담기는 키보드 포커스를 따라간다. 창구 아래의 컨트롤로 Tab 하면 보이는 곳으로 스크롤된다. 따로 청하지 않으면 위아래로만 스크롤한다(0.10.0). <code>gates_layout_set_scroll_sideways(tree, area, true)</code> 를 주면 자식들을 그 가운데 가장 넓은 것만큼 넓게 놓고, 그것이 창구보다 넓으면 아래쪽에 가로 막대가 나타난다. 휠의 옆 움직임(Windows 에서는 Shift+휠)이 이를 움직이고, Tab 은 포커스 받은 컨트롤을 가로로도 보이게 하며, 보조 기술도 스크롤할 수 있다. 위치는 <code>gates_layout_set_scroll_x</code>, <code>gates_layout_scroll_x</code> 로 쓰고 읽는다. 폼에는 켜지 않는다. 자식이 창구 너비와 같은 것이 폼에 맞다. 활성이 아닌 겹침(stack) 쪽은 그려지지도 닿지도 않는다.</p>
+<div class="nav"><a href="manual-01-concepts-ko.html">&larr; 이전</a><span class="sp"></span><a href="index.html">목차로</a><span class="sp"></span><a href="manual-03-forms-ko.html">다음 &rarr;</a></div>
+</div></main>
+<script>(function(){var b=document.querySelector('.here-btn'),p=document.getElementById('here-panel');function open(o){if(!p)return;p.hidden=!o;if(b)b.setAttribute('aria-expanded',o);}if(b)b.addEventListener('click',function(){open(p.hidden);});if(p)p.addEventListener('click',function(e){if(e.target.tagName==='A'&&e.target.getAttribute('href').charAt(0)==='#')open(false);});document.addEventListener('keydown',function(e){if(e.key==='Escape')open(false);});var box=document.getElementById('setbox'),so=document.getElementById('set-open');if(!box||!so)return;var r=document.documentElement;function load(){try{return JSON.parse(localStorage.getItem('rp-read')||'{}');}catch(e){return {};}}function save(s){try{localStorage.setItem('rp-read',JSON.stringify(s));}catch(e){}}function css(n){return getComputedStyle(r).getPropertyValue(n).trim();}function hex(v){var m=v.match(/^rgba?\((\d+)[ ,]+(\d+)[ ,]+(\d+)/);if(!m)return v.charAt(0)==='#'?v:'#000000';return '#'+[1,2,3].map(function(i){return ('0'+parseInt(m[i],10).toString(16)).slice(-2);}).join('');}function paint(){var s=load();document.getElementById('s-width').checked=!!s.width;var t=s.theme||'auto';[].forEach.call(box.querySelectorAll('.segb'),function(x){x.setAttribute('aria-pressed',x.dataset.theme===t);});document.getElementById('s-fg').value=s.fg||hex(css('--fg'));document.getElementById('s-bg').value=s.bg||hex(css('--bg'));document.getElementById('s-link').value=s.link||hex(css('--link'));}so.addEventListener('click',function(){box.hidden=!box.hidden;so.setAttribute('aria-expanded',!box.hidden);if(!box.hidden)paint();});document.getElementById('s-width').addEventListener('change',function(){var s=load();s.width=this.checked;save(s);if(s.width)r.setAttribute('data-measure','on');else r.removeAttribute('data-measure');});[].forEach.call(box.querySelectorAll('.segb'),function(x){x.addEventListener('click',function(){var s=load();s.theme=x.dataset.theme;delete s.fg;delete s.bg;delete s.link;save(s);['--fg','--bg','--link'].forEach(function(n){r.style.removeProperty(n);});if(s.theme==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',s.theme);setTimeout(paint,0);});});[['s-fg','--fg','fg'],['s-bg','--bg','bg'],['s-link','--link','link']].forEach(function(a){document.getElementById(a[0]).addEventListener('input',function(){var s=load();s[a[2]]=this.value;save(s);r.style.setProperty(a[1],this.value);});});})();</script><script>
+(function(){
+  var q=document.getElementById('q'), out=document.getElementById('qr');
+  if(!q||!out) return;
+  var data=null, NONE="찾은 것이 없다";
+  function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+  function run(){
+    var v=q.value.trim().toLowerCase();
+    out.innerHTML='';
+    if(!v||!data) return;
+    var hits=[];
+    for(var i=0;i<data.length && hits.length<40;i++){
+      if(data[i][0].toLowerCase().indexOf(v)>=0) hits.push(data[i]);
+    }
+    if(!hits.length){ out.innerHTML='<li>'+NONE+'</li>'; return; }
+    out.innerHTML=hits.map(function(h){
+      return '<li><a href="'+h[1]+'">'+esc(h[0])+'</a>'+
+             (h[2]?'<span class="where">'+esc(h[2])+'</span>':'')+'</li>';
+    }).join('');
+  }
+  q.addEventListener('input',function(){
+    if(data){ run(); return; }
+    fetch('search-index.json').then(function(r){return r.json();})
+      .then(function(j){ data=j; run(); })
+      .catch(function(){ out.innerHTML='<li>'+NONE+'</li>'; });
+  });
+})();
+</script></body></html>

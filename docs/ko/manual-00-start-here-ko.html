@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>0 여기서부터 - gates 매뉴얼</title><link rel="stylesheet" href="../book.css">
+<script>(function(){try{var s=JSON.parse(localStorage.getItem('rp-read')||'{}');var r=document.documentElement;if(s.theme&&s.theme!=='auto')r.setAttribute('data-theme',s.theme);if(s.fg)r.style.setProperty('--fg',s.fg);if(s.bg)r.style.setProperty('--bg',s.bg);if(s.link)r.style.setProperty('--link',s.link);if(s.width)r.setAttribute('data-measure','on');}catch(e){}})();</script></head>
+<body>
+<a class="skip" href="#content">본문으로 건너뛰기</a>
+<div class="bar"><strong><a href="index.html">gates 매뉴얼</a></strong><button class="here-btn" type="button" aria-expanded="false" aria-controls="here-panel">0장 <span class="caret">&#9662;</span></button><span class="sp"></span><span class="bar-nav"><a href="index.html" title="이전" aria-label="이전">&larr;</a><a href="index.html" title="목차로" aria-label="목차로">&uarr;</a><a href="manual-01-concepts-ko.html" title="다음" aria-label="다음">&rarr;</a></span></div><div id="here-panel" class="here-panel" hidden><div class="tools"><span class="ver">0.15.0</span><button class="tool" type="button" id="set-open">&#9881; 설정</button><a class="tool" href="toc.html">&#9636; 상세 차례</a><a class="tool" href="../en/manual-00-start-here-ko.html">En</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.15.0/gates-manual-0.15.0-ko.pdf">&#10515; PDF</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib" title="gates_gui_lib 의 GitHub 저장소">Git</a><a class="tool" href="https://rubidus-api.github.io/" title="rubidus-api.github.io - 공개된 모든 프로젝트">&#8962; 전체 사이트</a><a class="tool" href="https://github.com/rubidus-api" title="github.com/rubidus-api - 모든 저장소">&#8801; 저장소 목록</a></div><div class="setbox" id="setbox" hidden><label class="setrow"><input type="checkbox" id="s-width"><span>가로폭 제한</span></label><div class="setrow"><span class="setlbl">테마</span><span class="seg"><button type="button" class="segb" data-theme="auto">시스템</button><button type="button" class="segb" data-theme="light">밝게</button><button type="button" class="segb" data-theme="dark">어둡게</button></span></div><div class="setrow"><span class="setlbl">색</span><label class="col"><span>글자</span><input type="color" id="s-fg"></label><label class="col"><span>배경</span><input type="color" id="s-bg"></label><label class="col"><span>링크</span><input type="color" id="s-link"></label></div><p class="setnote">설정은 이 브라우저에만 저장된다.</p></div><div class="here-head"><strong>이 장의 차례</strong></div><div class="here-body"><a class="lv3" href="#gates-는-무엇을-위한-것인가"><span class="tf-no">0.1</span>gates 는 무엇을 위한 것인가</a><a class="lv3" href="#패키지"><span class="tf-no">0.2</span>패키지</a><a class="lv3" href="#첫-프로그램"><span class="tf-no">0.3</span>첫 프로그램</a><a class="lv3" href="#창-없이"><span class="tf-no">0.4</span>창 없이</a><a class="lv3" href="#헤더"><span class="tf-no">0.5</span>헤더</a></div></div>
+<main id="content"><div class="wrap">
+<h2 id="top">0 여기서부터</h2>
+<div class="chapter-toc"><div class="rail-label">이 장의 차례</div><div class="rail-body"><a class="lv3" href="#gates-는-무엇을-위한-것인가"><span class="tf-no">0.1</span>gates 는 무엇을 위한 것인가</a><a class="lv3" href="#패키지"><span class="tf-no">0.2</span>패키지</a><a class="lv3" href="#첫-프로그램"><span class="tf-no">0.3</span>첫 프로그램</a><a class="lv3" href="#창-없이"><span class="tf-no">0.4</span>창 없이</a><a class="lv3" href="#헤더"><span class="tf-no">0.5</span>헤더</a></div></div>
+<h3 id="gates-는-무엇을-위한-것인가">0.1 gates 는 무엇을 위한 것인가<a class="plink" href="#gates-는-무엇을-위한-것인가" aria-label="이 절의 주소" title="이 절의 주소">#</a></h3>
+<p>gates 는 사람이 무언가를 보고 바꾸게 하는 것이 일인 프로그램을 위한 GUI 라이브러리다. 설정 창, 기록 살펴보기, 로그 보기, 빌드 도구가 그런 프로그램이다. C23 으로 쓰였고, 화면을 설명하는 노드 트리를 유지하며, 이런 프로그램이 저마다 서툴게 다시 만들던 일을 맡는다. 키보드 포커스, 설치된 입력기로 하는 글자 입력, 폼, 큰 데이터 위의 목록, 버튼과 단축키가 함께 쓰는 명령, 대화상자, 화면에 결과를 넘기는 스레드, 테마, 배율, 접근성이 그 일이다.</p>
+<p>브라우저 엔진도, 게임 UI 도, 픽셀까지 똑같이 그리는 도구도 아니다. HTML 과 CSS 를 떠올리면 된다. 프로그램은 무엇이 무엇이며 서로 어떤 관계인지를 말하고, 마지막 모습은 백엔드와 테마가 정한다. gates 에서 기능이 끝났다는 것은 그 기능이 섬기는 상호작용이 동작한다는 뜻이다. 닿을 수 있고, 포인터와 키보드와 입력기로 쓸 수 있고, 화면 읽기 프로그램이 읽을 수 있어야 한다. 그림과 같아 보이는 것은 기준이 아니다.</p>
+<p>0.15.0 의 백엔드는 하나, 소프트웨어 그리기를 쓰는 Win32 다. 창을 뺀 나머지 전부인 코어는 플랫폼에 묶이지 않아서 C23 컴파일러가 있는 곳이면 어디서나 돌고, 시험도 그렇게 돈다.</p>
+<h3 id="패키지">0.2 패키지<a class="plink" href="#패키지" aria-label="이 절의 주소" title="이 절의 주소">#</a></h3>
+<p>릴리스는 <code>gates-0.15.0/</code> 폴더 하나다.</p>
+<div class="tblwrap"><table><tr><th>경로</th><th>무엇</th></tr><tr><td><code>include/gates/</code></td><td>공개 헤더. <code>gates/gates.h</code> 가 전부를 포함한다</td></tr><tr><td><code>include/proven/</code></td><td>gates 가 기반으로 삼는 proven 라이브러리의 헤더</td></tr><tr><td><code>lib/win64/libgates.a</code></td><td>Windows 용 gates(코어 + Win32 백엔드), mingw-w64</td></tr><tr><td><code>lib/host/libgates_core.a</code></td><td>플랫폼 없는 코어. 시험과 창 없는 도구용</td></tr><tr><td><code>lib/*/libproven.a</code></td><td>기반 라이브러리 proven(할당기, 문자열, 결과)</td></tr><tr><td><code>manual/</code>, <code>manual-ko/</code></td><td>이 매뉴얼의 영문판과 한국어판</td></tr><tr><td><code>examples/consumer/</code></td><td>패키지만으로 빌드하는 프로그램과 그 Makefile</td></tr></table></div>
+<p>gates 와 proven 은 따로 된 라이브러리다. 둘 다 링크하되 gates 를 먼저 둔다. 이미 proven(0.1.x)을 쓰는 프로그램은 패키지의 것 대신 자기 사본을 링크해도 된다.</p>
+<h3 id="첫-프로그램">0.3 첫 프로그램<a class="plink" href="#첫-프로그램" aria-label="이 절의 주소" title="이 절의 주소">#</a></h3>
+<p>이름표 하나와 버튼 하나가 있는 창이다. 버튼을 누르면 이름표가 바뀐다.</p>
+<pre><code class="lang-c">/* manual example (windows): the first program - a window, a label, a button.
+ * Build: see chapter 0 (links -lgates -lproven and the Windows libraries). */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+typedef struct hello_t {
+    gates_app_t *app;
+    gates_tree_t *tree;
+    gates_node_t count_label;
+    int clicks;
+} hello_t;
+
+/* The button tells us it was pressed; we change the label. Nothing is read
+ * back from widgets while painting. */
+static void on_button(gates_tree_t *tree, const gates_event_t *ev, void *user) {
+    hello_t *h = user;
+    if (ev-&gt;kind != GATES_EVENT_ACTIVATED) return;
+    h-&gt;clicks++;
+    char text[48];
+    int n = snprintf(text, sizeof text, "Pressed %d time%s", h-&gt;clicks, h-&gt;clicks == 1 ? "" : "s");
+    (void)gates_widget_set_text(tree, h-&gt;count_label, (gates_str_t){ .ptr = (const gates_u8 *)text, .size = (gates_usize_t)n });
+}
+
+static void on_key(gates_window_t *win, const gates_key_event_t *ev, void *user) {
+    (void)win;
+    hello_t *h = user;
+    if (ev-&gt;down &amp;&amp; ev-&gt;key == GATES_KEY_ESCAPE) gates_app_quit(h-&gt;app);
+}
+
+int main(void) {
+    gates_app_t *app = nullptr;
+    if (!gates_is_ok(gates_app_create(&amp;(gates_app_desc_t){0}, &amp;app))) return 1;
+    hello_t h = { .app = app };
+    gates_window_desc_t desc = { .title = GATES_STR("Hello, gates"), .size = { 320, 160 } };
+    gates_window_callbacks_t cb = { .on_key = on_key, .user_data = &amp;h };
+    gates_window_t *win = nullptr;
+    if (!gates_is_ok(gates_window_create(app, &amp;desc, &amp;cb, &amp;win))) {
+        gates_app_destroy(app);
+        return 1;
+    }
+    h.tree = gates_window_tree(win);
+    gates_node_t root = gates_tree_root(h.tree), button;
+    gates_err_t err = gates_layout_set(h.tree, root, GATES_LAYOUT_KIND_COLUMN);
+    if (gates_is_ok(err)) err = gates_layout_set_padding(h.tree, root, 12);
+    if (gates_is_ok(err)) err = gates_label_create(h.tree, root, GATES_STR("Not pressed yet"), &amp;h.count_label);
+    if (gates_is_ok(err)) err = gates_button_create(h.tree, root, GATES_STR("Press me"), nullptr, nullptr, &amp;button);
+    if (gates_is_ok(err)) err = gates_widget_set_handler(h.tree, button, on_button, &amp;h);
+    if (gates_is_ok(err)) err = gates_app_run(app); /* returns when the last window closes */
+    gates_window_destroy(win);
+    gates_app_destroy(app);
+    return gates_is_ok(err) ? 0 : 1;
+}</code></pre>
+<p>패키지 폴더에서 mingw-w64(Linux, 또는 Windows 의 MSYS2)로 빌드한다.</p>
+<pre><code class="lang-sh">x86_64-w64-mingw32-gcc -std=c23 -O2 -Iinclude hello.c -Llib/win64 -lgates -lproven \
+    -lgdi32 -luser32 -limm32 -ldwmapi -ladvapi32 -luiautomationcore -lole32 -loleaut32 \
+    -luuid -mwindows -o hello.exe</code></pre>
+<p>gates 프로그램의 모양은 이 안의 세 가지가 전부다. 프로그램은 창의 트리에 노드를 만들어 넣는다 (<code>gates_label_create</code>, <code>gates_button_create</code>). 사람이 한 일은 이벤트로 알고 (<code>gates_widget_set_handler</code>), 창이 그리는 동안 위젯을 읽어서 알아내지 않는다. 그리고 <code>gates_app_run</code> 이 마지막 창이 닫힐 때까지 루프를 맡는다.</p>
+<h3 id="창-없이">0.4 창 없이<a class="plink" href="#창-없이" aria-label="이 절의 주소" title="이 절의 주소">#</a></h3>
+<p>코어에는 창이 필요 없다. 트리를 만들고, 내장 글자 백엔드로 배치하고, 무엇이 어디 있는지 묻는다. 시험과 명령줄 도구가 gates 를 이렇게 쓴다.</p>
+<pre><code class="lang-c">/* manual example (host): gates without a window - build, lay out, inspect.
+ * expect: Press me: button at 0,16 320x26 */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+int main(void) {
+    gates_tree_t *tree = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;tree))) return 1;
+    gates_node_t root = gates_tree_root(tree), label, button;
+    gates_err_t err = gates_layout_set(tree, root, GATES_LAYOUT_KIND_COLUMN);
+    if (gates_is_ok(err)) err = gates_label_create(tree, root, GATES_STR("Not pressed yet"), &amp;label);
+    if (gates_is_ok(err)) err = gates_button_create(tree, root, GATES_STR("Press me"), nullptr, nullptr, &amp;button);
+    /* Layout needs text metrics: the builtin backend works everywhere. */
+    if (gates_is_ok(err)) err = gates_layout_run(tree, (gates_size_t){ 320, 160 }, gates_text_backend_builtin());
+    gates_access_info_t info;
+    if (gates_is_ok(err)) err = gates_access_info(tree, button, 0, &amp;info);
+    if (gates_is_ok(err)) {
+        printf("%.*s: %s at %d,%d %dx%d\n", (int)info.name.size, (const char *)info.name.ptr,
+               info.role == GATES_ROLE_BUTTON ? "button" : "?", info.bounds.x, info.bounds.y, info.bounds.w,
+               info.bounds.h);
+    }
+    gates_tree_destroy(tree);
+    return gates_is_ok(err) ? 0 : 1;
+}</code></pre>
+<pre><code class="lang-sh">cc -std=c23 -Iinclude headless.c -Llib/host -lgates_core -lproven -lm -o headless</code></pre>
+<p>출력은 <code>Press me: button at 0,16 320x26</code> 이다. 세로 배치(column)가 버튼을 이름표 아래에 두고 너비 전체로 늘렸다.</p>
+<h3 id="헤더">0.5 헤더<a class="plink" href="#헤더" aria-label="이 절의 주소" title="이 절의 주소">#</a></h3>
+<p><code>gates/gates.h</code> 가 전부를 포함한다. 이 매뉴얼에서 만나는 차례로 적으면 다음과 같다.</p>
+<div class="tblwrap"><table class="key"><tr><th>헤더</th><th>담긴 것</th><th>장</th></tr><tr><td><code>gates/types.h</code></td><td>정수, 문자열(<code>gates_str_t</code>), 오류, 할당기</td><td>1</td></tr><tr><td><code>gates/version.h</code></td><td>판과 <code>gates_version()</code></td><td>10</td></tr><tr><td><code>gates/tree.h</code></td><td>노드 트리, 핸들, 포커스, 숨긴 노드</td><td>1</td></tr><tr><td><code>gates/event.h</code></td><td>타입 있는 이벤트와 그 전달</td><td>1</td></tr><tr><td><code>gates/widget.h</code></td><td>이름표, 버튼, 체크박스, 텍스트 상자, 라디오 그룹, 선택 상자, 진행 막대</td><td>2</td></tr><tr><td><code>gates/layout.h</code></td><td>가로, 세로, 겹침, 나눔, 스크롤, 폼 배치</td><td>2</td></tr><tr><td><code>gates/geometry.h</code></td><td>점, 크기, 사각형, 논리 단위</td><td>2, 8</td></tr><tr><td><code>gates/form.h</code></td><td>이름표·도움말·오류 줄이 있는 폼</td><td>3</td></tr><tr><td><code>gates/command.h</code></td><td>버튼·단축키·메뉴가 함께 쓰는 명령</td><td>4</td></tr><tr><td><code>gates/overlay.h</code></td><td>모달 대화상자와 문맥 메뉴</td><td>4</td></tr><tr><td><code>gates/view.h</code></td><td>내 데이터 위의 목록, 표, 트리, 로그</td><td>5</td></tr><tr><td><code>gates/text_edit.h</code></td><td>모든 텍스트 상자 밑의 편집 코어</td><td>6</td></tr><tr><td><code>gates/clipboard.h</code></td><td>클립보드 경계</td><td>6</td></tr><tr><td><code>gates/input.h</code></td><td>포인터와 키 이벤트</td><td>6</td></tr><tr><td><code>gates/ui.h</code></td><td>입력 전달, 맞힘 판정(hit test), 트리 그리기</td><td>6</td></tr><tr><td><code>gates/post.h</code></td><td>작업 스레드에서 보내기</td><td>7</td></tr><tr><td><code>gates/timer.h</code></td><td>UI 스레드의 타이머</td><td>7</td></tr><tr><td><code>gates/theme.h</code></td><td>테마: 색 토큰, 밝게, 어둡게, 고대비</td><td>8</td></tr><tr><td><code>gates/draw.h</code></td><td>그리기 명령 목록</td><td>8</td></tr><tr><td><code>gates/render.h</code></td><td>소프트웨어 그리기</td><td>8</td></tr><tr><td><code>gates/text.h</code></td><td>글꼴, 글자 치수, 글자 백엔드</td><td>8</td></tr><tr><td><code>gates/access.h</code></td><td>접근성: 역할, 이름, 동작, 감사</td><td>9</td></tr><tr><td><code>gates/app.h</code></td><td>응용과 그 루프</td><td>10</td></tr><tr><td><code>gates/window.h</code></td><td>창, 테마, 확대, 알림</td><td>10</td></tr></table></div>
+<div class="nav"><a href="index.html">&larr; 이전</a><span class="sp"></span><a href="index.html">목차로</a><span class="sp"></span><a href="manual-01-concepts-ko.html">다음 &rarr;</a></div>
+</div></main>
+<script>(function(){var b=document.querySelector('.here-btn'),p=document.getElementById('here-panel');function open(o){if(!p)return;p.hidden=!o;if(b)b.setAttribute('aria-expanded',o);}if(b)b.addEventListener('click',function(){open(p.hidden);});if(p)p.addEventListener('click',function(e){if(e.target.tagName==='A'&&e.target.getAttribute('href').charAt(0)==='#')open(false);});document.addEventListener('keydown',function(e){if(e.key==='Escape')open(false);});var box=document.getElementById('setbox'),so=document.getElementById('set-open');if(!box||!so)return;var r=document.documentElement;function load(){try{return JSON.parse(localStorage.getItem('rp-read')||'{}');}catch(e){return {};}}function save(s){try{localStorage.setItem('rp-read',JSON.stringify(s));}catch(e){}}function css(n){return getComputedStyle(r).getPropertyValue(n).trim();}function hex(v){var m=v.match(/^rgba?\((\d+)[ ,]+(\d+)[ ,]+(\d+)/);if(!m)return v.charAt(0)==='#'?v:'#000000';return '#'+[1,2,3].map(function(i){return ('0'+parseInt(m[i],10).toString(16)).slice(-2);}).join('');}function paint(){var s=load();document.getElementById('s-width').checked=!!s.width;var t=s.theme||'auto';[].forEach.call(box.querySelectorAll('.segb'),function(x){x.setAttribute('aria-pressed',x.dataset.theme===t);});document.getElementById('s-fg').value=s.fg||hex(css('--fg'));document.getElementById('s-bg').value=s.bg||hex(css('--bg'));document.getElementById('s-link').value=s.link||hex(css('--link'));}so.addEventListener('click',function(){box.hidden=!box.hidden;so.setAttribute('aria-expanded',!box.hidden);if(!box.hidden)paint();});document.getElementById('s-width').addEventListener('change',function(){var s=load();s.width=this.checked;save(s);if(s.width)r.setAttribute('data-measure','on');else r.removeAttribute('data-measure');});[].forEach.call(box.querySelectorAll('.segb'),function(x){x.addEventListener('click',function(){var s=load();s.theme=x.dataset.theme;delete s.fg;delete s.bg;delete s.link;save(s);['--fg','--bg','--link'].forEach(function(n){r.style.removeProperty(n);});if(s.theme==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',s.theme);setTimeout(paint,0);});});[['s-fg','--fg','fg'],['s-bg','--bg','bg'],['s-link','--link','link']].forEach(function(a){document.getElementById(a[0]).addEventListener('input',function(){var s=load();s[a[2]]=this.value;save(s);r.style.setProperty(a[1],this.value);});});})();</script><script>
+(function(){
+  var q=document.getElementById('q'), out=document.getElementById('qr');
+  if(!q||!out) return;
+  var data=null, NONE="찾은 것이 없다";
+  function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+  function run(){
+    var v=q.value.trim().toLowerCase();
+    out.innerHTML='';
+    if(!v||!data) return;
+    var hits=[];
+    for(var i=0;i<data.length && hits.length<40;i++){
+      if(data[i][0].toLowerCase().indexOf(v)>=0) hits.push(data[i]);
+    }
+    if(!hits.length){ out.innerHTML='<li>'+NONE+'</li>'; return; }
+    out.innerHTML=hits.map(function(h){
+      return '<li><a href="'+h[1]+'">'+esc(h[0])+'</a>'+
+             (h[2]?'<span class="where">'+esc(h[2])+'</span>':'')+'</li>';
+    }).join('');
+  }
+  q.addEventListener('input',function(){
+    if(data){ run(); return; }
+    fetch('search-index.json').then(function(r){return r.json();})
+      .then(function(j){ data=j; run(); })
+      .catch(function(){ out.innerHTML='<li>'+NONE+'</li>'; });
+  });
+})();
+</script></body></html>

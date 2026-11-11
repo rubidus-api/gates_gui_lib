@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>11 응용 프로그램 틀 - gates 매뉴얼</title><link rel="stylesheet" href="../book.css">
+<script>(function(){try{var s=JSON.parse(localStorage.getItem('rp-read')||'{}');var r=document.documentElement;if(s.theme&&s.theme!=='auto')r.setAttribute('data-theme',s.theme);if(s.fg)r.style.setProperty('--fg',s.fg);if(s.bg)r.style.setProperty('--bg',s.bg);if(s.link)r.style.setProperty('--link',s.link);if(s.width)r.setAttribute('data-measure','on');}catch(e){}})();</script></head>
+<body>
+<a class="skip" href="#content">본문으로 건너뛰기</a>
+<div class="bar"><strong><a href="index.html">gates 매뉴얼</a></strong><button class="here-btn" type="button" aria-expanded="false" aria-controls="here-panel">11장 <span class="caret">&#9662;</span></button><span class="sp"></span><span class="bar-nav"><a href="manual-10-deployment-ko.html" title="이전" aria-label="이전">&larr;</a><a href="index.html" title="목차로" aria-label="목차로">&uarr;</a><a href="manual-12-numbers-layouts-ko.html" title="다음" aria-label="다음">&rarr;</a></span></div><div id="here-panel" class="here-panel" hidden><div class="tools"><span class="ver">0.15.0</span><button class="tool" type="button" id="set-open">&#9881; 설정</button><a class="tool" href="toc.html">&#9636; 상세 차례</a><a class="tool" href="../en/manual-11-application-frame-ko.html">En</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.15.0/gates-manual-0.15.0-ko.pdf">&#10515; PDF</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib" title="gates_gui_lib 의 GitHub 저장소">Git</a><a class="tool" href="https://rubidus-api.github.io/" title="rubidus-api.github.io - 공개된 모든 프로젝트">&#8962; 전체 사이트</a><a class="tool" href="https://github.com/rubidus-api" title="github.com/rubidus-api - 모든 저장소">&#8801; 저장소 목록</a></div><div class="setbox" id="setbox" hidden><label class="setrow"><input type="checkbox" id="s-width"><span>가로폭 제한</span></label><div class="setrow"><span class="setlbl">테마</span><span class="seg"><button type="button" class="segb" data-theme="auto">시스템</button><button type="button" class="segb" data-theme="light">밝게</button><button type="button" class="segb" data-theme="dark">어둡게</button></span></div><div class="setrow"><span class="setlbl">색</span><label class="col"><span>글자</span><input type="color" id="s-fg"></label><label class="col"><span>배경</span><input type="color" id="s-bg"></label><label class="col"><span>링크</span><input type="color" id="s-link"></label></div><p class="setnote">설정은 이 브라우저에만 저장된다.</p></div><div class="here-head"><strong>이 장의 차례</strong></div><div class="here-body"><a class="lv3" href="#니모닉"><span class="tf-no">11.1</span>니모닉</a><a class="lv3" href="#메뉴-막대"><span class="tf-no">11.2</span>메뉴 막대</a><a class="lv3" href="#키맵-단축키-나열과-다시-묶기"><span class="tf-no">11.3</span>키맵: 단축키 나열과 다시 묶기</a><a class="lv3" href="#도구-막대"><span class="tf-no">11.4</span>도구 막대</a><a class="lv3" href="#상태-줄"><span class="tf-no">11.5</span>상태 줄</a><a class="lv3" href="#툴팁"><span class="tf-no">11.6</span>툴팁</a><a class="lv3" href="#탭"><span class="tf-no">11.7</span>탭</a><a class="lv3" href="#배치-기억하기"><span class="tf-no">11.8</span>배치 기억하기</a><a class="lv3" href="#접근성"><span class="tf-no">11.9</span>접근성</a></div></div>
+<main id="content"><div class="wrap">
+<h2 id="top">11 응용 프로그램 틀</h2>
+<div class="chapter-toc"><div class="rail-label">이 장의 차례</div><div class="rail-body"><a class="lv3" href="#니모닉"><span class="tf-no">11.1</span>니모닉</a><a class="lv3" href="#메뉴-막대"><span class="tf-no">11.2</span>메뉴 막대</a><a class="lv3" href="#키맵-단축키-나열과-다시-묶기"><span class="tf-no">11.3</span>키맵: 단축키 나열과 다시 묶기</a><a class="lv3" href="#도구-막대"><span class="tf-no">11.4</span>도구 막대</a><a class="lv3" href="#상태-줄"><span class="tf-no">11.5</span>상태 줄</a><a class="lv3" href="#툴팁"><span class="tf-no">11.6</span>툴팁</a><a class="lv3" href="#탭"><span class="tf-no">11.7</span>탭</a><a class="lv3" href="#배치-기억하기"><span class="tf-no">11.8</span>배치 기억하기</a><a class="lv3" href="#접근성"><span class="tf-no">11.9</span>접근성</a></div></div>
+<p>헤더: <code>gates/frame.h</code>, <code>gates/command.h</code>, <code>gates/state.h</code>.</p>
+<p>데스크톱 도구는 보통 내용 둘레에 틀을 갖는다. 메뉴 막대가 있고, 레이블과 버튼에는 키보드 접근 키가 있으며, 사람이 익히고 바꿀 수 있는 단축키가 있다. 이 모두는 4장의 명령으로 움직이므로, 한 동작은 어디에 나타나든 레이블 하나, 사용 가능 상태 하나, 단축키 하나를 지킨다.</p>
+<h3 id="니모닉">11.1 니모닉<a class="plink" href="#니모닉" aria-label="이 절의 주소" title="이 절의 주소">#</a></h3>
+<p>버튼, 체크 상자, 명령, 메뉴 막대 제목, 탭의 글자에서 <code>&amp;x</code>는 <code>x</code>가 영문자나 숫자일 때 <code>x</code>를 니모닉으로 표시한다. 예를 들면 <code>"&amp;Save"</code>, <code>"E&amp;xit"</code>, <code>"Page &amp;2"</code>이다. 그러면 Alt+x가 그 컨트롤을 작동시킨다. 버튼은 눌리고, 체크 상자는 바뀌고, 메뉴 막대 제목은 열린다. <code>&amp;</code> 두 개는 하나로 보이고(<code>"Fish &amp;&amp; chips"</code>), 그 밖의 <code>&amp;</code>는 그대로 보이므로 <code>"Save &amp; close"</code>는 따로 처리할 필요가 없다. 니모닉 표시는 자리를 차지하지 않는다. <code>"&amp;Save"</code>는 <code>"Save"</code>와 너비가 똑같다.</p>
+<p>그 글자는 다른 Windows 프로그램처럼 키보드 표시가 보이는 동안 밑줄이 그어진다. Alt를 누르거나 키보드로 메뉴 막대에 들어간 때부터 다음 포인터 누름까지이고, "선택키 밑줄 표시" 설정이 켜져 있으면 늘 그어진다.</p>
+<p>레이블은 파일 이름 같은 자료를 보여 주는 일이 많으므로, 대상이 있을 때만 <code>&amp;</code>를 해석한다. <code>gates_label_set_target(tree, label, box)</code>를 부르면 Alt+x가 <code>box</code>에 초점을 준다. 그 상자에 레이블을 접근성 이름으로도 주면(<code>gates_node_set_labelled_by</code>) 화면 낭독기가 이름과 함께 키를 읽는다.</p>
+<p>여러 컨트롤이 같은 글자를 쓰면 Alt+x를 누를 때마다 초점이 다음 컨트롤로 옮겨 가고 아무것도 작동하지 않는다. 사람이 Space나 Enter를 누른다. 키보드가 닿는 컨트롤만 센다. 쓸 수 없는 버튼, 숨은 패널, 모달 대화 상자 뒤의 창은 건너뛴다. 니모닉은 ASCII 영문자와 숫자이다. 다른 문자에는 <code>"파일(&amp;F)"</code>처럼 괄호 안에 하나 넣는다.</p>
+<h3 id="메뉴-막대">11.2 메뉴 막대<a class="plink" href="#메뉴-막대" aria-label="이 절의 주소" title="이 절의 주소">#</a></h3>
+<p>트리에는 메뉴 막대가 많아야 하나 있다. <code>gates_menubar_create(tree, parent, scope, &amp;bar)</code>로 만든다. <code>gates_menubar_add(tree, bar, title, ids, count, nullptr)</code>를 부를 때마다 <code>scope</code>의 명령 목록 위에 제목 하나가 더해지고, id 0은 구분선을 그린다. 문맥 메뉴가 받는 목록과 같다. 메뉴는 보통 메뉴 오버레이이므로 4장에서 메뉴에 대해 말한 것이 모두 성립한다. Escape, 바깥 클릭, 창이 초점을 잃을 때 닫히고, 고른 항목은 명령을 실행하기 전에 다시 확인되며, 열린 메뉴에 처리기를 두면 MENU_CLOSED를 받는다.</p>
+<p>포인터로는 제목을 클릭하면 그 아래에 메뉴가 열린다. 하나가 열려 있는 동안 다른 제목 위로 움직이면 그 메뉴로 바뀌고, 열린 제목을 클릭하면 닫힌다. 키보드로는 다음과 같다.</p>
+<div class="tblwrap"><table class="key"><tr><th>키</th><th>메뉴 모드(제목 하나가 강조됨)</th><th>열린 메뉴</th></tr><tr><td>F10, 또는 Alt만 눌렀다 뗌</td><td>메뉴 모드에 들어감 / 나감</td><td>나감</td></tr><tr><td>Left / Right</td><td>앞 / 다음 제목</td><td>이웃 메뉴를 엶</td></tr><tr><td>Down, Up, Enter, Space</td><td>강조된 제목을 엶</td><td>이동 / 고름</td></tr><tr><td>제목의 니모닉 글자</td><td>그 제목을 엶</td><td>-</td></tr><tr><td>항목의 니모닉 글자</td><td>-</td><td>그 항목을 고름</td></tr><tr><td>Escape</td><td>메뉴 모드에서 나감</td><td>강조된 제목으로 돌아감</td></tr></table></div>
+<p>제목의 글자로 Alt+x를 누르면 그 메뉴가 곧바로 열린다. 제목이 컨트롤보다 먼저이므로 컨트롤에는 제목이 쓰지 않는 글자를 준다. F10은 메뉴 막대가 닿을 수 있는 동안만 메뉴 키이다. 메뉴 막대가 없는 창에서는 보통 명령 단축키로 남는다. 막대는 Tab 정지 위치가 아니며, 모달 대화 상자가 있으면 닿을 수 없다. 이 판에서 메뉴에는 하위 메뉴가 없다.</p>
+<p>Windows에서 gates는 Alt+글자가 니모닉과 맞을 때만 받는다. Alt+F4, Alt+Tab, Alt+Space는 Windows가 하는 일을 그대로 한다.</p>
+<h3 id="키맵-단축키-나열과-다시-묶기">11.3 키맵: 단축키 나열과 다시 묶기<a class="plink" href="#키맵-단축키-나열과-다시-묶기" aria-label="이 절의 주소" title="이 절의 주소">#</a></h3>
+<p>각 명령에 저장된 단축키가 곧 키맵이다. <code>gates_command_count</code>와 <code>gates_command_at</code>은 한 범위의 명령을 나열한다(키맵 편집기나 도움말 화면에 쓴다). <code>gates_command_set_shortcut</code>은 하나를 다시 묶고, 그 범위의 다른 명령이 이미 가진 단축키는 거절하며 그 명령을 <code>*conflict</code>에 알려 준다. <code>gates_shortcut_format</code>은 단축키를 메뉴와 화면 낭독기가 보여 주는 대로 적고(<code>"Ctrl+Shift+S"</code>, <code>"F5"</code>, <code>"Ctrl+Del"</code>), <code>gates_shortcut_parse</code>는 같은 글자를 다시 읽는다. 그래서 프로그램은 사람의 키맵을 <code>save=Ctrl+S</code> 같은 줄로 된 파일에 둘 수 있다. 4장의 규칙은 그대로이다. 단축키에는 Ctrl이 있어야 하거나 기능 키여야 하고, Alt는 단축키에 들어가지 않는다.</p>
+<pre><code class="lang-c">/* manual example (host): a menu bar, its keyboard and its mnemonics.
+ * expect: new 1, open 1; F10 highlights File; access key Alt+F; shortcut Ctrl+Shift+N */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+enum { CMD_NEW = 1, CMD_OPEN, CMD_QUIT };
+
+static void on_command(gates_tree_t *tree, gates_command_id_t id, void *user) {
+    (void)tree;
+    ((int *)user)[id]++;
+}
+
+static bool press(gates_tree_t *t, gates_key_t key) {
+    gates_key_event_t e = { .key = key, .down = true };
+    return gates_input_key(t, &amp;e);
+}
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;t))) return 1;
+    gates_node_t root = gates_tree_root(t), bar;
+    int runs[4] = {0};
+    /* "&amp;" marks the mnemonic: Alt+N, and N while the menu is open. */
+    gates_command_desc_t cmds[] = {
+        { .id = CMD_NEW, .label = GATES_STR("&amp;New"), .shortcut = { .letter = 'N', .ctrl = true },
+          .enabled = true, .invoke = on_command, .user = runs },
+        { .id = CMD_OPEN, .label = GATES_STR("&amp;Open..."), .enabled = true, .invoke = on_command, .user = runs },
+        { .id = CMD_QUIT, .label = GATES_STR("E&amp;xit"), .enabled = true, .invoke = on_command, .user = runs },
+    };
+    for (int i = 0; i &lt; 3; i++) {
+        if (!gates_is_ok(gates_command_register(t, root, &amp;cmds[i]))) return 1;
+    }
+    static const gates_command_id_t file[] = { CMD_NEW, CMD_OPEN, 0, CMD_QUIT }; /* 0: separator */
+    if (!gates_is_ok(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN)) ||
+        !gates_is_ok(gates_menubar_create(t, root, root, &amp;bar)) ||
+        !gates_is_ok(gates_menubar_add(t, bar, GATES_STR("&amp;File"), file, 4, nullptr)) ||
+        !gates_is_ok(gates_layout_run(t, (gates_size_t){ 400, 300 }, gates_text_backend_builtin()))) {
+        return 1;
+    }
+    /* F10 enters menu mode, Down opens File on its first entry, Enter chooses it. */
+    (void)press(t, GATES_KEY_F10);
+    bool highlighted = gates_menubar_highlighted(t, bar) == 0;
+    (void)press(t, GATES_KEY_DOWN);
+    (void)press(t, GATES_KEY_ENTER);
+    /* Alt+F opens File directly (the platform sends Alt+letter here); O chooses Open. */
+    (void)gates_input_mnemonic(t, 'f');
+    gates_key_event_t o = { .letter = 'O', .down = true };
+    (void)gates_input_key(t, &amp;o);
+    (void)gates_tree_dispatch_events(t, 0);
+
+    /* The keymap: rebind New, and print the shortcut as menus do. */
+    gates_command_id_t conflict = 0;
+    if (!gates_is_ok(gates_command_set_shortcut(t, root, CMD_NEW,
+                                                (gates_shortcut_t){ .letter = 'N', .ctrl = true, .shift = true },
+                                                &amp;conflict))) {
+        return 1;
+    }
+    char keys[32];
+    gates_shortcut_t now = gates_command_shortcut(t, root, CMD_NEW);
+    (void)gates_shortcut_format(&amp;now, keys, sizeof keys);
+
+    gates_access_info_t info;
+    if (!gates_is_ok(gates_access_info(t, bar, 1, &amp;info))) return 1;   /* item 1: the File title */
+    printf("new %d, open %d; F10 %s File; access key %.*s; shortcut %s\n", runs[CMD_NEW], runs[CMD_OPEN],
+           highlighted ? "highlights" : "misses", (int)info.access_key.size, (const char *)info.access_key.ptr,
+           keys);
+    gates_tree_destroy(t);
+    return 0;
+}</code></pre>
+<h3 id="도구-막대">11.4 도구 막대<a class="plink" href="#도구-막대" aria-label="이 절의 주소" title="이 절의 주소">#</a></h3>
+<p><code>gates_toolbar_create(tree, parent, scope, &amp;bar)</code>는 작은 버튼이 늘어선 줄을 만들고, <code>gates_toolbar_add(tree, bar, id)</code>를 부를 때마다 <code>scope</code>의 명령에 묶인 버튼이 하나씩 더해진다(id 0은 구분선). 버튼은 명령의 레이블을 니모닉 표시 없이 보여 주고, 명령을 쓸 수 없는 동안은 흐리게, 명령이 체크된 동안은 눌린 모습으로 보인다. 굵게 같은 켜고 끄는 버튼은 체크된 명령이다(0.14.0 부터 강조색 테두리). 버튼은 포인터가 위에 올 때까지 평평하고, 아래에 선이 그어진 띠 위에 놓이므로 글자 버튼 줄이 탭 줄처럼 읽히지 않는다. 버튼마다 아이콘(<code>gates_command_set_icon</code>)을 달면 더 뚜렷이 구별된다.</p>
+<p>클릭은 명령을 실행하고 키보드 초점은 그대로 둔다. 그래서 잘라내기와 붙여넣기 버튼은 사람이 입력하던 글상자에 작용한다. 키보드로는 도구 막대 전체가 Tab 정지 위치 하나이다. Left, Right, Home, End가 쓸 수 있는 버튼 사이를 옮기고, Space나 Enter가 초점이 있는 버튼을 실행한다. 도구 막대가 버튼보다 좁으면 들어가지 않는 버튼은 빠지고, 끝의 <code>&gt;&gt;</code> 버튼이 그 명령들을 메뉴로 보여 준다.</p>
+<h3 id="상태-줄">11.5 상태 줄<a class="plink" href="#상태-줄" aria-label="이 절의 주소" title="이 절의 주소">#</a></h3>
+<p><code>gates_statusbar_create(tree, parent, &amp;bar)</code>는 창 아래쪽을 따라 놓이는 띠를 만들고, <code>gates_statusbar_add(tree, bar, text, grow, &amp;segment)</code>는 구역 하나를 더한다. 구역은 레이블이므로 글자는 <code>gates_widget_set_text</code>로 바꾼다. 구역 사이에는 가는 선이 있고, <code>grow</code>가 있는 구역은 레이아웃 자식처럼 남는 너비를 나눠 가진다. 상태 글자는 바뀔 때마다 읽히지 않는다. 소식이 중요한 구역만 라이브 영역으로 만든다(<code>gates_node_set_live</code>).</p>
+<h3 id="툴팁">11.6 툴팁<a class="plink" href="#툴팁" aria-label="이 절의 주소" title="이 절의 주소">#</a></h3>
+<p><code>gates_node_set_tooltip(tree, node, text)</code>는 노드에 짧은 도움말을 준다. 포인터가 <code>GATES_TOOLTIP_DELAY_MS</code>(500 ms) 동안 머물거나 키보드 초점이 온 뒤 그만큼 지나면 노드 아래(창 아래쪽 가까이에서는 위)의 작은 상자에 나타나고, 누름, 키, 포인터나 초점이 떠날 때, 그리고 <code>GATES_TOOLTIP_SHOW_MS</code>가 지나면 숨는다. 툴팁 하나가 보이는 동안 다른 툴팁으로 옮기면 곧바로 바뀐다. 도구 막대 버튼은 따로 부탁하지 않아도 명령의 레이블과 단축키로 된 툴팁을 가진다(<code>"Paste (Ctrl+V)"</code>). 툴팁은 입력을 받지 않으며, 화면 낭독기는 그 글자를 노드의 도움말로 읽고, 보이는 툴팁은 열릴 때 알려지는 ToolTip 요소이기도 하다. 모달 대화상자가 열리면 툴팁은 숨는다. 툴팁은 트리의 시계로 시간을 재며, 포인터가 올라가 있거나 초점이 있는 노드에 툴팁이 없는 동안에는 아무것도 재지 않는다.</p>
+<pre><code class="lang-c">/* manual example (host): a toolbar, a status bar and a tooltip.
+ * expect: pasted 1, focus kept; tooltip "Paste (Ctrl+V)" after 500 ms; status Pasted */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+enum { CMD_CUT = 1, CMD_PASTE };
+
+typedef struct app_t {
+    gates_node_t status;
+    int pasted;
+} app_t;
+
+static void on_command(gates_tree_t *tree, gates_command_id_t id, void *user) {
+    app_t *a = user;
+    if (id == CMD_PASTE) {
+        a-&gt;pasted++;
+        (void)gates_widget_set_text(tree, a-&gt;status, GATES_STR("Pasted"));
+    }
+}
+
+/* A test clock: a window's tree has a real one. */
+static gates_u64 now_ms;
+static gates_u64 clock_now(void *ctx) { (void)ctx; return now_ms; }
+static void clock_changed(void *ctx) { (void)ctx; }
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;t))) return 1;
+    gates_tree_set_clock(t, clock_now, clock_changed, nullptr);
+    gates_node_t root = gates_tree_root(t), bar, body, status_bar;
+    app_t a = {0};
+    gates_command_desc_t cmds[] = {
+        { .id = CMD_CUT, .label = GATES_STR("Cu&amp;t"), .shortcut = { .key = GATES_KEY_X, .ctrl = true },
+          .enabled = true, .invoke = on_command, .user = &amp;a },
+        { .id = CMD_PASTE, .label = GATES_STR("&amp;Paste"), .shortcut = { .key = GATES_KEY_V, .ctrl = true },
+          .enabled = true, .invoke = on_command, .user = &amp;a },
+    };
+    if (!gates_is_ok(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN)) ||
+        !gates_is_ok(gates_command_register(t, root, &amp;cmds[0])) ||
+        !gates_is_ok(gates_command_register(t, root, &amp;cmds[1])) ||
+        !gates_is_ok(gates_toolbar_create(t, root, root, &amp;bar)) ||
+        !gates_is_ok(gates_toolbar_add(t, bar, CMD_CUT)) ||
+        !gates_is_ok(gates_toolbar_add(t, bar, CMD_PASTE)) ||
+        !gates_is_ok(gates_textbox_create(t, root, GATES_STR(""), 30, &amp;body)) ||
+        !gates_is_ok(gates_node_set_access_name(t, body, GATES_STR("Text"))) ||
+        !gates_is_ok(gates_layout_set_child_grow(t, body, 1)) ||
+        !gates_is_ok(gates_statusbar_create(t, root, &amp;status_bar)) ||
+        !gates_is_ok(gates_statusbar_add(t, status_bar, GATES_STR("Ready"), 1, &amp;a.status)) ||
+        !gates_is_ok(gates_layout_run(t, (gates_size_t){ 400, 300 }, gates_text_backend_builtin()))) {
+        return 1;
+    }
+    gates_tree_set_focus(t, body);
+
+    /* Find the Paste button through the accessibility model: item 2 of the bar. */
+    gates_access_info_t info;
+    if (!gates_is_ok(gates_access_info(t, bar, 2, &amp;info))) return 1;
+    gates_point_t p = { info.bounds.x + info.bounds.w / 2, info.bounds.y + info.bounds.h / 2 };
+
+    /* Rest the pointer on it: the tooltip shows after GATES_TOOLTIP_DELAY_MS. */
+    gates_pointer_event_t move = { .action = GATES_POINTER_MOVE, .pos = p };
+    (void)gates_input_pointer(t, &amp;move);
+    now_ms += GATES_TOOLTIP_DELAY_MS;
+    (void)gates_tree_run_timers(t);
+    gates_str_t tip = {0};
+    char tip_text[64] = "";
+    if (gates_tooltip_shown(t, nullptr, nullptr, &amp;tip, nullptr) &amp;&amp; tip.size &lt; sizeof tip_text) {
+        memcpy(tip_text, tip.ptr, tip.size);
+    }
+
+    /* A click invokes the command; the focus stays in the text box. */
+    gates_pointer_event_t down = { .action = GATES_POINTER_DOWN, .button = GATES_BUTTON_LEFT, .pos = p };
+    gates_pointer_event_t up = { .action = GATES_POINTER_UP, .button = GATES_BUTTON_LEFT, .pos = p };
+    (void)gates_input_pointer(t, &amp;down);
+    (void)gates_input_pointer(t, &amp;up);
+    (void)gates_tree_dispatch_events(t, 0);
+
+    gates_str_t s = gates_widget_text(t, a.status);
+    printf("pasted %d, focus %s; tooltip \"%s\" after %u ms; status %.*s\n", a.pasted,
+           gates_node_eq(gates_tree_focus(t), body) ? "kept" : "moved", tip_text, GATES_TOOLTIP_DELAY_MS,
+           (int)s.size, (const char *)s.ptr);
+    gates_tree_destroy(t);
+    return 0;
+}</code></pre>
+<h3 id="탭">11.7 탭<a class="plink" href="#탭" aria-label="이 절의 주소" title="이 절의 주소">#</a></h3>
+<p><code>gates_tabs_create(tree, parent, &amp;tabs)</code>는 페이지 위에 제목이 늘어선 띠를 만들고, <code>gates_tabs_add(tree, tabs, title, &amp;page)</code>를 부를 때마다 탭 하나가 더해지며 그 페이지를 돌려준다. 페이지는 컨트롤을 담는 세로 패널이다. 한 번에 한 페이지만 보이고, 다른 페이지의 컨트롤은 포인터, 키보드, 보조 기술이 닿지 않는다. 고른 탭과 그 페이지는 한 장이다(0.14.0). 페이지에 테두리가 둘리고, 고른 탭은 위쪽에 강조색 막대를 달고 페이지로 열리며, 다른 탭은 그 뒤의 윤곽선이다.</p>
+<p>띠 전체가 Tab 정지 위치 하나이다. Left, Right, Home, End는 곧바로 고르고, Ctrl+Tab과 Ctrl+Shift+Tab(또는 Ctrl+PgDn과 Ctrl+PgUp)은 탭 안 어디서나 바꾸며 끝에서 처음으로 돌아간다. 클릭은 고르고 띠에 초점을 주며, 제목의 니모닉은 그 탭을 고른다. 초점이 사라지는 페이지에 있었으면 새 페이지의 첫 컨트롤로, 없으면 띠로 옮겨 간다. 사람이 바꾸면 탭 노드에 GATES_EVENT_VALUE_CHANGED가 오고 <code>result</code>는 새 번호이다. <code>gates_tabs_set_selected</code>는 조용히 바꾼다. 제목이 다 들어가지 않으면 띠는 온전한 제목만, 늘 고른 탭을 포함해 보이고 <code>&gt;&gt;</code> 버튼을 둔다. 그 버튼을 누르거나 띠에서 Alt+Down 을 누르면 고른 탭에 표시가 된 모든 탭의 메뉴가 열린다.</p>
+<h3 id="배치-기억하기">11.8 배치 기억하기<a class="plink" href="#배치-기억하기" aria-label="이 절의 주소" title="이 절의 주소">#</a></h3>
+<p>분할선을 끌고, 탭을 고르고, 열을 넓히고, 스크롤한 사람은 다음에도 그대로이기를 바란다. <code>gates_state_save</code>는 자동화 id가 있는 모든 노드의 그런 배치를 글자로 적고(<code>split</code>, <code>tabs</code>, <code>columns</code>, <code>scroll</code> 줄), <code>gates_state_load</code>는 그 글자를 새로 만든 트리에 적용한다. 글자를 어디에 둘지는 프로그램이 정하며, 보통 설정 옆의 파일이다. id가 열쇠이므로 판이 바뀌어도 id를 그대로 둔다. 더는 맞지 않는 줄은 건너뛰므로 오래된 파일이 새 프로그램을 망가뜨리지 않는다. Windows에서는 <code>gates_window_placement</code>와 <code>gates_window_set_placement</code>가 창의 위치, 크기, 최대화 상태를 같은 방식으로 다루고, 모니터가 사라진 창은 가장 가까운 모니터로 데려온다.</p>
+<pre><code class="lang-c">/* manual example (host): tabs, and state kept between runs.
+ * expect: tab 1 (Advanced) after Ctrl+Tab; saved 2 lines; next run: tab 1, split 700 */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+/* Builds the same window each run: tabs and a split, both with automation ids. */
+static bool build(gates_tree_t **out, gates_node_t *tabs, gates_node_t *split, gates_node_t *apply) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;t))) return false;
+    gates_node_t root = gates_tree_root(t), page, left, right, reset;
+    bool ok = gates_is_ok(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN)) &amp;&amp;
+              gates_is_ok(gates_tabs_create(t, root, tabs)) &amp;&amp;
+              gates_is_ok(gates_tabs_add(t, *tabs, GATES_STR("&amp;General"), &amp;page)) &amp;&amp;
+              gates_is_ok(gates_button_create(t, page, GATES_STR("Apply"), nullptr, nullptr, apply)) &amp;&amp;
+              gates_is_ok(gates_tabs_add(t, *tabs, GATES_STR("&amp;Advanced"), &amp;page)) &amp;&amp;
+              gates_is_ok(gates_button_create(t, page, GATES_STR("Reset"), nullptr, nullptr, &amp;reset)) &amp;&amp;
+              gates_is_ok(gates_node_set_automation_id(t, *tabs, GATES_STR("settings.tabs"))) &amp;&amp;
+              gates_is_ok(gates_panel_create(t, root, split)) &amp;&amp;
+              gates_is_ok(gates_layout_set(t, *split, GATES_LAYOUT_KIND_SPLIT)) &amp;&amp;
+              gates_is_ok(gates_panel_create(t, *split, &amp;left)) &amp;&amp;
+              gates_is_ok(gates_panel_create(t, *split, &amp;right)) &amp;&amp;
+              gates_is_ok(gates_node_set_automation_id(t, *split, GATES_STR("main.split"))) &amp;&amp;
+              gates_is_ok(gates_layout_run(t, (gates_size_t){ 400, 300 }, gates_text_backend_builtin()));
+    *out = t;
+    return ok;
+}
+
+int main(void) {
+    gates_tree_t *t;
+    gates_node_t tabs, split, apply;
+    if (!build(&amp;t, &amp;tabs, &amp;split, &amp;apply)) return 1;
+    /* The person works in General, then Ctrl+Tab switches to Advanced. */
+    gates_tree_set_focus(t, apply);
+    gates_key_event_t ctrl_tab = { .key = GATES_KEY_TAB, .ctrl = true, .down = true };
+    (void)gates_input_key(t, &amp;ctrl_tab);
+    gates_u32 now = gates_tabs_selected(t, tabs);
+    gates_str_t title = gates_tabs_title(t, tabs, now);
+    /* ...and drags the split. Save the state (a real program writes it to a file). */
+    if (!gates_is_ok(gates_layout_set_split(t, split, GATES_SPLIT_HORIZONTAL, 700))) return 1;
+    gates_u8 text[256];
+    gates_usize_t len = 0;
+    if (!gates_is_ok(gates_state_save(t, text, sizeof text, &amp;len))) return 1;
+    int lines = 0;
+    for (gates_usize_t i = 0; i &lt; len; i++) lines += text[i] == '\n' &amp;&amp; i &gt; 16;
+    gates_tree_destroy(t);
+
+    /* The next run builds the window again and loads what was saved. */
+    if (!build(&amp;t, &amp;tabs, &amp;split, &amp;apply)) return 1;
+    if (!gates_is_ok(gates_state_load(t, (gates_str_t){ .ptr = text, .size = len }, nullptr))) return 1;
+    printf("tab %u (%.*s) after Ctrl+Tab; saved %d lines; next run: tab %u, split %d\n", now,
+           (int)title.size - 1, (const char *)title.ptr + 1, lines, gates_tabs_selected(t, tabs),
+           gates_layout_split_ratio(t, split));
+    gates_tree_destroy(t);
+    return 0;
+}</code></pre>
+<h3 id="접근성">11.9 접근성<a class="plink" href="#접근성" aria-label="이 절의 주소" title="이 절의 주소">#</a></h3>
+<p>메뉴 막대는 MenuBar 요소이고 그 제목은 ExpandCollapse가 있는 메뉴 항목이다. 메뉴 모드에서는 강조된 제목이 키보드 초점을 가진다. 니모닉이 있는 컨트롤은 모두 그것을 접근 키로 알린다("Alt+F", 열린 메뉴의 항목은 글자만). 메뉴 항목과 명령에 묶인 버튼은 명령의 단축키를 가속 키로 알리며, 접근성 이름에는 <code>&amp;</code> 표시가 들어가지 않는다. 도구 막대는 버튼을 항목으로 가진 ToolBar 요소이고(구분선은 항목이 아니며, <code>&gt;&gt;</code>는 보이는 동안 More라는 항목이다), 상태 줄은 구역을 글자로 가진 StatusBar 요소이다. 탭 띠는 제목을 SelectionItem이 있는 TabItem 항목으로 가진 Tab 요소이고, 각 페이지는 탭 이름을 가진 그룹이다.</p>
+<div class="nav"><a href="manual-10-deployment-ko.html">&larr; 이전</a><span class="sp"></span><a href="index.html">목차로</a><span class="sp"></span><a href="manual-12-numbers-layouts-ko.html">다음 &rarr;</a></div>
+</div></main>
+<script>(function(){var b=document.querySelector('.here-btn'),p=document.getElementById('here-panel');function open(o){if(!p)return;p.hidden=!o;if(b)b.setAttribute('aria-expanded',o);}if(b)b.addEventListener('click',function(){open(p.hidden);});if(p)p.addEventListener('click',function(e){if(e.target.tagName==='A'&&e.target.getAttribute('href').charAt(0)==='#')open(false);});document.addEventListener('keydown',function(e){if(e.key==='Escape')open(false);});var box=document.getElementById('setbox'),so=document.getElementById('set-open');if(!box||!so)return;var r=document.documentElement;function load(){try{return JSON.parse(localStorage.getItem('rp-read')||'{}');}catch(e){return {};}}function save(s){try{localStorage.setItem('rp-read',JSON.stringify(s));}catch(e){}}function css(n){return getComputedStyle(r).getPropertyValue(n).trim();}function hex(v){var m=v.match(/^rgba?\((\d+)[ ,]+(\d+)[ ,]+(\d+)/);if(!m)return v.charAt(0)==='#'?v:'#000000';return '#'+[1,2,3].map(function(i){return ('0'+parseInt(m[i],10).toString(16)).slice(-2);}).join('');}function paint(){var s=load();document.getElementById('s-width').checked=!!s.width;var t=s.theme||'auto';[].forEach.call(box.querySelectorAll('.segb'),function(x){x.setAttribute('aria-pressed',x.dataset.theme===t);});document.getElementById('s-fg').value=s.fg||hex(css('--fg'));document.getElementById('s-bg').value=s.bg||hex(css('--bg'));document.getElementById('s-link').value=s.link||hex(css('--link'));}so.addEventListener('click',function(){box.hidden=!box.hidden;so.setAttribute('aria-expanded',!box.hidden);if(!box.hidden)paint();});document.getElementById('s-width').addEventListener('change',function(){var s=load();s.width=this.checked;save(s);if(s.width)r.setAttribute('data-measure','on');else r.removeAttribute('data-measure');});[].forEach.call(box.querySelectorAll('.segb'),function(x){x.addEventListener('click',function(){var s=load();s.theme=x.dataset.theme;delete s.fg;delete s.bg;delete s.link;save(s);['--fg','--bg','--link'].forEach(function(n){r.style.removeProperty(n);});if(s.theme==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',s.theme);setTimeout(paint,0);});});[['s-fg','--fg','fg'],['s-bg','--bg','bg'],['s-link','--link','link']].forEach(function(a){document.getElementById(a[0]).addEventListener('input',function(){var s=load();s[a[2]]=this.value;save(s);r.style.setProperty(a[1],this.value);});});})();</script><script>
+(function(){
+  var q=document.getElementById('q'), out=document.getElementById('qr');
+  if(!q||!out) return;
+  var data=null, NONE="찾은 것이 없다";
+  function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+  function run(){
+    var v=q.value.trim().toLowerCase();
+    out.innerHTML='';
+    if(!v||!data) return;
+    var hits=[];
+    for(var i=0;i<data.length && hits.length<40;i++){
+      if(data[i][0].toLowerCase().indexOf(v)>=0) hits.push(data[i]);
+    }
+    if(!hits.length){ out.innerHTML='<li>'+NONE+'</li>'; return; }
+    out.innerHTML=hits.map(function(h){
+      return '<li><a href="'+h[1]+'">'+esc(h[0])+'</a>'+
+             (h[2]?'<span class="where">'+esc(h[2])+'</span>':'')+'</li>';
+    }).join('');
+  }
+  q.addEventListener('input',function(){
+    if(data){ run(); return; }
+    fetch('search-index.json').then(function(r){return r.json();})
+      .then(function(j){ data=j; run(); })
+      .catch(function(){ out.innerHTML='<li>'+NONE+'</li>'; });
+  });
+})();
+</script></body></html>

@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>11 The application frame - gates Manual</title><link rel="stylesheet" href="../book.css">
+<script>(function(){try{var s=JSON.parse(localStorage.getItem('rp-read')||'{}');var r=document.documentElement;if(s.theme&&s.theme!=='auto')r.setAttribute('data-theme',s.theme);if(s.fg)r.style.setProperty('--fg',s.fg);if(s.bg)r.style.setProperty('--bg',s.bg);if(s.link)r.style.setProperty('--link',s.link);if(s.width)r.setAttribute('data-measure','on');}catch(e){}})();</script></head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<div class="bar"><strong><a href="index.html">gates Manual</a></strong><button class="here-btn" type="button" aria-expanded="false" aria-controls="here-panel">ch. 11 <span class="caret">&#9662;</span></button><span class="sp"></span><span class="bar-nav"><a href="manual-10-deployment.html" title="Prev" aria-label="Prev">&larr;</a><a href="index.html" title="Contents" aria-label="Contents">&uarr;</a><a href="manual-12-numbers-layouts.html" title="Next" aria-label="Next">&rarr;</a></span></div><div id="here-panel" class="here-panel" hidden><div class="tools"><span class="ver">0.15.0</span><button class="tool" type="button" id="set-open">&#9881; Settings</button><a class="tool" href="toc.html">&#9636; Detailed contents</a><a class="tool" href="../ko/manual-11-application-frame.html">Ko</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.15.0/gates-manual-0.15.0-en.pdf">&#10515; PDF</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib" title="gates_gui_lib on GitHub">Git</a><a class="tool" href="https://rubidus-api.github.io/" title="rubidus-api.github.io - every published project">&#8962; All projects</a><a class="tool" href="https://github.com/rubidus-api" title="github.com/rubidus-api - every repository">&#8801; All repos</a></div><div class="setbox" id="setbox" hidden><label class="setrow"><input type="checkbox" id="s-width"><span>Limit line width</span></label><div class="setrow"><span class="setlbl">Theme</span><span class="seg"><button type="button" class="segb" data-theme="auto">System</button><button type="button" class="segb" data-theme="light">Light</button><button type="button" class="segb" data-theme="dark">Dark</button></span></div><div class="setrow"><span class="setlbl">Colours</span><label class="col"><span>Text</span><input type="color" id="s-fg"></label><label class="col"><span>Background</span><input type="color" id="s-bg"></label><label class="col"><span>Link</span><input type="color" id="s-link"></label></div><p class="setnote">Settings are kept in this browser only.</p></div><div class="here-head"><strong>In this chapter</strong></div><div class="here-body"><a class="lv3" href="#mnemonics"><span class="tf-no">11.1</span>Mnemonics</a><a class="lv3" href="#the-menu-bar"><span class="tf-no">11.2</span>The menu bar</a><a class="lv3" href="#keymap-listing-and-rebinding-shortcuts"><span class="tf-no">11.3</span>Keymap: listing and rebinding shortcuts</a><a class="lv3" href="#toolbar"><span class="tf-no">11.4</span>Toolbar</a><a class="lv3" href="#status-bar"><span class="tf-no">11.5</span>Status bar</a><a class="lv3" href="#tooltips"><span class="tf-no">11.6</span>Tooltips</a><a class="lv3" href="#tabs"><span class="tf-no">11.7</span>Tabs</a><a class="lv3" href="#keeping-the-arrangement"><span class="tf-no">11.8</span>Keeping the arrangement</a><a class="lv3" href="#accessibility"><span class="tf-no">11.9</span>Accessibility</a></div></div>
+<main id="content"><div class="wrap">
+<h2 id="top">11 The application frame</h2>
+<div class="chapter-toc"><div class="rail-label">In this chapter</div><div class="rail-body"><a class="lv3" href="#mnemonics"><span class="tf-no">11.1</span>Mnemonics</a><a class="lv3" href="#the-menu-bar"><span class="tf-no">11.2</span>The menu bar</a><a class="lv3" href="#keymap-listing-and-rebinding-shortcuts"><span class="tf-no">11.3</span>Keymap: listing and rebinding shortcuts</a><a class="lv3" href="#toolbar"><span class="tf-no">11.4</span>Toolbar</a><a class="lv3" href="#status-bar"><span class="tf-no">11.5</span>Status bar</a><a class="lv3" href="#tooltips"><span class="tf-no">11.6</span>Tooltips</a><a class="lv3" href="#tabs"><span class="tf-no">11.7</span>Tabs</a><a class="lv3" href="#keeping-the-arrangement"><span class="tf-no">11.8</span>Keeping the arrangement</a><a class="lv3" href="#accessibility"><span class="tf-no">11.9</span>Accessibility</a></div></div>
+<p>Headers: <code>gates/frame.h</code>, <code>gates/command.h</code>, <code>gates/state.h</code>.</p>
+<p>A desktop tool usually has a frame around its content: a menu bar, keyboard access keys on its labels and buttons, and shortcuts a person can learn and change. All of it is driven by the commands of chapter 4, so one action keeps one label, one enabled state and one shortcut wherever it appears.</p>
+<h3 id="mnemonics">11.1 Mnemonics<a class="plink" href="#mnemonics" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>In the text of a button, a check box, a command, a menu bar title or a tab, <code>&amp;x</code> marks <code>x</code> as the mnemonic when <code>x</code> is a letter or digit: <code>"&amp;Save"</code>, <code>"E&amp;xit"</code>, <code>"Page &amp;2"</code>. Alt+x then activates the control - a button is pressed, a check box toggled, a menu bar title opened. Two <code>&amp;</code> show one (<code>"Fish &amp;&amp; chips"</code>), and any other <code>&amp;</code> is shown as it is, so <code>"Save &amp; close"</code> needs no escaping. The mnemonic takes no room: <code>"&amp;Save"</code> is exactly as wide as <code>"Save"</code>.</p>
+<p>The letter is underlined while keyboard cues are visible, as in other Windows programs: from the moment Alt is pressed or the menu bar is entered from the keyboard until the next pointer press, or all the time when the "underline access keys" setting is on.</p>
+<p>Labels often show data, such as file names, so a label parses <code>&amp;</code> only when it has a target: <code>gates_label_set_target(tree, label, box)</code> makes Alt+x focus <code>box</code>. Give the box the label as its accessible name too (<code>gates_node_set_labelled_by</code>), and screen readers announce the key with the name.</p>
+<p>When several controls share a letter, each Alt+x moves the focus to the next of them and activates nothing; the person presses Space or Enter. Only controls the keyboard can reach count: a disabled button, a hidden panel or the window behind a modal dialog is skipped. Mnemonics are ASCII letters and digits; a title in another script adds one in brackets after its text, <code>(&amp;F)</code>, as Korean and Japanese Windows programs do.</p>
+<h3 id="the-menu-bar">11.2 The menu bar<a class="plink" href="#the-menu-bar" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>A tree has at most one menu bar: <code>gates_menubar_create(tree, parent, scope, &amp;bar)</code>. Each <code>gates_menubar_add(tree, bar, title, ids, count, nullptr)</code> adds a title over a list of commands of <code>scope</code>, where id 0 draws a separator - the same list a context menu takes. The menus are ordinary menu overlays, so everything chapter 4 says about menus holds: they close on Escape, an outside click or when the window loses focus, a chosen entry is checked again before its command runs, and a handler set on the open menu hears MENU_CLOSED.</p>
+<p>With the pointer, a click on a title opens its menu below it; while one is open, moving over another title switches to it, and a click on the open title closes it. From the keyboard:</p>
+<div class="tblwrap"><table class="key"><tr><th>Keys</th><th>In menu mode (a title highlighted)</th><th>In an open menu</th></tr><tr><td>F10, or Alt pressed and released alone</td><td>enter / leave menu mode</td><td>leave</td></tr><tr><td>Left / Right</td><td>the previous / next title</td><td>the neighbouring menu, opened</td></tr><tr><td>Down, Up, Enter, Space</td><td>open the highlighted title</td><td>move / choose</td></tr><tr><td>a title's mnemonic letter</td><td>open that title</td><td>-</td></tr><tr><td>an entry's mnemonic letter</td><td>-</td><td>choose that entry</td></tr><tr><td>Escape</td><td>leave menu mode</td><td>back to the highlighted title</td></tr></table></div>
+<p>Alt+x with a title's letter opens that menu directly. Titles come before controls, so give a control a letter no title uses. F10 is the menu key only while a menu bar is reachable; in a window without one it stays an ordinary command shortcut. The bar is not a Tab stop, and a modal dialog makes it unreachable. Menus have no submenus in this version.</p>
+<p>On Windows, gates takes Alt+letter only when it matches a mnemonic; Alt+F4, Alt+Tab and Alt+Space keep doing what Windows does.</p>
+<h3 id="keymap-listing-and-rebinding-shortcuts">11.3 Keymap: listing and rebinding shortcuts<a class="plink" href="#keymap-listing-and-rebinding-shortcuts" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>The shortcut stored in each command is the keymap. <code>gates_command_count</code> and <code>gates_command_at</code> list a scope's commands (for a keymap editor or a help screen); <code>gates_command_set_shortcut</code> rebinds one and refuses a shortcut another command of the scope already has, naming that command in <code>*conflict</code>. <code>gates_shortcut_format</code> prints a shortcut as menus and screen readers show it (<code>"Ctrl+Shift+S"</code>, <code>"F5"</code>, <code>"Ctrl+Del"</code>), and <code>gates_shortcut_parse</code> reads the same text back, so a program can keep a person's keymap in a file of lines such as <code>save=Ctrl+S</code>. Rules from chapter 4 still hold: a shortcut needs Ctrl, or is a function key; Alt is never part of one.</p>
+<pre><code class="lang-c">/* manual example (host): a menu bar, its keyboard and its mnemonics.
+ * expect: new 1, open 1; F10 highlights File; access key Alt+F; shortcut Ctrl+Shift+N */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+enum { CMD_NEW = 1, CMD_OPEN, CMD_QUIT };
+
+static void on_command(gates_tree_t *tree, gates_command_id_t id, void *user) {
+    (void)tree;
+    ((int *)user)[id]++;
+}
+
+static bool press(gates_tree_t *t, gates_key_t key) {
+    gates_key_event_t e = { .key = key, .down = true };
+    return gates_input_key(t, &amp;e);
+}
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;t))) return 1;
+    gates_node_t root = gates_tree_root(t), bar;
+    int runs[4] = {0};
+    /* "&amp;" marks the mnemonic: Alt+N, and N while the menu is open. */
+    gates_command_desc_t cmds[] = {
+        { .id = CMD_NEW, .label = GATES_STR("&amp;New"), .shortcut = { .letter = 'N', .ctrl = true },
+          .enabled = true, .invoke = on_command, .user = runs },
+        { .id = CMD_OPEN, .label = GATES_STR("&amp;Open..."), .enabled = true, .invoke = on_command, .user = runs },
+        { .id = CMD_QUIT, .label = GATES_STR("E&amp;xit"), .enabled = true, .invoke = on_command, .user = runs },
+    };
+    for (int i = 0; i &lt; 3; i++) {
+        if (!gates_is_ok(gates_command_register(t, root, &amp;cmds[i]))) return 1;
+    }
+    static const gates_command_id_t file[] = { CMD_NEW, CMD_OPEN, 0, CMD_QUIT }; /* 0: separator */
+    if (!gates_is_ok(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN)) ||
+        !gates_is_ok(gates_menubar_create(t, root, root, &amp;bar)) ||
+        !gates_is_ok(gates_menubar_add(t, bar, GATES_STR("&amp;File"), file, 4, nullptr)) ||
+        !gates_is_ok(gates_layout_run(t, (gates_size_t){ 400, 300 }, gates_text_backend_builtin()))) {
+        return 1;
+    }
+    /* F10 enters menu mode, Down opens File on its first entry, Enter chooses it. */
+    (void)press(t, GATES_KEY_F10);
+    bool highlighted = gates_menubar_highlighted(t, bar) == 0;
+    (void)press(t, GATES_KEY_DOWN);
+    (void)press(t, GATES_KEY_ENTER);
+    /* Alt+F opens File directly (the platform sends Alt+letter here); O chooses Open. */
+    (void)gates_input_mnemonic(t, 'f');
+    gates_key_event_t o = { .letter = 'O', .down = true };
+    (void)gates_input_key(t, &amp;o);
+    (void)gates_tree_dispatch_events(t, 0);
+
+    /* The keymap: rebind New, and print the shortcut as menus do. */
+    gates_command_id_t conflict = 0;
+    if (!gates_is_ok(gates_command_set_shortcut(t, root, CMD_NEW,
+                                                (gates_shortcut_t){ .letter = 'N', .ctrl = true, .shift = true },
+                                                &amp;conflict))) {
+        return 1;
+    }
+    char keys[32];
+    gates_shortcut_t now = gates_command_shortcut(t, root, CMD_NEW);
+    (void)gates_shortcut_format(&amp;now, keys, sizeof keys);
+
+    gates_access_info_t info;
+    if (!gates_is_ok(gates_access_info(t, bar, 1, &amp;info))) return 1;   /* item 1: the File title */
+    printf("new %d, open %d; F10 %s File; access key %.*s; shortcut %s\n", runs[CMD_NEW], runs[CMD_OPEN],
+           highlighted ? "highlights" : "misses", (int)info.access_key.size, (const char *)info.access_key.ptr,
+           keys);
+    gates_tree_destroy(t);
+    return 0;
+}</code></pre>
+<h3 id="toolbar">11.4 Toolbar<a class="plink" href="#toolbar" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p><code>gates_toolbar_create(tree, parent, scope, &amp;bar)</code> makes a row of compact buttons, and each <code>gates_toolbar_add(tree, bar, id)</code> adds one bound to a command of <code>scope</code> (id 0 adds a separator). A button shows its command's label without the mnemonic markup, looks disabled while the command is disabled, and looks pressed while the command is checked - a toggle such as Bold is a checked command (with the accent border, 0.14.0). Buttons are flat until the pointer is over them, on a band with a line under it, so a row of text buttons does not read as a row of tabs; an icon per button (<code>gates_command_set_icon</code>) sets them apart further.</p>
+<p>A click invokes the command and leaves the keyboard focus where it was, so Cut and Paste buttons act on the text box the person is typing in. From the keyboard the toolbar is one Tab stop: Left, Right, Home and End move between its enabled buttons, and Space or Enter invokes the one with the focus. When the toolbar is narrower than its buttons, those that do not fit are left out and a <code>&gt;&gt;</code> button at its end lists their commands in a menu.</p>
+<h3 id="status-bar">11.5 Status bar<a class="plink" href="#status-bar" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p><code>gates_statusbar_create(tree, parent, &amp;bar)</code> makes the strip along the bottom of a window, and <code>gates_statusbar_add(tree, bar, text, grow, &amp;segment)</code> adds a segment: a label, so its text changes with <code>gates_widget_set_text</code>. Segments are separated by thin lines; a segment with <code>grow</code> takes a share of the spare width, like a layout child. Status text is not announced on every change - make a segment a live region (<code>gates_node_set_live</code>) only when its news matters.</p>
+<h3 id="tooltips">11.6 Tooltips<a class="plink" href="#tooltips" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p><code>gates_node_set_tooltip(tree, node, text)</code> gives a node a short help text. It shows in a small box below the node (above near the bottom of the window) after the pointer rests on it for <code>GATES_TOOLTIP_DELAY_MS</code> (500 ms), or that long after the keyboard focus arrives, and it hides on a press, a key, when the pointer or focus leaves, and after <code>GATES_TOOLTIP_SHOW_MS</code>. Moving from one tooltip to the next while one shows switches at once. Toolbar buttons have one without asking: the command's label and shortcut, <code>"Paste (Ctrl+V)"</code>. Tooltips never take input, and screen readers read the text as the node's help text; the shown tooltip is also a ToolTip element of its own, announced when it opens. A modal dialog opening hides it. They are timed by the tree's clock, and nothing is timed while no hovered or focused node has one.</p>
+<pre><code class="lang-c">/* manual example (host): a toolbar, a status bar and a tooltip.
+ * expect: pasted 1, focus kept; tooltip "Paste (Ctrl+V)" after 500 ms; status Pasted */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+enum { CMD_CUT = 1, CMD_PASTE };
+
+typedef struct app_t {
+    gates_node_t status;
+    int pasted;
+} app_t;
+
+static void on_command(gates_tree_t *tree, gates_command_id_t id, void *user) {
+    app_t *a = user;
+    if (id == CMD_PASTE) {
+        a-&gt;pasted++;
+        (void)gates_widget_set_text(tree, a-&gt;status, GATES_STR("Pasted"));
+    }
+}
+
+/* A test clock: a window's tree has a real one. */
+static gates_u64 now_ms;
+static gates_u64 clock_now(void *ctx) { (void)ctx; return now_ms; }
+static void clock_changed(void *ctx) { (void)ctx; }
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;t))) return 1;
+    gates_tree_set_clock(t, clock_now, clock_changed, nullptr);
+    gates_node_t root = gates_tree_root(t), bar, body, status_bar;
+    app_t a = {0};
+    gates_command_desc_t cmds[] = {
+        { .id = CMD_CUT, .label = GATES_STR("Cu&amp;t"), .shortcut = { .key = GATES_KEY_X, .ctrl = true },
+          .enabled = true, .invoke = on_command, .user = &amp;a },
+        { .id = CMD_PASTE, .label = GATES_STR("&amp;Paste"), .shortcut = { .key = GATES_KEY_V, .ctrl = true },
+          .enabled = true, .invoke = on_command, .user = &amp;a },
+    };
+    if (!gates_is_ok(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN)) ||
+        !gates_is_ok(gates_command_register(t, root, &amp;cmds[0])) ||
+        !gates_is_ok(gates_command_register(t, root, &amp;cmds[1])) ||
+        !gates_is_ok(gates_toolbar_create(t, root, root, &amp;bar)) ||
+        !gates_is_ok(gates_toolbar_add(t, bar, CMD_CUT)) ||
+        !gates_is_ok(gates_toolbar_add(t, bar, CMD_PASTE)) ||
+        !gates_is_ok(gates_textbox_create(t, root, GATES_STR(""), 30, &amp;body)) ||
+        !gates_is_ok(gates_node_set_access_name(t, body, GATES_STR("Text"))) ||
+        !gates_is_ok(gates_layout_set_child_grow(t, body, 1)) ||
+        !gates_is_ok(gates_statusbar_create(t, root, &amp;status_bar)) ||
+        !gates_is_ok(gates_statusbar_add(t, status_bar, GATES_STR("Ready"), 1, &amp;a.status)) ||
+        !gates_is_ok(gates_layout_run(t, (gates_size_t){ 400, 300 }, gates_text_backend_builtin()))) {
+        return 1;
+    }
+    gates_tree_set_focus(t, body);
+
+    /* Find the Paste button through the accessibility model: item 2 of the bar. */
+    gates_access_info_t info;
+    if (!gates_is_ok(gates_access_info(t, bar, 2, &amp;info))) return 1;
+    gates_point_t p = { info.bounds.x + info.bounds.w / 2, info.bounds.y + info.bounds.h / 2 };
+
+    /* Rest the pointer on it: the tooltip shows after GATES_TOOLTIP_DELAY_MS. */
+    gates_pointer_event_t move = { .action = GATES_POINTER_MOVE, .pos = p };
+    (void)gates_input_pointer(t, &amp;move);
+    now_ms += GATES_TOOLTIP_DELAY_MS;
+    (void)gates_tree_run_timers(t);
+    gates_str_t tip = {0};
+    char tip_text[64] = "";
+    if (gates_tooltip_shown(t, nullptr, nullptr, &amp;tip, nullptr) &amp;&amp; tip.size &lt; sizeof tip_text) {
+        memcpy(tip_text, tip.ptr, tip.size);
+    }
+
+    /* A click invokes the command; the focus stays in the text box. */
+    gates_pointer_event_t down = { .action = GATES_POINTER_DOWN, .button = GATES_BUTTON_LEFT, .pos = p };
+    gates_pointer_event_t up = { .action = GATES_POINTER_UP, .button = GATES_BUTTON_LEFT, .pos = p };
+    (void)gates_input_pointer(t, &amp;down);
+    (void)gates_input_pointer(t, &amp;up);
+    (void)gates_tree_dispatch_events(t, 0);
+
+    gates_str_t s = gates_widget_text(t, a.status);
+    printf("pasted %d, focus %s; tooltip \"%s\" after %u ms; status %.*s\n", a.pasted,
+           gates_node_eq(gates_tree_focus(t), body) ? "kept" : "moved", tip_text, GATES_TOOLTIP_DELAY_MS,
+           (int)s.size, (const char *)s.ptr);
+    gates_tree_destroy(t);
+    return 0;
+}</code></pre>
+<h3 id="tabs">11.7 Tabs<a class="plink" href="#tabs" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p><code>gates_tabs_create(tree, parent, &amp;tabs)</code> makes a strip of titles over pages, and each <code>gates_tabs_add(tree, tabs, title, &amp;page)</code> adds a tab and returns its page, a column panel for the controls. One page shows at a time; controls on the others are out of reach of the pointer, the keyboard and assistive technology. The selected tab and its page are one sheet (0.14.0): the page is framed, the selected tab opens into it with the accent along its top, and the other tabs are outlines behind it.</p>
+<p>The strip is one Tab stop. Left, Right, Home and End select at once; Ctrl+Tab and Ctrl+Shift+Tab (or Ctrl+PgDn and Ctrl+PgUp) switch from anywhere inside the tabs and wrap around; a click selects and focuses the strip; a title's mnemonic selects its tab. When the focus was on the page that goes away, it moves to the first control of the new page, or to the strip when there is none. A person's switch reports GATES_EVENT_VALUE_CHANGED on the tabs node with <code>result</code> the new index; <code>gates_tabs_set_selected</code> changes it silently. When the titles do not fit, the strip shows whole titles - always the selected one - and a <code>&gt;&gt;</code> button; a press on it, or Alt+Down on the strip, opens a menu of every tab with the selected one checked.</p>
+<h3 id="keeping-the-arrangement">11.8 Keeping the arrangement<a class="plink" href="#keeping-the-arrangement" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>A person who drags a split, picks a tab, widens a column or scrolls expects to find it so next time. <code>gates_state_save</code> writes those arrangements as text - <code>split</code>, <code>tabs</code>, <code>columns</code> and <code>scroll</code> lines - for every node that has an automation id, and <code>gates_state_load</code> applies such text to a newly built tree. The program chooses where the text lives, usually a file beside its settings. The id is the key, so keep ids the same between versions; lines that no longer match are skipped, so an old file never breaks a newer program. On Windows, <code>gates_window_placement</code> and <code>gates_window_set_placement</code> do the same for the window's position, size and maximized state, and bring a window whose monitor is gone back onto the nearest one.</p>
+<pre><code class="lang-c">/* manual example (host): tabs, and state kept between runs.
+ * expect: tab 1 (Advanced) after Ctrl+Tab; saved 2 lines; next run: tab 1, split 700 */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+/* Builds the same window each run: tabs and a split, both with automation ids. */
+static bool build(gates_tree_t **out, gates_node_t *tabs, gates_node_t *split, gates_node_t *apply) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;t))) return false;
+    gates_node_t root = gates_tree_root(t), page, left, right, reset;
+    bool ok = gates_is_ok(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN)) &amp;&amp;
+              gates_is_ok(gates_tabs_create(t, root, tabs)) &amp;&amp;
+              gates_is_ok(gates_tabs_add(t, *tabs, GATES_STR("&amp;General"), &amp;page)) &amp;&amp;
+              gates_is_ok(gates_button_create(t, page, GATES_STR("Apply"), nullptr, nullptr, apply)) &amp;&amp;
+              gates_is_ok(gates_tabs_add(t, *tabs, GATES_STR("&amp;Advanced"), &amp;page)) &amp;&amp;
+              gates_is_ok(gates_button_create(t, page, GATES_STR("Reset"), nullptr, nullptr, &amp;reset)) &amp;&amp;
+              gates_is_ok(gates_node_set_automation_id(t, *tabs, GATES_STR("settings.tabs"))) &amp;&amp;
+              gates_is_ok(gates_panel_create(t, root, split)) &amp;&amp;
+              gates_is_ok(gates_layout_set(t, *split, GATES_LAYOUT_KIND_SPLIT)) &amp;&amp;
+              gates_is_ok(gates_panel_create(t, *split, &amp;left)) &amp;&amp;
+              gates_is_ok(gates_panel_create(t, *split, &amp;right)) &amp;&amp;
+              gates_is_ok(gates_node_set_automation_id(t, *split, GATES_STR("main.split"))) &amp;&amp;
+              gates_is_ok(gates_layout_run(t, (gates_size_t){ 400, 300 }, gates_text_backend_builtin()));
+    *out = t;
+    return ok;
+}
+
+int main(void) {
+    gates_tree_t *t;
+    gates_node_t tabs, split, apply;
+    if (!build(&amp;t, &amp;tabs, &amp;split, &amp;apply)) return 1;
+    /* The person works in General, then Ctrl+Tab switches to Advanced. */
+    gates_tree_set_focus(t, apply);
+    gates_key_event_t ctrl_tab = { .key = GATES_KEY_TAB, .ctrl = true, .down = true };
+    (void)gates_input_key(t, &amp;ctrl_tab);
+    gates_u32 now = gates_tabs_selected(t, tabs);
+    gates_str_t title = gates_tabs_title(t, tabs, now);
+    /* ...and drags the split. Save the state (a real program writes it to a file). */
+    if (!gates_is_ok(gates_layout_set_split(t, split, GATES_SPLIT_HORIZONTAL, 700))) return 1;
+    gates_u8 text[256];
+    gates_usize_t len = 0;
+    if (!gates_is_ok(gates_state_save(t, text, sizeof text, &amp;len))) return 1;
+    int lines = 0;
+    for (gates_usize_t i = 0; i &lt; len; i++) lines += text[i] == '\n' &amp;&amp; i &gt; 16;
+    gates_tree_destroy(t);
+
+    /* The next run builds the window again and loads what was saved. */
+    if (!build(&amp;t, &amp;tabs, &amp;split, &amp;apply)) return 1;
+    if (!gates_is_ok(gates_state_load(t, (gates_str_t){ .ptr = text, .size = len }, nullptr))) return 1;
+    printf("tab %u (%.*s) after Ctrl+Tab; saved %d lines; next run: tab %u, split %d\n", now,
+           (int)title.size - 1, (const char *)title.ptr + 1, lines, gates_tabs_selected(t, tabs),
+           gates_layout_split_ratio(t, split));
+    gates_tree_destroy(t);
+    return 0;
+}</code></pre>
+<h3 id="accessibility">11.9 Accessibility<a class="plink" href="#accessibility" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>The menu bar is a MenuBar element whose titles are menu items with ExpandCollapse; in menu mode the highlighted title has the keyboard focus. Every control with a mnemonic reports it as its access key ("Alt+F"; an entry of an open menu reports its letter), menu entries and buttons bound to a command report the command's shortcut as their accelerator key, and accessible names never contain the <code>&amp;</code> markup. The toolbar is a ToolBar element whose buttons are items (a separator is none; <code>&gt;&gt;</code> is an item called More while it is shown), and the status bar is a StatusBar element with its segments as text. The tab strip is a Tab element whose titles are TabItem items with SelectionItem, and each page is a group named after its tab.</p>
+<div class="nav"><a href="manual-10-deployment.html">&larr; Prev</a><span class="sp"></span><a href="index.html">Contents</a><span class="sp"></span><a href="manual-12-numbers-layouts.html">Next &rarr;</a></div>
+</div></main>
+<script>(function(){var b=document.querySelector('.here-btn'),p=document.getElementById('here-panel');function open(o){if(!p)return;p.hidden=!o;if(b)b.setAttribute('aria-expanded',o);}if(b)b.addEventListener('click',function(){open(p.hidden);});if(p)p.addEventListener('click',function(e){if(e.target.tagName==='A'&&e.target.getAttribute('href').charAt(0)==='#')open(false);});document.addEventListener('keydown',function(e){if(e.key==='Escape')open(false);});var box=document.getElementById('setbox'),so=document.getElementById('set-open');if(!box||!so)return;var r=document.documentElement;function load(){try{return JSON.parse(localStorage.getItem('rp-read')||'{}');}catch(e){return {};}}function save(s){try{localStorage.setItem('rp-read',JSON.stringify(s));}catch(e){}}function css(n){return getComputedStyle(r).getPropertyValue(n).trim();}function hex(v){var m=v.match(/^rgba?\((\d+)[ ,]+(\d+)[ ,]+(\d+)/);if(!m)return v.charAt(0)==='#'?v:'#000000';return '#'+[1,2,3].map(function(i){return ('0'+parseInt(m[i],10).toString(16)).slice(-2);}).join('');}function paint(){var s=load();document.getElementById('s-width').checked=!!s.width;var t=s.theme||'auto';[].forEach.call(box.querySelectorAll('.segb'),function(x){x.setAttribute('aria-pressed',x.dataset.theme===t);});document.getElementById('s-fg').value=s.fg||hex(css('--fg'));document.getElementById('s-bg').value=s.bg||hex(css('--bg'));document.getElementById('s-link').value=s.link||hex(css('--link'));}so.addEventListener('click',function(){box.hidden=!box.hidden;so.setAttribute('aria-expanded',!box.hidden);if(!box.hidden)paint();});document.getElementById('s-width').addEventListener('change',function(){var s=load();s.width=this.checked;save(s);if(s.width)r.setAttribute('data-measure','on');else r.removeAttribute('data-measure');});[].forEach.call(box.querySelectorAll('.segb'),function(x){x.addEventListener('click',function(){var s=load();s.theme=x.dataset.theme;delete s.fg;delete s.bg;delete s.link;save(s);['--fg','--bg','--link'].forEach(function(n){r.style.removeProperty(n);});if(s.theme==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',s.theme);setTimeout(paint,0);});});[['s-fg','--fg','fg'],['s-bg','--bg','bg'],['s-link','--link','link']].forEach(function(a){document.getElementById(a[0]).addEventListener('input',function(){var s=load();s[a[2]]=this.value;save(s);r.style.setProperty(a[1],this.value);});});})();</script><script>
+(function(){
+  var q=document.getElementById('q'), out=document.getElementById('qr');
+  if(!q||!out) return;
+  var data=null, NONE="Nothing found";
+  function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+  function run(){
+    var v=q.value.trim().toLowerCase();
+    out.innerHTML='';
+    if(!v||!data) return;
+    var hits=[];
+    for(var i=0;i<data.length && hits.length<40;i++){
+      if(data[i][0].toLowerCase().indexOf(v)>=0) hits.push(data[i]);
+    }
+    if(!hits.length){ out.innerHTML='<li>'+NONE+'</li>'; return; }
+    out.innerHTML=hits.map(function(h){
+      return '<li><a href="'+h[1]+'">'+esc(h[0])+'</a>'+
+             (h[2]?'<span class="where">'+esc(h[2])+'</span>':'')+'</li>';
+    }).join('');
+  }
+  q.addEventListener('input',function(){
+    if(data){ run(); return; }
+    fetch('search-index.json').then(function(r){return r.json();})
+      .then(function(j){ data=j; run(); })
+      .catch(function(){ out.innerHTML='<li>'+NONE+'</li>'; });
+  });
+})();
+</script></body></html>

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>8 Themes, units and scaling - gates Manual</title><link rel="stylesheet" href="../book.css">
+<script>(function(){try{var s=JSON.parse(localStorage.getItem('rp-read')||'{}');var r=document.documentElement;if(s.theme&&s.theme!=='auto')r.setAttribute('data-theme',s.theme);if(s.fg)r.style.setProperty('--fg',s.fg);if(s.bg)r.style.setProperty('--bg',s.bg);if(s.link)r.style.setProperty('--link',s.link);if(s.width)r.setAttribute('data-measure','on');}catch(e){}})();</script></head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<div class="bar"><strong><a href="index.html">gates Manual</a></strong><button class="here-btn" type="button" aria-expanded="false" aria-controls="here-panel">ch. 8 <span class="caret">&#9662;</span></button><span class="sp"></span><span class="bar-nav"><a href="manual-07-workers-timers.html" title="Prev" aria-label="Prev">&larr;</a><a href="index.html" title="Contents" aria-label="Contents">&uarr;</a><a href="manual-09-accessibility.html" title="Next" aria-label="Next">&rarr;</a></span></div><div id="here-panel" class="here-panel" hidden><div class="tools"><span class="ver">0.15.0</span><button class="tool" type="button" id="set-open">&#9881; Settings</button><a class="tool" href="toc.html">&#9636; Detailed contents</a><a class="tool" href="../ko/manual-08-themes-units.html">Ko</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.15.0/gates-manual-0.15.0-en.pdf">&#10515; PDF</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib" title="gates_gui_lib on GitHub">Git</a><a class="tool" href="https://rubidus-api.github.io/" title="rubidus-api.github.io - every published project">&#8962; All projects</a><a class="tool" href="https://github.com/rubidus-api" title="github.com/rubidus-api - every repository">&#8801; All repos</a></div><div class="setbox" id="setbox" hidden><label class="setrow"><input type="checkbox" id="s-width"><span>Limit line width</span></label><div class="setrow"><span class="setlbl">Theme</span><span class="seg"><button type="button" class="segb" data-theme="auto">System</button><button type="button" class="segb" data-theme="light">Light</button><button type="button" class="segb" data-theme="dark">Dark</button></span></div><div class="setrow"><span class="setlbl">Colours</span><label class="col"><span>Text</span><input type="color" id="s-fg"></label><label class="col"><span>Background</span><input type="color" id="s-bg"></label><label class="col"><span>Link</span><input type="color" id="s-link"></label></div><p class="setnote">Settings are kept in this browser only.</p></div><div class="here-head"><strong>In this chapter</strong></div><div class="here-body"><a class="lv3" href="#logical-units"><span class="tf-no">8.1</span>Logical units</a><a class="lv3" href="#themes"><span class="tf-no">8.2</span>Themes</a><a class="lv3" href="#fonts"><span class="tf-no">8.3</span>Fonts</a><a class="lv3" href="#drawing-and-text-backends"><span class="tf-no">8.4</span>Drawing and text backends</a></div></div>
+<main id="content"><div class="wrap">
+<h2 id="top">8 Themes, units and scaling</h2>
+<div class="chapter-toc"><div class="rail-label">In this chapter</div><div class="rail-body"><a class="lv3" href="#logical-units"><span class="tf-no">8.1</span>Logical units</a><a class="lv3" href="#themes"><span class="tf-no">8.2</span>Themes</a><a class="lv3" href="#fonts"><span class="tf-no">8.3</span>Fonts</a><a class="lv3" href="#drawing-and-text-backends"><span class="tf-no">8.4</span>Drawing and text backends</a></div></div>
+<p>Headers: <code>gates/theme.h</code>, <code>gates/geometry.h</code>, <code>gates/draw.h</code>, <code>gates/render.h</code>, <code>gates/text.h</code>.</p>
+<h3 id="logical-units">8.1 Logical units<a class="plink" href="#logical-units" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>Every coordinate and size in the API is a logical unit, 1/96 inch: layout values, node rectangles, preferred sizes, window sizes, pointer positions. A window converts once, at its edge - to device pixels when it draws, back to units when it reports the pointer - so the same program is the same physical size on a 100 % and a 200 % display. <code>gates_px</code> and <code>gates_logical</code> are the conversions (exact inverses for whole units).</p>
+<pre><code class="lang-c">/* manual example (host): logical units and themes.
+ * expect: 100 units = 150 px at 144 dpi; 150 px = 100 units; light theme: 0 issues */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+int main(void) {
+    /* Every coordinate in the API is a logical unit, 1/96 inch. A window
+     * scales once, at its edge: to pixels when drawing, back when reading
+     * pointer positions. */
+    gates_u32 dpi = 144; /* 150 % */
+    gates_i32 px = gates_px(100, dpi);
+    gates_i32 back = gates_logical(px, dpi);
+    /* A theme is checked against the enforced rules: contrast and cues. */
+    gates_access_issue_t issues[8];
+    gates_u32 n = gates_theme_audit(gates_theme_light(), issues, 8);
+    printf("100 units = %d px at %u dpi; %d px = %d units; light theme: %u issues\n", px, dpi, px, back, n);
+    return n == 0 ? 0 : 1;
+}</code></pre>
+<p>The window follows its monitor (per-monitor DPI, and moving between monitors), the Windows "Text size" setting, and an application zoom (<code>gates_window_set_zoom</code>, 25 % to 400 %). All of them scale the whole interface, as a magnified page does.</p>
+<h3 id="themes">8.2 Themes<a class="plink" href="#themes" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>Colours are tokens (<code>gates_color_token_t</code>), not values: the program says "text", "focus", "error", and the theme says which colour that is. A window follows the system - light or dark mode, and high contrast from the system's own colours - and switches live when the person changes it; the title bar follows too. <code>gates_window_set_theme_mode</code> fixes a mode, <code>gates_window_set_theme</code> sets an application theme. Every theme is held to the contrast and cue rules of chapter 9: <code>gates_theme_audit</code> checks one.</p>
+<p>Focus and errors are never shown by colour alone: the focus ring and the error border have a width (at least 2 units), so they read in any theme.</p>
+<h3 id="fonts">8.3 Fonts<a class="plink" href="#fonts" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>Text uses one of two fonts (<code>gates_font_t</code> in <code>gates/text.h</code>):</p>
+<div class="tblwrap"><table class="key"><tr><th>Font</th><th>Is</th><th>On Windows</th></tr><tr><td><code>GATES_FONT_UI</code> (the default)</td><td>the platform's UI face, proportional</td><td>the system message font: Segoe UI, Malgun Gothic on Korean Windows</td></tr><tr><td><code>GATES_FONT_MONO</code></td><td>fixed pitch, for code, logs and aligned columns</td><td>Consolas</td></tr><tr><td>a named face (0.12.0)</td><td>a face you name, from <code>gates_font_named</code></td><td>that face at the UI size; the UI face when it is not installed</td></tr></table></div>
+<p><code>gates_node_set_font</code> chooses the font of a node and, like CSS <code>font-family</code>, of everything under it that does not choose its own; <code>GATES_FONT_INHERIT</code> goes back to the parent's, and <code>gates_node_font</code> reads the effective one. Set it on a panel to switch a whole area, or on one view for a log. Dialogs and menus are not under the window's root: they start from the UI font unless you set one on them.</p>
+<p>Faces by name (0.12.0) work two ways. For <strong>one face everywhere</strong>, give the application its UI face: <code>gates_app_desc_t.ui_font</code> at creation, or <code>gates_app_set_ui_font(app, name)</code> while it runs (a settings screen's font choice; it answers <code>PROVEN_ERR_NOT_FOUND</code> when the face is not installed, and an empty name goes back to the system's). Everything that uses <code>GATES_FONT_UI</code> - dialogs and menus too - takes it, at the system's UI size. For <strong>a face per element</strong>, register the name once with <code>gates_font_named(name, &amp;face)</code> and set that face like <code>GATES_FONT_MONO</code>: on one node, on a panel for an area, or on the root for the whole window. The same name always gives the same face; up to <code>GATES_FONT_NAMED_MAX</code> (62) names. Names are the system's family names, in English or in the system's language ("Malgun Gothic" or its Korean name both work on Windows).</p>
+<pre><code class="lang-c">gates_app_desc_t desc = { .ui_font = GATES_STR("Malgun Gothic") };  /* one face for the program */
+gates_font_t serif;
+if (gates_is_ok(gates_font_named(GATES_STR("Georgia"), &amp;serif))) {
+    (void)gates_node_set_font(tree, quote, serif);                  /* one element */
+}</code></pre>
+<p>Sizes (0.10.0) are a percentage of the system's text size, so they still follow the person's Windows "Text size" setting. <code>gates_node_set_font_size(tree, node, percent)</code> sets one from <code>GATES_FONT_SIZE_MIN</code> (50) to <code>GATES_FONT_SIZE_MAX</code> (400); <code>GATES_FONT_SIZE_SMALL</code> (85), <code>GATES_FONT_SIZE_LARGE</code> (125) and <code>GATES_FONT_SIZE_HEADING</code> (150) are the usual ones, and 0 goes back to the parent's. The size is inherited like the face but separately from it: a MONO view inside a heading panel is mono at 150 %. Everything the node measures and draws follows it - text, line and row heights, carets, a text box's <code>cols</code>. <code>gates_node_font_size</code> reads the effective size, and <code>gates_node_font</code> returns face and size together (<code>gates_font_face</code>, <code>gates_font_percent</code>).</p>
+<pre><code class="lang-c">(void)gates_node_set_font(tree, log_view, GATES_FONT_MONO);            /* aligned log lines */
+(void)gates_node_set_font_size(tree, title, GATES_FONT_SIZE_HEADING); /* a page heading */
+(void)gates_node_set_font_size(tree, note, GATES_FONT_SIZE_SMALL);    /* small print */</code></pre>
+<h3 id="drawing-and-text-backends">8.4 Drawing and text backends<a class="plink" href="#drawing-and-text-backends" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>A window paints its tree into a draw list (<code>gates/draw.h</code>) and the software renderer (<code>gates/render.h</code>) turns it into pixels. Text goes through a text backend (<code>gates/text.h</code>), which reports per font a line height, an average width (a sizing hint: a text box's <code>cols</code>) and the advance of every character; a string's width is exactly the sum of its advances, and the backend draws each character at that offset. So layout, drawing, the caret and hit testing agree on every backend and at every scale. The builtin backend is fixed-pitch for both fonts, which keeps tests deterministic (a size scales its 8 x 16 cell; named faces draw as the UI one). A backend of your own reads the face with <code>gates_font_face(font)</code>, a named face's name with <code>gates_font_face_name(font)</code>, and scales by <code>gates_font_percent(font)</code>. An application can draw its own things in the window's paint callback; it never reads widget state there.</p>
+<div class="nav"><a href="manual-07-workers-timers.html">&larr; Prev</a><span class="sp"></span><a href="index.html">Contents</a><span class="sp"></span><a href="manual-09-accessibility.html">Next &rarr;</a></div>
+</div></main>
+<script>(function(){var b=document.querySelector('.here-btn'),p=document.getElementById('here-panel');function open(o){if(!p)return;p.hidden=!o;if(b)b.setAttribute('aria-expanded',o);}if(b)b.addEventListener('click',function(){open(p.hidden);});if(p)p.addEventListener('click',function(e){if(e.target.tagName==='A'&&e.target.getAttribute('href').charAt(0)==='#')open(false);});document.addEventListener('keydown',function(e){if(e.key==='Escape')open(false);});var box=document.getElementById('setbox'),so=document.getElementById('set-open');if(!box||!so)return;var r=document.documentElement;function load(){try{return JSON.parse(localStorage.getItem('rp-read')||'{}');}catch(e){return {};}}function save(s){try{localStorage.setItem('rp-read',JSON.stringify(s));}catch(e){}}function css(n){return getComputedStyle(r).getPropertyValue(n).trim();}function hex(v){var m=v.match(/^rgba?\((\d+)[ ,]+(\d+)[ ,]+(\d+)/);if(!m)return v.charAt(0)==='#'?v:'#000000';return '#'+[1,2,3].map(function(i){return ('0'+parseInt(m[i],10).toString(16)).slice(-2);}).join('');}function paint(){var s=load();document.getElementById('s-width').checked=!!s.width;var t=s.theme||'auto';[].forEach.call(box.querySelectorAll('.segb'),function(x){x.setAttribute('aria-pressed',x.dataset.theme===t);});document.getElementById('s-fg').value=s.fg||hex(css('--fg'));document.getElementById('s-bg').value=s.bg||hex(css('--bg'));document.getElementById('s-link').value=s.link||hex(css('--link'));}so.addEventListener('click',function(){box.hidden=!box.hidden;so.setAttribute('aria-expanded',!box.hidden);if(!box.hidden)paint();});document.getElementById('s-width').addEventListener('change',function(){var s=load();s.width=this.checked;save(s);if(s.width)r.setAttribute('data-measure','on');else r.removeAttribute('data-measure');});[].forEach.call(box.querySelectorAll('.segb'),function(x){x.addEventListener('click',function(){var s=load();s.theme=x.dataset.theme;delete s.fg;delete s.bg;delete s.link;save(s);['--fg','--bg','--link'].forEach(function(n){r.style.removeProperty(n);});if(s.theme==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',s.theme);setTimeout(paint,0);});});[['s-fg','--fg','fg'],['s-bg','--bg','bg'],['s-link','--link','link']].forEach(function(a){document.getElementById(a[0]).addEventListener('input',function(){var s=load();s[a[2]]=this.value;save(s);r.style.setProperty(a[1],this.value);});});})();</script><script>
+(function(){
+  var q=document.getElementById('q'), out=document.getElementById('qr');
+  if(!q||!out) return;
+  var data=null, NONE="Nothing found";
+  function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+  function run(){
+    var v=q.value.trim().toLowerCase();
+    out.innerHTML='';
+    if(!v||!data) return;
+    var hits=[];
+    for(var i=0;i<data.length && hits.length<40;i++){
+      if(data[i][0].toLowerCase().indexOf(v)>=0) hits.push(data[i]);
+    }
+    if(!hits.length){ out.innerHTML='<li>'+NONE+'</li>'; return; }
+    out.innerHTML=hits.map(function(h){
+      return '<li><a href="'+h[1]+'">'+esc(h[0])+'</a>'+
+             (h[2]?'<span class="where">'+esc(h[2])+'</span>':'')+'</li>';
+    }).join('');
+  }
+  q.addEventListener('input',function(){
+    if(data){ run(); return; }
+    fetch('search-index.json').then(function(r){return r.json();})
+      .then(function(j){ data=j; run(); })
+      .catch(function(){ out.innerHTML='<li>'+NONE+'</li>'; });
+  });
+})();
+</script></body></html>

@@ -18,6 +18,7 @@
 !/manual-ko/
 !/spec/
 !/screenshots/
+!/docs/
 
 # Never public, even inside the directories above.
 *_private/

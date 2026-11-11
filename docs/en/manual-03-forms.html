@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3 Forms - gates Manual</title><link rel="stylesheet" href="../book.css">
+<script>(function(){try{var s=JSON.parse(localStorage.getItem('rp-read')||'{}');var r=document.documentElement;if(s.theme&&s.theme!=='auto')r.setAttribute('data-theme',s.theme);if(s.fg)r.style.setProperty('--fg',s.fg);if(s.bg)r.style.setProperty('--bg',s.bg);if(s.link)r.style.setProperty('--link',s.link);if(s.width)r.setAttribute('data-measure','on');}catch(e){}})();</script></head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<div class="bar"><strong><a href="index.html">gates Manual</a></strong><button class="here-btn" type="button" aria-expanded="false" aria-controls="here-panel">ch. 3 <span class="caret">&#9662;</span></button><span class="sp"></span><span class="bar-nav"><a href="manual-02-controls-layout.html" title="Prev" aria-label="Prev">&larr;</a><a href="index.html" title="Contents" aria-label="Contents">&uarr;</a><a href="manual-04-commands-focus.html" title="Next" aria-label="Next">&rarr;</a></span></div><div id="here-panel" class="here-panel" hidden><div class="tools"><span class="ver">0.15.0</span><button class="tool" type="button" id="set-open">&#9881; Settings</button><a class="tool" href="toc.html">&#9636; Detailed contents</a><a class="tool" href="../ko/manual-03-forms.html">Ko</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.15.0/gates-manual-0.15.0-en.pdf">&#10515; PDF</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib" title="gates_gui_lib on GitHub">Git</a><a class="tool" href="https://rubidus-api.github.io/" title="rubidus-api.github.io - every published project">&#8962; All projects</a><a class="tool" href="https://github.com/rubidus-api" title="github.com/rubidus-api - every repository">&#8801; All repos</a></div><div class="setbox" id="setbox" hidden><label class="setrow"><input type="checkbox" id="s-width"><span>Limit line width</span></label><div class="setrow"><span class="setlbl">Theme</span><span class="seg"><button type="button" class="segb" data-theme="auto">System</button><button type="button" class="segb" data-theme="light">Light</button><button type="button" class="segb" data-theme="dark">Dark</button></span></div><div class="setrow"><span class="setlbl">Colours</span><label class="col"><span>Text</span><input type="color" id="s-fg"></label><label class="col"><span>Background</span><input type="color" id="s-bg"></label><label class="col"><span>Link</span><input type="color" id="s-link"></label></div><p class="setnote">Settings are kept in this browser only.</p></div><div class="here-head"><strong>In this chapter</strong></div><div class="here-body"><a class="lv3" href="#a-form-holds-no-data"><span class="tf-no">3.1</span>A form holds no data</a><a class="lv3" href="#draft-validation"><span class="tf-no">3.2</span>Draft validation</a></div></div>
+<main id="content"><div class="wrap">
+<h2 id="top">3 Forms</h2>
+<div class="chapter-toc"><div class="rail-label">In this chapter</div><div class="rail-body"><a class="lv3" href="#a-form-holds-no-data"><span class="tf-no">3.1</span>A form holds no data</a><a class="lv3" href="#draft-validation"><span class="tf-no">3.2</span>Draft validation</a></div></div>
+<p>Header: <code>gates/form.h</code>.</p>
+<h3 id="a-form-holds-no-data">3.1 A form holds no data<a class="plink" href="#a-form-holds-no-data" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>A form lays out labelled fields - a label beside each editor, a help line and an error line under it - and does nothing else. It does not keep values, does not validate, and does not save. The application keeps a draft, reads the editors (or follows their events), decides what is valid, puts messages on the fields, and saves after a successful submit. This split is the point: the rules about valid data belong to the program, the presentation of fields and errors to gates, and the two never argue about who holds the truth.</p>
+<p>Each field has an id chosen by the program (<code>field_id</code>, nonzero, unique in the form); ids stay stable when rows are hidden or reordered. <code>gates_form_editor</code> gives the editor of a field.</p>
+<div class="tblwrap"><table class="key"><tr><th>Add</th><th>Editor</th><th>Value</th></tr><tr><td><code>gates_form_add_text</code></td><td>text box</td><td><code>gates_textbox_text</code></td></tr><tr><td><code>gates_form_add_checkbox</code></td><td>check box</td><td><code>gates_checkbox_checked</code></td></tr><tr><td><code>gates_form_add_choice</code></td><td>choice</td><td>the option id in VALUE_CHANGED</td></tr><tr><td><code>gates_form_add_radio</code></td><td>radio group</td><td>the option id in VALUE_CHANGED</td></tr></table></div>
+<p><code>required</code> adds a marker to the label and tells assistive technology the field is required; <code>help</code> is a line under the editor; <code>gates_form_set_error</code> shows a message under the field in the error colour and marks a text box invalid - an empty message clears it. A narrow form puts each label above its editor instead of beside it, and is as tall as those stacked rows, so what follows it moves down rather than being covered.</p>
+<pre><code class="lang-c">/* manual example (host): a form, a draft, validation on submit.
+ * expect: first submit: 1 error; second submit: saved Kim */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+enum { FIELD_NAME = 1, FIELD_NEWS = 2 };
+
+/* The application's draft: the form holds no data of its own. */
+typedef struct draft_t {
+    char name[32];
+    bool news;
+} draft_t;
+
+/* Reads the editors, checks, and puts messages on the fields. */
+static int submit(gates_tree_t *t, gates_node_t form, draft_t *d) {
+    gates_str_t name = gates_textbox_text(t, gates_form_editor(t, form, FIELD_NAME));
+    int errors = 0;
+    if (name.size == 0) {
+        (void)gates_form_set_error(t, form, FIELD_NAME, GATES_STR("enter a name"));
+        errors++;
+    } else {
+        (void)gates_form_set_error(t, form, FIELD_NAME, GATES_STR("")); /* clears it */
+        snprintf(d-&gt;name, sizeof d-&gt;name, "%.*s", (int)name.size, (const char *)name.ptr);
+    }
+    d-&gt;news = gates_checkbox_checked(t, gates_form_editor(t, form, FIELD_NEWS));
+    return errors;
+}
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;t))) return 1;
+    gates_node_t form, name_box;
+    gates_field_desc_t name = { .label = GATES_STR("Name"), .required = true, .max_bytes = 30,
+                                .help = GATES_STR("as it should appear on the badge") };
+    gates_field_desc_t news = { .label = GATES_STR("News"), .text = GATES_STR("send me news") };
+    if (!gates_is_ok(gates_form_create(t, gates_tree_root(t), &amp;form)) ||
+        !gates_is_ok(gates_form_add_text(t, form, FIELD_NAME, &amp;name, &amp;name_box)) ||
+        !gates_is_ok(gates_form_add_checkbox(t, form, FIELD_NEWS, &amp;news, nullptr))) {
+        return 1;
+    }
+    draft_t d = {0};
+    int first = submit(t, form, &amp;d);
+    /* The error is part of the field now: screen readers read it with the name. */
+    gates_access_info_t info;
+    if (!gates_is_ok(gates_access_info(t, name_box, 0, &amp;info)) || info.description.size == 0) return 1;
+
+    if (!gates_is_ok(gates_textbox_set_text(t, name_box, GATES_STR("Kim")))) return 1;
+    int second = submit(t, form, &amp;d);
+    printf("first submit: %d error%s; second submit: %s %s\n", first, first == 1 ? "" : "s",
+           second == 0 ? "saved" : "refused", d.name);
+    gates_tree_destroy(t);
+    return 0;
+}</code></pre>
+<h3 id="draft-validation">3.2 Draft validation<a class="plink" href="#draft-validation" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>Validate on submit, not on every key: a person half-way through typing an e-mail address has not made a mistake yet. When a submit fails, put every error on its field, keep focus where the person can fix the first one, and say in a status line what happened (chapter 9 shows how to make that line announce itself). Clear a field's error when the person changes it, or at the next submit.</p>
+<p>The reference application <code>app_settings</code> does all of this: required fields, help, errors, discarding changes, and saving a draft only when it is valid.</p>
+<div class="nav"><a href="manual-02-controls-layout.html">&larr; Prev</a><span class="sp"></span><a href="index.html">Contents</a><span class="sp"></span><a href="manual-04-commands-focus.html">Next &rarr;</a></div>
+</div></main>
+<script>(function(){var b=document.querySelector('.here-btn'),p=document.getElementById('here-panel');function open(o){if(!p)return;p.hidden=!o;if(b)b.setAttribute('aria-expanded',o);}if(b)b.addEventListener('click',function(){open(p.hidden);});if(p)p.addEventListener('click',function(e){if(e.target.tagName==='A'&&e.target.getAttribute('href').charAt(0)==='#')open(false);});document.addEventListener('keydown',function(e){if(e.key==='Escape')open(false);});var box=document.getElementById('setbox'),so=document.getElementById('set-open');if(!box||!so)return;var r=document.documentElement;function load(){try{return JSON.parse(localStorage.getItem('rp-read')||'{}');}catch(e){return {};}}function save(s){try{localStorage.setItem('rp-read',JSON.stringify(s));}catch(e){}}function css(n){return getComputedStyle(r).getPropertyValue(n).trim();}function hex(v){var m=v.match(/^rgba?\((\d+)[ ,]+(\d+)[ ,]+(\d+)/);if(!m)return v.charAt(0)==='#'?v:'#000000';return '#'+[1,2,3].map(function(i){return ('0'+parseInt(m[i],10).toString(16)).slice(-2);}).join('');}function paint(){var s=load();document.getElementById('s-width').checked=!!s.width;var t=s.theme||'auto';[].forEach.call(box.querySelectorAll('.segb'),function(x){x.setAttribute('aria-pressed',x.dataset.theme===t);});document.getElementById('s-fg').value=s.fg||hex(css('--fg'));document.getElementById('s-bg').value=s.bg||hex(css('--bg'));document.getElementById('s-link').value=s.link||hex(css('--link'));}so.addEventListener('click',function(){box.hidden=!box.hidden;so.setAttribute('aria-expanded',!box.hidden);if(!box.hidden)paint();});document.getElementById('s-width').addEventListener('change',function(){var s=load();s.width=this.checked;save(s);if(s.width)r.setAttribute('data-measure','on');else r.removeAttribute('data-measure');});[].forEach.call(box.querySelectorAll('.segb'),function(x){x.addEventListener('click',function(){var s=load();s.theme=x.dataset.theme;delete s.fg;delete s.bg;delete s.link;save(s);['--fg','--bg','--link'].forEach(function(n){r.style.removeProperty(n);});if(s.theme==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',s.theme);setTimeout(paint,0);});});[['s-fg','--fg','fg'],['s-bg','--bg','bg'],['s-link','--link','link']].forEach(function(a){document.getElementById(a[0]).addEventListener('input',function(){var s=load();s[a[2]]=this.value;save(s);r.style.setProperty(a[1],this.value);});});})();</script><script>
+(function(){
+  var q=document.getElementById('q'), out=document.getElementById('qr');
+  if(!q||!out) return;
+  var data=null, NONE="Nothing found";
+  function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+  function run(){
+    var v=q.value.trim().toLowerCase();
+    out.innerHTML='';
+    if(!v||!data) return;
+    var hits=[];
+    for(var i=0;i<data.length && hits.length<40;i++){
+      if(data[i][0].toLowerCase().indexOf(v)>=0) hits.push(data[i]);
+    }
+    if(!hits.length){ out.innerHTML='<li>'+NONE+'</li>'; return; }
+    out.innerHTML=hits.map(function(h){
+      return '<li><a href="'+h[1]+'">'+esc(h[0])+'</a>'+
+             (h[2]?'<span class="where">'+esc(h[2])+'</span>':'')+'</li>';
+    }).join('');
+  }
+  q.addEventListener('input',function(){
+    if(data){ run(); return; }
+    fetch('search-index.json').then(function(r){return r.json();})
+      .then(function(j){ data=j; run(); })
+      .catch(function(){ out.innerHTML='<li>'+NONE+'</li>'; });
+  });
+})();
+</script></body></html>

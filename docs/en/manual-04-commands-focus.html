@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>4 Commands, focus, dialogs and menus - gates Manual</title><link rel="stylesheet" href="../book.css">
+<script>(function(){try{var s=JSON.parse(localStorage.getItem('rp-read')||'{}');var r=document.documentElement;if(s.theme&&s.theme!=='auto')r.setAttribute('data-theme',s.theme);if(s.fg)r.style.setProperty('--fg',s.fg);if(s.bg)r.style.setProperty('--bg',s.bg);if(s.link)r.style.setProperty('--link',s.link);if(s.width)r.setAttribute('data-measure','on');}catch(e){}})();</script></head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<div class="bar"><strong><a href="index.html">gates Manual</a></strong><button class="here-btn" type="button" aria-expanded="false" aria-controls="here-panel">ch. 4 <span class="caret">&#9662;</span></button><span class="sp"></span><span class="bar-nav"><a href="manual-03-forms.html" title="Prev" aria-label="Prev">&larr;</a><a href="index.html" title="Contents" aria-label="Contents">&uarr;</a><a href="manual-05-views.html" title="Next" aria-label="Next">&rarr;</a></span></div><div id="here-panel" class="here-panel" hidden><div class="tools"><span class="ver">0.15.0</span><button class="tool" type="button" id="set-open">&#9881; Settings</button><a class="tool" href="toc.html">&#9636; Detailed contents</a><a class="tool" href="../ko/manual-04-commands-focus.html">Ko</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.15.0/gates-manual-0.15.0-en.pdf">&#10515; PDF</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib" title="gates_gui_lib on GitHub">Git</a><a class="tool" href="https://rubidus-api.github.io/" title="rubidus-api.github.io - every published project">&#8962; All projects</a><a class="tool" href="https://github.com/rubidus-api" title="github.com/rubidus-api - every repository">&#8801; All repos</a></div><div class="setbox" id="setbox" hidden><label class="setrow"><input type="checkbox" id="s-width"><span>Limit line width</span></label><div class="setrow"><span class="setlbl">Theme</span><span class="seg"><button type="button" class="segb" data-theme="auto">System</button><button type="button" class="segb" data-theme="light">Light</button><button type="button" class="segb" data-theme="dark">Dark</button></span></div><div class="setrow"><span class="setlbl">Colours</span><label class="col"><span>Text</span><input type="color" id="s-fg"></label><label class="col"><span>Background</span><input type="color" id="s-bg"></label><label class="col"><span>Link</span><input type="color" id="s-link"></label></div><p class="setnote">Settings are kept in this browser only.</p></div><div class="here-head"><strong>In this chapter</strong></div><div class="here-body"><a class="lv3" href="#one-action-many-ways-to-ask-for-it"><span class="tf-no">4.1</span>One action, many ways to ask for it</a><a class="lv3" href="#focus"><span class="tf-no">4.2</span>Focus</a><a class="lv3" href="#dialogs"><span class="tf-no">4.3</span>Dialogs</a><a class="lv3" href="#context-menus"><span class="tf-no">4.4</span>Context menus</a><a class="lv3" href="#undo-and-redo"><span class="tf-no">4.5</span>Undo and redo</a></div></div>
+<main id="content"><div class="wrap">
+<h2 id="top">4 Commands, focus, dialogs and menus</h2>
+<div class="chapter-toc"><div class="rail-label">In this chapter</div><div class="rail-body"><a class="lv3" href="#one-action-many-ways-to-ask-for-it"><span class="tf-no">4.1</span>One action, many ways to ask for it</a><a class="lv3" href="#focus"><span class="tf-no">4.2</span>Focus</a><a class="lv3" href="#dialogs"><span class="tf-no">4.3</span>Dialogs</a><a class="lv3" href="#context-menus"><span class="tf-no">4.4</span>Context menus</a><a class="lv3" href="#undo-and-redo"><span class="tf-no">4.5</span>Undo and redo</a></div></div>
+<p>Headers: <code>gates/command.h</code>, <code>gates/overlay.h</code>.</p>
+<h3 id="one-action-many-ways-to-ask-for-it">4.1 One action, many ways to ask for it<a class="plink" href="#one-action-many-ways-to-ask-for-it" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>"Save" is one action whether the person clicks a button, presses Ctrl+S or picks it from a context menu. A command holds it once: an id, a label, an optional shortcut, enabled and checked states, and the function to run. Commands belong to a scope node; a shortcut works while focus is inside the scope. Buttons bound to a command (<code>gates_button_set_command</code>) take its label and enabled state, and follow it when it changes: disable the command and every way to invoke it is disabled at once.</p>
+<p>An invocation is queued and runs at the next safe point, after the command is checked again - a command disabled in between does not run.</p>
+<pre><code class="lang-c">/* manual example (host): one command for a button and a shortcut.
+ * expect: saved 1 time; button disabled with the command */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+enum { CMD_SAVE = 1 };
+
+static void on_save(gates_tree_t *tree, gates_command_id_t id, void *user) {
+    (void)tree;
+    (void)id;
+    (*(int *)user)++;
+}
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;t))) return 1;
+    gates_node_t root = gates_tree_root(t), save;
+    int saves = 0;
+    gates_command_desc_t cmd = { .id = CMD_SAVE, .label = GATES_STR("Save"), .enabled = true,
+                                 .shortcut = { .letter = 'S', .ctrl = true },
+                                 .invoke = on_save, .user = &amp;saves };
+    if (!gates_is_ok(gates_command_register(t, root, &amp;cmd)) ||
+        !gates_is_ok(gates_button_create(t, root, GATES_STR(""), nullptr, nullptr, &amp;save)) ||
+        !gates_is_ok(gates_button_set_command(t, save, root, CMD_SAVE))) { /* label, state from the command */
+        return 1;
+    }
+    /* Ctrl+S: the command is queued and runs at the next safe point. */
+    gates_key_event_t ctrl_s = { .letter = 'S', .ctrl = true, .down = true };
+    (void)gates_input_key(t, &amp;ctrl_s);
+    (void)gates_tree_dispatch_events(t, 0);
+
+    /* Disabling the command disables every button bound to it, and its shortcut. */
+    if (!gates_is_ok(gates_command_set_enabled(t, root, CMD_SAVE, false))) return 1;
+    (void)gates_input_key(t, &amp;ctrl_s);
+    (void)gates_tree_dispatch_events(t, 0);
+
+    gates_access_info_t info;
+    if (!gates_is_ok(gates_access_info(t, save, 0, &amp;info))) return 1;
+    printf("saved %d time%s; button %s with the command\n", saves, saves == 1 ? "" : "s",
+           (info.states &amp; GATES_ACCESS_DISABLED) != 0 ? "disabled" : "enabled");
+    gates_tree_destroy(t);
+    return 0;
+}</code></pre>
+<p>A command may have a role: the scope's DEFAULT command runs when Enter is pressed in a text box or check box of the scope, its CANCEL command on Escape anywhere in the scope (for a dialog: OK and Cancel).</p>
+<h3 id="focus">4.2 Focus<a class="plink" href="#focus" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>One control has keyboard focus (<code>gates_tree_focus</code>, <code>gates_tree_set_focus</code>). Tab and Shift+Tab move it in tree order and wrap inside the current focus scope; the window's scope is the whole tree, an open dialog's scope is the dialog. A focused control that is hidden or destroyed lets focus go (a press or drag inside it is let go too); the program decides where focus goes next with <code>gates_tree_set_focus</code>. When a dialog closes, focus returns to the control that had it.</p>
+<h3 id="dialogs">4.3 Dialogs<a class="plink" href="#dialogs" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p><code>gates_dialog_open</code> shows a modal dialog inside the window: the rest of the window is dimmed and ignores input, Tab stays inside, and the window's own shortcuts wait. Opening returns at once - there is no nested event loop. The program fills the dialog's content panel, registers the dialog's commands with the dialog as scope, and learns the answer from one DIALOG_CLOSED event (<code>ev-&gt;result</code>: ACCEPTED or CANCELED). Focus returns to where it was. At most eight dialogs and menus are open at a time.</p>
+<h3 id="context-menus">4.4 Context menus<a class="plink" href="#context-menus" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p><code>gates_menu_open</code> lists commands of a scope at a point: their labels, check marks, shortcuts and enabled states come from the commands. Choosing an entry invokes its command through the same queued, checked path as a shortcut. Arrows move, Enter chooses, Escape or a click outside only closes (a click outside never also clicks what is under it).</p>
+<p><code>gates_command_set_submenu(tree, scope, id, ids, count)</code> gives an entry a submenu of other commands of the same scope. The entry shows an arrow; Right, Enter, a click, or resting the pointer on it opens the submenu beside it, and Left or Escape closes it again. Choosing inside a submenu invokes that command and closes every menu of the chain; the menu you opened reports MENU_CLOSED with the command's id. The same works in menu bar menus.</p>
+<h3 id="undo-and-redo">4.5 Undo and redo<a class="plink" href="#undo-and-redo" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>Text boxes undo their own typing. For the program's own data - a renamed item, a moved row, a changed setting - <code>gates_undo_create</code> (gates/undo.h) gives a stack: after making a change, push an entry with a label and two functions that take it back and make it again. Entries with the same merge key in a row become one (typing into one field), the stack keeps a bounded number, and <code>gates_undo_mark_clean</code> / <code>gates_undo_is_clean</code> tell whether the data is as it was saved. <code>gates_undo_bind</code> keeps two commands in step: enabled only when there is something to undo or redo, and labelled "Undo Rename" / "Redo Rename" (with words in the program's language).</p>
+<pre><code class="lang-c">/* manual example (host): Undo and Redo commands over the program's own data.
+ * expect: menu shows "Undo Rename"; after Undo: name Draft, menu shows "Redo Rename"; clean again: yes */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+enum { CMD_UNDO = 1, CMD_REDO = 2 };
+
+static char name[32] = "Draft";
+
+/* One entry remembers the name before and after the change. */
+typedef struct rename_t {
+    char before[32], after[32];
+} rename_t;
+
+static gates_err_t undo_rename(void *data) {
+    memcpy(name, ((rename_t *)data)-&gt;before, sizeof name);
+    return GATES_OK;
+}
+static gates_err_t redo_rename(void *data) {
+    memcpy(name, ((rename_t *)data)-&gt;after, sizeof name);
+    return GATES_OK;
+}
+
+static void on_command(gates_tree_t *tree, gates_command_id_t id, void *user) {
+    (void)tree;
+    gates_undo_t *undo = user;
+    (void)(id == CMD_UNDO ? gates_undo_undo(undo) : gates_undo_redo(undo));
+}
+
+static void print_label(gates_tree_t *t, gates_command_id_t id) {
+    gates_str_t l = gates_command_label(t, gates_tree_root(t), id);
+    printf("\"%.*s\"", (int)l.size, (const char *)l.ptr);
+}
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    gates_undo_t *undo = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;t)) ||
+        !gates_is_ok(gates_undo_create((gates_allocator_t){0}, 0, &amp;undo))) {
+        return 1;
+    }
+    gates_node_t root = gates_tree_root(t);
+    gates_command_desc_t cmds[] = {
+        { .id = CMD_UNDO, .label = GATES_STR_INIT("Undo"), .shortcut = { .key = GATES_KEY_Z, .ctrl = true },
+          .enabled = true, .invoke = on_command, .user = undo },
+        { .id = CMD_REDO, .label = GATES_STR_INIT("Redo"), .shortcut = { .key = GATES_KEY_Y, .ctrl = true },
+          .enabled = true, .invoke = on_command, .user = undo },
+    };
+    if (!gates_is_ok(gates_command_register(t, root, &amp;cmds[0])) || !gates_is_ok(gates_command_register(t, root, &amp;cmds[1])) ||
+        !gates_is_ok(gates_undo_bind(undo, t, root, CMD_UNDO, CMD_REDO, GATES_STR("Undo"), GATES_STR("Redo")))) {
+        return 1;
+    }
+    gates_undo_mark_clean(undo); /* the name as saved */
+
+    /* The program renames, then records how to take it back. */
+    static rename_t change = { "Draft", "Final" };
+    memcpy(name, change.after, sizeof name);
+    gates_undo_entry_t entry = { .label = GATES_STR_INIT("Rename"), .undo = undo_rename, .undo_data = &amp;change,
+                                 .redo = redo_rename, .redo_data = &amp;change };
+    if (!gates_is_ok(gates_undo_push(undo, &amp;entry))) return 1;
+    printf("menu shows ");
+    print_label(t, CMD_UNDO);
+
+    /* A person presses Ctrl+Z. */
+    gates_key_event_t ctrl_z = { .key = GATES_KEY_Z, .ctrl = true, .down = true };
+    (void)gates_input_key(t, &amp;ctrl_z);
+    (void)gates_tree_dispatch_events(t, 0);
+    printf("; after Undo: name %s, menu shows ", name);
+    print_label(t, CMD_REDO);
+    printf("; clean again: %s\n", gates_undo_is_clean(undo) ? "yes" : "no");
+
+    gates_undo_destroy(undo);
+    gates_tree_destroy(t);
+    return 0;
+}</code></pre>
+<div class="nav"><a href="manual-03-forms.html">&larr; Prev</a><span class="sp"></span><a href="index.html">Contents</a><span class="sp"></span><a href="manual-05-views.html">Next &rarr;</a></div>
+</div></main>
+<script>(function(){var b=document.querySelector('.here-btn'),p=document.getElementById('here-panel');function open(o){if(!p)return;p.hidden=!o;if(b)b.setAttribute('aria-expanded',o);}if(b)b.addEventListener('click',function(){open(p.hidden);});if(p)p.addEventListener('click',function(e){if(e.target.tagName==='A'&&e.target.getAttribute('href').charAt(0)==='#')open(false);});document.addEventListener('keydown',function(e){if(e.key==='Escape')open(false);});var box=document.getElementById('setbox'),so=document.getElementById('set-open');if(!box||!so)return;var r=document.documentElement;function load(){try{return JSON.parse(localStorage.getItem('rp-read')||'{}');}catch(e){return {};}}function save(s){try{localStorage.setItem('rp-read',JSON.stringify(s));}catch(e){}}function css(n){return getComputedStyle(r).getPropertyValue(n).trim();}function hex(v){var m=v.match(/^rgba?\((\d+)[ ,]+(\d+)[ ,]+(\d+)/);if(!m)return v.charAt(0)==='#'?v:'#000000';return '#'+[1,2,3].map(function(i){return ('0'+parseInt(m[i],10).toString(16)).slice(-2);}).join('');}function paint(){var s=load();document.getElementById('s-width').checked=!!s.width;var t=s.theme||'auto';[].forEach.call(box.querySelectorAll('.segb'),function(x){x.setAttribute('aria-pressed',x.dataset.theme===t);});document.getElementById('s-fg').value=s.fg||hex(css('--fg'));document.getElementById('s-bg').value=s.bg||hex(css('--bg'));document.getElementById('s-link').value=s.link||hex(css('--link'));}so.addEventListener('click',function(){box.hidden=!box.hidden;so.setAttribute('aria-expanded',!box.hidden);if(!box.hidden)paint();});document.getElementById('s-width').addEventListener('change',function(){var s=load();s.width=this.checked;save(s);if(s.width)r.setAttribute('data-measure','on');else r.removeAttribute('data-measure');});[].forEach.call(box.querySelectorAll('.segb'),function(x){x.addEventListener('click',function(){var s=load();s.theme=x.dataset.theme;delete s.fg;delete s.bg;delete s.link;save(s);['--fg','--bg','--link'].forEach(function(n){r.style.removeProperty(n);});if(s.theme==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',s.theme);setTimeout(paint,0);});});[['s-fg','--fg','fg'],['s-bg','--bg','bg'],['s-link','--link','link']].forEach(function(a){document.getElementById(a[0]).addEventListener('input',function(){var s=load();s[a[2]]=this.value;save(s);r.style.setProperty(a[1],this.value);});});})();</script><script>
+(function(){
+  var q=document.getElementById('q'), out=document.getElementById('qr');
+  if(!q||!out) return;
+  var data=null, NONE="Nothing found";
+  function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+  function run(){
+    var v=q.value.trim().toLowerCase();
+    out.innerHTML='';
+    if(!v||!data) return;
+    var hits=[];
+    for(var i=0;i<data.length && hits.length<40;i++){
+      if(data[i][0].toLowerCase().indexOf(v)>=0) hits.push(data[i]);
+    }
+    if(!hits.length){ out.innerHTML='<li>'+NONE+'</li>'; return; }
+    out.innerHTML=hits.map(function(h){
+      return '<li><a href="'+h[1]+'">'+esc(h[0])+'</a>'+
+             (h[2]?'<span class="where">'+esc(h[2])+'</span>':'')+'</li>';
+    }).join('');
+  }
+  q.addEventListener('input',function(){
+    if(data){ run(); return; }
+    fetch('search-index.json').then(function(r){return r.json();})
+      .then(function(j){ data=j; run(); })
+      .catch(function(){ out.innerHTML='<li>'+NONE+'</li>'; });
+  });
+})();
+</script></body></html>

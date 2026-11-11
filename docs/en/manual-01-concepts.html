@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>1 Concepts - gates Manual</title><link rel="stylesheet" href="../book.css">
+<script>(function(){try{var s=JSON.parse(localStorage.getItem('rp-read')||'{}');var r=document.documentElement;if(s.theme&&s.theme!=='auto')r.setAttribute('data-theme',s.theme);if(s.fg)r.style.setProperty('--fg',s.fg);if(s.bg)r.style.setProperty('--bg',s.bg);if(s.link)r.style.setProperty('--link',s.link);if(s.width)r.setAttribute('data-measure','on');}catch(e){}})();</script></head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<div class="bar"><strong><a href="index.html">gates Manual</a></strong><button class="here-btn" type="button" aria-expanded="false" aria-controls="here-panel">ch. 1 <span class="caret">&#9662;</span></button><span class="sp"></span><span class="bar-nav"><a href="manual-00-start-here.html" title="Prev" aria-label="Prev">&larr;</a><a href="index.html" title="Contents" aria-label="Contents">&uarr;</a><a href="manual-02-controls-layout.html" title="Next" aria-label="Next">&rarr;</a></span></div><div id="here-panel" class="here-panel" hidden><div class="tools"><span class="ver">0.15.0</span><button class="tool" type="button" id="set-open">&#9881; Settings</button><a class="tool" href="toc.html">&#9636; Detailed contents</a><a class="tool" href="../ko/manual-01-concepts.html">Ko</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.15.0/gates-manual-0.15.0-en.pdf">&#10515; PDF</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib" title="gates_gui_lib on GitHub">Git</a><a class="tool" href="https://rubidus-api.github.io/" title="rubidus-api.github.io - every published project">&#8962; All projects</a><a class="tool" href="https://github.com/rubidus-api" title="github.com/rubidus-api - every repository">&#8801; All repos</a></div><div class="setbox" id="setbox" hidden><label class="setrow"><input type="checkbox" id="s-width"><span>Limit line width</span></label><div class="setrow"><span class="setlbl">Theme</span><span class="seg"><button type="button" class="segb" data-theme="auto">System</button><button type="button" class="segb" data-theme="light">Light</button><button type="button" class="segb" data-theme="dark">Dark</button></span></div><div class="setrow"><span class="setlbl">Colours</span><label class="col"><span>Text</span><input type="color" id="s-fg"></label><label class="col"><span>Background</span><input type="color" id="s-bg"></label><label class="col"><span>Link</span><input type="color" id="s-link"></label></div><p class="setnote">Settings are kept in this browser only.</p></div><div class="here-head"><strong>In this chapter</strong></div><div class="here-body"><a class="lv3" href="#the-node-tree"><span class="tf-no">1.1</span>The node tree</a><a class="lv3" href="#ownership-copied-or-borrowed"><span class="tf-no">1.2</span>Ownership: copied or borrowed</a><a class="lv3" href="#errors"><span class="tf-no">1.3</span>Errors</a><a class="lv3" href="#events-and-safe-points"><span class="tf-no">1.4</span>Events and safe points</a><a class="lv3" href="#units"><span class="tf-no">1.5</span>Units</a></div></div>
+<main id="content"><div class="wrap">
+<h2 id="top">1 Concepts</h2>
+<div class="chapter-toc"><div class="rail-label">In this chapter</div><div class="rail-body"><a class="lv3" href="#the-node-tree"><span class="tf-no">1.1</span>The node tree</a><a class="lv3" href="#ownership-copied-or-borrowed"><span class="tf-no">1.2</span>Ownership: copied or borrowed</a><a class="lv3" href="#errors"><span class="tf-no">1.3</span>Errors</a><a class="lv3" href="#events-and-safe-points"><span class="tf-no">1.4</span>Events and safe points</a><a class="lv3" href="#units"><span class="tf-no">1.5</span>Units</a></div></div>
+<p>Headers: <code>gates/tree.h</code>, <code>gates/types.h</code>, <code>gates/event.h</code>.</p>
+<h3 id="the-node-tree">1.1 The node tree<a class="plink" href="#the-node-tree" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>Everything a window shows is a node in its tree: panels that group, labels, buttons, text boxes, whole views. The program creates nodes, puts them under parents, and changes them; gates lays them out, paints them, routes input to them, and describes them to assistive technology. The tree is retained: the program does not redraw anything by hand, it changes the tree and the window repaints what changed.</p>
+<p>A node is named by a handle, <code>gates_node_t</code>: a slot index and a generation. When a node is destroyed its slot can later hold another node with a new generation, so an old handle never reaches the new node - every call checks, and a stale handle is refused (<code>PROVEN_ERR_INVALID_ARG</code>), never obeyed. Destroying marks a whole subtree at once; the slots are freed at a safe point (<code>gates_tree_flush_destroys</code>, which a window calls after each input turn), so a handler can destroy the node that sent its event.</p>
+<pre><code class="lang-c">/* manual example (host): handles, generations and copies.
+ * expect: stale handle refused; label kept its copy */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+int main(void) {
+    gates_tree_t *tree = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;tree))) return 1;
+    gates_node_t root = gates_tree_root(tree), old, fresh;
+
+    /* Text is copied: the caller's buffer may change or go away at once. */
+    char buf[16] = "first";
+    if (!gates_is_ok(gates_label_create(tree, root, (gates_str_t){ .ptr = (const gates_u8 *)buf, .size = strlen(buf) }, &amp;old))) return 1;
+    strcpy(buf, "XXXXX");
+
+    /* Destroying marks the node; its slot is freed at a safe point. */
+    if (!gates_is_ok(gates_node_destroy(tree, old))) return 1;
+    (void)gates_tree_flush_destroys(tree);
+
+    /* A new node may reuse the slot, with a new generation: the old handle
+     * never reaches it. */
+    if (!gates_is_ok(gates_label_create(tree, root, GATES_STR("second"), &amp;fresh))) return 1;
+    bool stale_refused = !gates_node_is_valid(tree, old) &amp;&amp;
+                         gates_widget_set_text(tree, old, GATES_STR("oops")) == PROVEN_ERR_INVALID_ARG;
+    gates_str_t now = gates_widget_text(tree, fresh);
+    bool kept = now.size == 6 &amp;&amp; memcmp(now.ptr, "second", 6) == 0;
+    printf("%s; %s\n", stale_refused ? "stale handle refused" : "STALE HANDLE WORKED",
+           kept ? "label kept its copy" : "label changed");
+    gates_tree_destroy(tree);
+    return stale_refused &amp;&amp; kept ? 0 : 1;
+}</code></pre>
+<h3 id="ownership-copied-or-borrowed">1.2 Ownership: copied or borrowed<a class="plink" href="#ownership-copied-or-borrowed" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>Every string the program gives gates is copied when the call returns successfully: labels, texts, command labels, option labels, names. The caller's buffer is free to change at once. What gates gives back is borrowed:</p>
+<div class="tblwrap"><table><tr><th>Returned</th><th>Valid until</th></tr><tr><td><code>gates_widget_text</code>, <code>gates_textbox_text</code></td><td>the next change of that node</td></tr><tr><td><code>ev-&gt;text</code> in an event</td><td>the handler returns</td></tr><tr><td>a view cell (<code>gates_cell_t.text</code>, from your model)</td><td>the next call into your model</td></tr><tr><td><code>gates_access_info_t</code> strings</td><td>the next <code>gates_access_info</code> call on the tree, or any change</td></tr></table></div>
+<p>Callbacks and <code>user</code> pointers registered with gates (handlers, models, command functions) are borrowed for as long as they are registered: keep them alive, or unregister first.</p>
+<h3 id="errors">1.3 Errors<a class="plink" href="#errors" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>Functions that can fail return <code>gates_err_t</code> and are marked <code>[[nodiscard]]</code>. <code>GATES_OK</code> (test it with <code>gates_is_ok</code>) means the whole change happened; any other value means none of it did - a node that could not be created leaves nothing half-built behind. The codes are proven's: <code>PROVEN_ERR_INVALID_ARG</code> (a bad or stale argument), <code>PROVEN_ERR_INVALID_STATE</code> (not now: a disabled control, a closed dialog), <code>PROVEN_ERR_NOMEM</code>, <code>PROVEN_ERR_OUT_OF_BOUNDS</code> (a limit). Out of memory is an ordinary answer, not a crash: the reference applications handle it. Input that cannot fail loudly (a key, a click) records its failure for <code>gates_input_take_error</code>; a window's <code>on_input_error</code> callback hears it after each input turn, and the reference applications show it in their status line.</p>
+<h3 id="events-and-safe-points">1.4 Events and safe points<a class="plink" href="#events-and-safe-points" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>A program learns what the person did through events. Each widget has at most one handler (<code>gates_widget_set_handler</code>); when the person changes something, gates queues an event describing it, and the window delivers the queue at a safe point after the input message has been handled (<code>gates_tree_dispatch_events</code>). Nothing is delivered in the middle of an input operation, so a handler may change or destroy anything, including its source.</p>
+<p>Changes the program makes itself are silent: it already knows. When the rest of the program should hear about one, <code>gates_widget_notify</code> queues an event with origin <code>GATES_ORIGIN_PROGRAM</code>.</p>
+<pre><code class="lang-c">/* manual example (host): events - what the person did, delivered at a safe point.
+ * expect: user checked=1, program checked=0 */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+static char log_text[128];
+static int log_len;
+
+static void on_value(gates_tree_t *tree, const gates_event_t *ev, void *user) {
+    (void)tree;
+    (void)user;
+    if (ev-&gt;kind != GATES_EVENT_VALUE_CHANGED) return;
+    log_len += snprintf(log_text + log_len, sizeof log_text - (size_t)log_len, "%s%s checked=%d",
+                        log_len &gt; 0 ? ", " : "", ev-&gt;origin == GATES_ORIGIN_USER ? "user" : "program",
+                        ev-&gt;checked ? 1 : 0);
+}
+
+int main(void) {
+    gates_tree_t *tree = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;tree))) return 1;
+    gates_node_t box;
+    if (!gates_is_ok(gates_checkbox_create(tree, gates_tree_root(tree), GATES_STR("Send news"), false, nullptr, nullptr, &amp;box)) ||
+        !gates_is_ok(gates_widget_set_handler(tree, box, on_value, nullptr))) {
+        return 1;
+    }
+    /* A person ticks the box (here through the accessibility action, which
+     * takes the same path as a click): an event is queued, not delivered. */
+    if (!gates_is_ok(gates_access_toggle(tree, box))) return 1;
+    /* The window delivers queued events after each input message; without a
+     * window, the program does it. */
+    (void)gates_tree_dispatch_events(tree, 0);
+
+    /* Setters are silent: the program knows what it did. Announce it
+     * explicitly when the rest of the program should hear it. */
+    if (!gates_is_ok(gates_checkbox_set_checked(tree, box, false))) return 1;
+    if (!gates_is_ok(gates_widget_notify(tree, box))) return 1;
+    (void)gates_tree_dispatch_events(tree, 0);
+
+    printf("%s\n", log_text);
+    gates_tree_destroy(tree);
+    return 0;
+}</code></pre>
+<p>Two rules follow. Never read widget state while painting to find out what changed - follow events. And never change a model from inside a paint callback; paint only draws.</p>
+<h3 id="units">1.5 Units<a class="plink" href="#units" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>Every coordinate and size in the API is a logical unit, 1/96 inch. A window converts once, at its edge. Chapter 8 has the details; until then, read "units" where you would expect pixels.</p>
+<div class="nav"><a href="manual-00-start-here.html">&larr; Prev</a><span class="sp"></span><a href="index.html">Contents</a><span class="sp"></span><a href="manual-02-controls-layout.html">Next &rarr;</a></div>
+</div></main>
+<script>(function(){var b=document.querySelector('.here-btn'),p=document.getElementById('here-panel');function open(o){if(!p)return;p.hidden=!o;if(b)b.setAttribute('aria-expanded',o);}if(b)b.addEventListener('click',function(){open(p.hidden);});if(p)p.addEventListener('click',function(e){if(e.target.tagName==='A'&&e.target.getAttribute('href').charAt(0)==='#')open(false);});document.addEventListener('keydown',function(e){if(e.key==='Escape')open(false);});var box=document.getElementById('setbox'),so=document.getElementById('set-open');if(!box||!so)return;var r=document.documentElement;function load(){try{return JSON.parse(localStorage.getItem('rp-read')||'{}');}catch(e){return {};}}function save(s){try{localStorage.setItem('rp-read',JSON.stringify(s));}catch(e){}}function css(n){return getComputedStyle(r).getPropertyValue(n).trim();}function hex(v){var m=v.match(/^rgba?\((\d+)[ ,]+(\d+)[ ,]+(\d+)/);if(!m)return v.charAt(0)==='#'?v:'#000000';return '#'+[1,2,3].map(function(i){return ('0'+parseInt(m[i],10).toString(16)).slice(-2);}).join('');}function paint(){var s=load();document.getElementById('s-width').checked=!!s.width;var t=s.theme||'auto';[].forEach.call(box.querySelectorAll('.segb'),function(x){x.setAttribute('aria-pressed',x.dataset.theme===t);});document.getElementById('s-fg').value=s.fg||hex(css('--fg'));document.getElementById('s-bg').value=s.bg||hex(css('--bg'));document.getElementById('s-link').value=s.link||hex(css('--link'));}so.addEventListener('click',function(){box.hidden=!box.hidden;so.setAttribute('aria-expanded',!box.hidden);if(!box.hidden)paint();});document.getElementById('s-width').addEventListener('change',function(){var s=load();s.width=this.checked;save(s);if(s.width)r.setAttribute('data-measure','on');else r.removeAttribute('data-measure');});[].forEach.call(box.querySelectorAll('.segb'),function(x){x.addEventListener('click',function(){var s=load();s.theme=x.dataset.theme;delete s.fg;delete s.bg;delete s.link;save(s);['--fg','--bg','--link'].forEach(function(n){r.style.removeProperty(n);});if(s.theme==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',s.theme);setTimeout(paint,0);});});[['s-fg','--fg','fg'],['s-bg','--bg','bg'],['s-link','--link','link']].forEach(function(a){document.getElementById(a[0]).addEventListener('input',function(){var s=load();s[a[2]]=this.value;save(s);r.style.setProperty(a[1],this.value);});});})();</script><script>
+(function(){
+  var q=document.getElementById('q'), out=document.getElementById('qr');
+  if(!q||!out) return;
+  var data=null, NONE="Nothing found";
+  function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+  function run(){
+    var v=q.value.trim().toLowerCase();
+    out.innerHTML='';
+    if(!v||!data) return;
+    var hits=[];
+    for(var i=0;i<data.length && hits.length<40;i++){
+      if(data[i][0].toLowerCase().indexOf(v)>=0) hits.push(data[i]);
+    }
+    if(!hits.length){ out.innerHTML='<li>'+NONE+'</li>'; return; }
+    out.innerHTML=hits.map(function(h){
+      return '<li><a href="'+h[1]+'">'+esc(h[0])+'</a>'+
+             (h[2]?'<span class="where">'+esc(h[2])+'</span>':'')+'</li>';
+    }).join('');
+  }
+  q.addEventListener('input',function(){
+    if(data){ run(); return; }
+    fetch('search-index.json').then(function(r){return r.json();})
+      .then(function(j){ data=j; run(); })
+      .catch(function(){ out.innerHTML='<li>'+NONE+'</li>'; });
+  });
+})();
+</script></body></html>

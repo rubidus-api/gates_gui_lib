@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>5 Views over your data - gates Manual</title><link rel="stylesheet" href="../book.css">
+<script>(function(){try{var s=JSON.parse(localStorage.getItem('rp-read')||'{}');var r=document.documentElement;if(s.theme&&s.theme!=='auto')r.setAttribute('data-theme',s.theme);if(s.fg)r.style.setProperty('--fg',s.fg);if(s.bg)r.style.setProperty('--bg',s.bg);if(s.link)r.style.setProperty('--link',s.link);if(s.width)r.setAttribute('data-measure','on');}catch(e){}})();</script></head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<div class="bar"><strong><a href="index.html">gates Manual</a></strong><button class="here-btn" type="button" aria-expanded="false" aria-controls="here-panel">ch. 5 <span class="caret">&#9662;</span></button><span class="sp"></span><span class="bar-nav"><a href="manual-04-commands-focus.html" title="Prev" aria-label="Prev">&larr;</a><a href="index.html" title="Contents" aria-label="Contents">&uarr;</a><a href="manual-06-text.html" title="Next" aria-label="Next">&rarr;</a></span></div><div id="here-panel" class="here-panel" hidden><div class="tools"><span class="ver">0.15.0</span><button class="tool" type="button" id="set-open">&#9881; Settings</button><a class="tool" href="toc.html">&#9636; Detailed contents</a><a class="tool" href="../ko/manual-05-views.html">Ko</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.15.0/gates-manual-0.15.0-en.pdf">&#10515; PDF</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib" title="gates_gui_lib on GitHub">Git</a><a class="tool" href="https://rubidus-api.github.io/" title="rubidus-api.github.io - every published project">&#8962; All projects</a><a class="tool" href="https://github.com/rubidus-api" title="github.com/rubidus-api - every repository">&#8801; All repos</a></div><div class="setbox" id="setbox" hidden><label class="setrow"><input type="checkbox" id="s-width"><span>Limit line width</span></label><div class="setrow"><span class="setlbl">Theme</span><span class="seg"><button type="button" class="segb" data-theme="auto">System</button><button type="button" class="segb" data-theme="light">Light</button><button type="button" class="segb" data-theme="dark">Dark</button></span></div><div class="setrow"><span class="setlbl">Colours</span><label class="col"><span>Text</span><input type="color" id="s-fg"></label><label class="col"><span>Background</span><input type="color" id="s-bg"></label><label class="col"><span>Link</span><input type="color" id="s-link"></label></div><p class="setnote">Settings are kept in this browser only.</p></div><div class="here-head"><strong>In this chapter</strong></div><div class="here-body"><a class="lv3" href="#one-node-for-any-number-of-rows"><span class="tf-no">5.1</span>One node for any number of rows</a><a class="lv3" href="#lists-tables-trees-and-logs"><span class="tf-no">5.2</span>Lists, tables, trees and logs</a><a class="lv3" href="#cells-people-can-change"><span class="tf-no">5.3</span>Cells people can change</a><a class="lv3" href="#many-rows-at-once-multi-selection"><span class="tf-no">5.4</span>Many rows at once: multi-selection</a><a class="lv3" href="#a-records-fields-the-property-grid"><span class="tf-no">5.5</span>A record&#x27;s fields: the property grid</a><a class="lv3" href="#rules-for-models"><span class="tf-no">5.6</span>Rules for models</a></div></div>
+<main id="content"><div class="wrap">
+<h2 id="top">5 Views over your data</h2>
+<div class="chapter-toc"><div class="rail-label">In this chapter</div><div class="rail-body"><a class="lv3" href="#one-node-for-any-number-of-rows"><span class="tf-no">5.1</span>One node for any number of rows</a><a class="lv3" href="#lists-tables-trees-and-logs"><span class="tf-no">5.2</span>Lists, tables, trees and logs</a><a class="lv3" href="#cells-people-can-change"><span class="tf-no">5.3</span>Cells people can change</a><a class="lv3" href="#many-rows-at-once-multi-selection"><span class="tf-no">5.4</span>Many rows at once: multi-selection</a><a class="lv3" href="#a-records-fields-the-property-grid"><span class="tf-no">5.5</span>A record&#x27;s fields: the property grid</a><a class="lv3" href="#rules-for-models"><span class="tf-no">5.6</span>Rules for models</a></div></div>
+<p>Header: <code>gates/view.h</code>.</p>
+<h3 id="one-node-for-any-number-of-rows">5.1 One node for any number of rows<a class="plink" href="#one-node-for-any-number-of-rows" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>A list with a million rows is still one node. The rows belong to the application: it describes them through a model - how many there are, the id at a position, the position of an id, the text of a cell - and gates asks only for the rows it shows (at most <code>GATES_VIEW_MAX_ROWS</code> at a time). Nothing is copied into gates, and scrolling through a million rows costs what scrolling through a screenful costs.</p>
+<p>Rows have ids (<code>gates_item_id_t</code>, nonzero, stable): the selection is an id, not a position, so it stays on the same row when rows are inserted above it, removed elsewhere, or sorted. After the application changes its rows it calls <code>gates_view_model_changed</code>; when the selected row is gone, the selection moves to the nearest remaining row and a SELECTION_CHANGED with origin PROGRAM says so.</p>
+<pre><code class="lang-c">/* manual example (host): a list over the application's own rows.
+ * expect: selected 3 (Cherry); after removing it: 4 (Damson), origin program */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+typedef struct row_t {
+    gates_item_id_t id;          /* stable: survives inserts, removals, sorting */
+    const char *name;
+} row_t;
+
+typedef struct fruits_t {
+    row_t rows[8];
+    gates_u64 n;
+} fruits_t;
+
+/* The model: gates asks only for the rows it shows, by position and by id. */
+static gates_u64 f_count(void *u) { return ((fruits_t *)u)-&gt;n; }
+static gates_item_id_t f_id_at(void *u, gates_u64 row) { return ((fruits_t *)u)-&gt;rows[row].id; }
+static bool f_index_of(void *u, gates_item_id_t id, gates_u64 *row) {
+    fruits_t *f = u;
+    for (gates_u64 i = 0; i &lt; f-&gt;n; i++) {
+        if (f-&gt;rows[i].id == id) { *row = i; return true; }
+    }
+    return false;
+}
+static gates_err_t f_cell(void *u, gates_item_id_t id, gates_column_id_t col, gates_cell_t *out) {
+    (void)col;
+    gates_u64 row;
+    if (!f_index_of(u, id, &amp;row)) return PROVEN_ERR_INVALID_ARG;
+    const char *s = ((fruits_t *)u)-&gt;rows[row].name;
+    out-&gt;text = (gates_str_t){ .ptr = (const gates_u8 *)s, .size = strlen(s) };
+    return GATES_OK;
+}
+
+static gates_item_id_t last_id;
+static gates_event_origin_t last_origin;
+
+static void on_view(gates_tree_t *tree, const gates_event_t *ev, void *user) {
+    (void)tree;
+    (void)user;
+    if (ev-&gt;kind == GATES_EVENT_SELECTION_CHANGED) {
+        last_id = ev-&gt;item;
+        last_origin = ev-&gt;origin;
+    }
+}
+
+static const char *name_of(fruits_t *f, gates_item_id_t id) {
+    gates_u64 row;
+    return f_index_of(f, id, &amp;row) ? f-&gt;rows[row].name : "none";
+}
+
+int main(void) {
+    fruits_t f = { .rows = { { 1, "Apple" }, { 2, "Banana" }, { 3, "Cherry" }, { 4, "Damson" }, { 5, "Elder" } }, .n = 5 };
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;t))) return 1;
+    gates_node_t list;
+    gates_rows_model_t model = { .user = &amp;f, .count = f_count, .id_at = f_id_at, .index_of = f_index_of, .cell = f_cell };
+    if (!gates_is_ok(gates_view_create(t, gates_tree_root(t), &amp;(gates_view_desc_t){0}, &amp;list)) ||
+        !gates_is_ok(gates_view_set_model(t, list, &amp;model)) ||
+        !gates_is_ok(gates_widget_set_handler(t, list, on_view, nullptr)) ||
+        !gates_is_ok(gates_layout_run(t, (gates_size_t){ 200, 160 }, gates_text_backend_builtin()))) {
+        return 1;
+    }
+    /* A person picks the third row. */
+    if (!gates_is_ok(gates_access_select(t, list, 3))) return 1;
+    (void)gates_tree_dispatch_events(t, 0);
+    printf("selected %llu (%s); ", (unsigned long long)last_id, name_of(&amp;f, last_id));
+
+    /* The application removes that row, then tells the view its rows changed:
+     * the selection moves to the nearest remaining row and says so. */
+    memmove(&amp;f.rows[2], &amp;f.rows[3], 2 * sizeof f.rows[0]);
+    f.n = 4;
+    if (!gates_is_ok(gates_view_model_changed(t, list))) return 1;
+    (void)gates_tree_dispatch_events(t, 0);
+    printf("after removing it: %llu (%s), origin %s\n", (unsigned long long)last_id, name_of(&amp;f, last_id),
+           last_origin == GATES_ORIGIN_PROGRAM ? "program" : "user");
+    gates_tree_destroy(t);
+    return 0;
+}</code></pre>
+<h3 id="lists-tables-trees-and-logs">5.2 Lists, tables, trees and logs<a class="plink" href="#lists-tables-trees-and-logs" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<ul><li>A list has no columns; the cell asked for is column 0.</li><li>A table has columns (<code>gates_column_desc_t</code>: id, label, width, minimum) and may show a header. Clicking a header cell sends SORT_REQUESTED with the column id: the application sorts its rows and calls <code>gates_view_model_changed</code>. Dragging a header edge resizes a column. <code>gates_view_set_column_hidden</code> and <code>gates_view_move_column</code> choose and order the columns; with <code>column_menu</code> in the description a right press on the header (or Shift+F10 on the table) opens a menu with a checked entry per column, and the last shown column cannot be hidden. gates/state.h saves widths, order and hidden columns.</li><li>A tree is a list whose model also answers <code>row_info</code>: depth, whether the row can open, whether it is open, a loading or error state. Opening and closing are requests (EXPAND_REQUESTED): the application changes its flattened rows and calls <code>gates_view_model_changed</code>. gates never walks rows it does not show.</li><li>A log (<code>gates_log_create</code>) owns its lines: append text, keep a line and byte limit, drop the oldest, and follow the end while the person has not scrolled away. Scrolling away or back reports GATES_EVENT_FOLLOW_CHANGED (<code>ev-&gt;result</code> 1 while following), so a status line can say so without watching the pointer.</li></ul>
+<p>Every view also answers typing: the letters typed select the next row whose cell in the current column - the one outlined, moved with Ctrl+Left/Right or a click - starts with them, or its first shown cell when there is no current column (0.10.0; a pause of a second starts over; the same letter again steps through such rows). Ctrl+C puts the selected row's shown cells on the clipboard, separated by tabs.</p>
+<h3 id="cells-people-can-change">5.3 Cells people can change<a class="plink" href="#cells-people-can-change" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>A column can show more than text (<code>gates_column_desc_t.kind</code>): <code>GATES_CELL_CHECK</code> draws a check box from <code>cell.checked</code>, <code>GATES_CELL_PROGRESS</code> a bar from <code>cell.permille</code> (0 to 1000), and <code>GATES_CELL_ICON_TEXT</code> a 16 x 16 icon (<code>cell.icon</code>, see chapter 13) before the text. A column with a <code>paint</code> function draws its cells itself, clipped to each cell.</p>
+<p>A column marked <code>editable</code> lets a person change the selected row's cell, and the model says yes or no through its <code>set_cell</code> function. F2 or a double click opens a text box over the cell with the model's text selected; Enter commits, Escape cancels, and moving focus away commits. Space, or a click on the box, toggles a check column. Which column F2 and Space use follows the table's current column - the cell last pressed, or moved with Ctrl+Left and Ctrl+Right, outlined in the selected row - when it is an editable column of the right kind, else the first such column. When <code>set_cell</code> returns an error the editor stays open and is marked invalid (after focus has left, the edit is dropped instead). After a change the view reads the model again and sends CELL_EDITED with the row (<code>ev-&gt;item</code>) and the column (<code>ev-&gt;result</code>). The program can do the same with <code>gates_view_edit</code> and <code>gates_view_end_edit</code>.</p>
+<p>Screen readers see every cell of a table row as an element of its own: its text, its column's label, a check cell's state and a progress cell's percentage. They can toggle a check cell or set a text cell's value when the column is editable - through <code>set_cell</code>, reported with CELL_EDITED, refused exactly as a person's edit would be (<code>gates_access_cell_info</code>, <code>_toggle</code>, <code>_set_value</code>). A table wider than its view scrolls sideways for them too.</p>
+<pre><code class="lang-c">/* manual example (host): a shopping list edited in place - a text column and a check column.
+ * expect: item 2 is now Bread (column 1), done: yes (column 2); refused empty name: editor still open */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+enum { COL_NAME = 1, COL_DONE = 2 };
+
+typedef struct item_t {
+    gates_item_id_t id;
+    char name[32];
+    bool done;
+} item_t;
+
+typedef struct list_t {
+    item_t items[4];
+    gates_u64 n;
+} list_t;
+
+static gates_u64 l_count(void *u) { return ((list_t *)u)-&gt;n; }
+static gates_item_id_t l_id_at(void *u, gates_u64 row) { return ((list_t *)u)-&gt;items[row].id; }
+static bool l_index_of(void *u, gates_item_id_t id, gates_u64 *row) {
+    list_t *l = u;
+    for (gates_u64 i = 0; i &lt; l-&gt;n; i++) {
+        if (l-&gt;items[i].id == id) { *row = i; return true; }
+    }
+    return false;
+}
+static gates_err_t l_cell(void *u, gates_item_id_t id, gates_column_id_t col, gates_cell_t *out) {
+    gates_u64 row;
+    if (!l_index_of(u, id, &amp;row)) return PROVEN_ERR_INVALID_ARG;
+    item_t *it = &amp;((list_t *)u)-&gt;items[row];
+    if (col == COL_DONE) {
+        out-&gt;checked = it-&gt;done;
+    } else {
+        out-&gt;text = (gates_str_t){ .ptr = (const gates_u8 *)it-&gt;name, .size = strlen(it-&gt;name) };
+    }
+    return GATES_OK;
+}
+/* A person changed a cell: the model decides. An empty name is refused. */
+static gates_err_t l_set_cell(void *u, gates_item_id_t id, gates_column_id_t col, const gates_cell_t *value) {
+    gates_u64 row;
+    if (!l_index_of(u, id, &amp;row)) return PROVEN_ERR_INVALID_ARG;
+    item_t *it = &amp;((list_t *)u)-&gt;items[row];
+    if (col == COL_DONE) {
+        it-&gt;done = value-&gt;checked;
+        return GATES_OK;
+    }
+    if (value-&gt;text.size == 0 || value-&gt;text.size &gt;= sizeof it-&gt;name) return PROVEN_ERR_INVALID_ARG;
+    memcpy(it-&gt;name, value-&gt;text.ptr, value-&gt;text.size);
+    it-&gt;name[value-&gt;text.size] = 0;
+    return GATES_OK;
+}
+
+static list_t list = { .items = { { 1, "Milk", false }, { 2, "Bred", false }, { 3, "Eggs", true } }, .n = 3 };
+
+static void on_view(gates_tree_t *tree, const gates_event_t *ev, void *user) {
+    (void)tree;
+    (void)user;
+    if (ev-&gt;kind != GATES_EVENT_CELL_EDITED) return;
+    gates_u64 row;
+    if (!l_index_of(&amp;list, ev-&gt;item, &amp;row)) return;
+    if (ev-&gt;result == COL_NAME) {
+        printf("item %llu is now %s (column %u), ", (unsigned long long)ev-&gt;item, list.items[row].name, ev-&gt;result);
+    } else {
+        printf("done: %s (column %u); ", list.items[row].done ? "yes" : "no", ev-&gt;result);
+    }
+}
+
+static void press(gates_tree_t *t, gates_key_t key) {
+    gates_key_event_t ev = { .key = key, .down = true };
+    (void)gates_input_key(t, &amp;ev);
+    ev.down = false;
+    (void)gates_input_key(t, &amp;ev);
+}
+
+static void type(gates_tree_t *t, const char *s) {
+    for (; *s != 0; s++) (void)gates_input_char(t, (gates_u32)(unsigned char)*s);
+}
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;t))) return 1;
+    const gates_column_desc_t cols[] = {
+        { .id = COL_NAME, .label = GATES_STR_INIT("Item"), .width = 120, .editable = true },
+        { .id = COL_DONE, .label = GATES_STR_INIT("Done"), .width = 60, .kind = GATES_CELL_CHECK, .editable = true },
+    };
+    gates_rows_model_t model = { .user = &amp;list, .count = l_count, .id_at = l_id_at, .index_of = l_index_of,
+                                 .cell = l_cell, .set_cell = l_set_cell };
+    gates_node_t table;
+    if (!gates_is_ok(gates_view_create(t, gates_tree_root(t),
+                                       &amp;(gates_view_desc_t){ .columns = cols, .column_count = 2, .header = true },
+                                       &amp;table)) ||
+        !gates_is_ok(gates_view_set_model(t, table, &amp;model)) ||
+        !gates_is_ok(gates_widget_set_handler(t, table, on_view, nullptr)) ||
+        !gates_is_ok(gates_layout_run(t, (gates_size_t){ 240, 160 }, gates_text_backend_builtin()))) {
+        return 1;
+    }
+    /* A person selects the second row, presses F2, retypes the name and presses Enter. */
+    gates_tree_set_focus(t, table);
+    press(t, GATES_KEY_DOWN);
+    press(t, GATES_KEY_DOWN);
+    press(t, GATES_KEY_F2);
+    type(t, "Bread");
+    press(t, GATES_KEY_ENTER);
+    /* Space toggles the row's check column. */
+    press(t, GATES_KEY_SPACE);
+    (void)gates_tree_dispatch_events(t, 0);
+
+    /* An empty name is refused: the editor stays open, marked invalid, until Escape. */
+    press(t, GATES_KEY_F2);
+    press(t, GATES_KEY_DELETE);
+    press(t, GATES_KEY_ENTER);
+    printf("refused empty name: editor %s\n", gates_view_editing(t, table, nullptr, nullptr) ? "still open" : "closed");
+    press(t, GATES_KEY_ESCAPE);
+    gates_tree_destroy(t);
+    return 0;
+}</code></pre>
+<h3 id="many-rows-at-once-multi-selection">5.4 Many rows at once: multi-selection<a class="plink" href="#many-rows-at-once-multi-selection" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>A view made with <code>multi_select</code> lets a person select many rows: Shift+click and Shift with the arrows make a range from an anchor, Ctrl+click and Ctrl+Space add or remove one row, Ctrl+A takes all, and Ctrl with the arrows moves the focus without changing the selection. Pressing on a row and dragging selects the rows passed over (with Ctrl held at the press, adds them); past the top or bottom of the rows the view scrolls one row for each pointer move (0.10.0). The selection is the program's, like the rows: the model answers <code>next_selected(row)</code> - the first selected row at or after <code>row</code> - and each gesture arrives as GATES_EVENT_SELECT_REQUESTED (<code>ev-&gt;result</code> says ONE, TOGGLE, RANGE, ADD_RANGE or ALL; <code>ev-&gt;item</code> is the target row and <code>ev-&gt;anchor</code> where the range starts). The program changes its selection and calls <code>gates_view_model_changed</code>.</p>
+<p>Because gates only asks about rows it paints, describes or copies, the program can keep any number of selected rows in a small form - a few ranges; "all" of a million rows is one range. gates has such a store (0.10.0): <code>gates_selection_create</code> makes one, the model's <code>next_selected</code> answers <code>gates_selection_next</code>, and <code>gates_view_apply_selection(tree, ev, sel)</code> applies a request (ids turned into rows through the model) and repaints. When rows are inserted or removed, <code>gates_selection_rows_inserted</code> / <code>_rows_removed</code> move the ranges with them; <code>gates_selection_range</code> walks them for the program's own use. A program with its own idea of a selection keeps it instead - the view never reads the store. Ctrl+C copies up to <code>GATES_VIEW_COPY_MAX</code> (10000) selected rows itself, one per line; past that it sends GATES_EVENT_COPY_REQUESTED and leaves the copying to the program. <code>gates_view_selected</code> stays the focus row. Screen readers see a list that selects many (<code>gates_access_set_item_selected</code> joins or leaves a row, as a request).</p>
+<pre><code class="lang-c">/* manual example (host): a million rows, selected together - kept in a selection store.
+ * expect: 0..999999 after Shift+End; 1..999999 after Ctrl+Space on row 0; 0..999999 after Ctrl+A; copy asked for 1000000 rows */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+#define ROWS 1000000u
+
+/* The model: row r has id r + 1; the store answers next_selected. */
+typedef struct app_t {
+    gates_selection_t *sel;
+    gates_node_t view;
+    int copy_asked;
+} app_t;
+
+static gates_u64 m_count(void *u) { (void)u; return ROWS; }
+static gates_item_id_t m_id_at(void *u, gates_u64 row) { (void)u; return row &lt; ROWS ? row + 1 : 0; }
+static bool m_index_of(void *u, gates_item_id_t id, gates_u64 *row) {
+    (void)u;
+    if (id == 0 || id &gt; ROWS) return false;
+    *row = id - 1;
+    return true;
+}
+static gates_err_t m_cell(void *u, gates_item_id_t id, gates_column_id_t col, gates_cell_t *out) {
+    (void)u; (void)id; (void)col;
+    out-&gt;text = GATES_STR("a row");
+    return GATES_OK;
+}
+static gates_u64 m_next_selected(void *u, gates_u64 row) { return gates_selection_next(((app_t *)u)-&gt;sel, row); }
+
+/* A person's gesture is a request: the store applies it, then the view repaints. */
+static void on_view(gates_tree_t *t, const gates_event_t *ev, void *user) {
+    app_t *a = user;
+    if (ev-&gt;kind == GATES_EVENT_COPY_REQUESTED) a-&gt;copy_asked++;
+    if (ev-&gt;kind == GATES_EVENT_SELECT_REQUESTED) (void)gates_view_apply_selection(t, ev, a-&gt;sel);
+}
+
+static void press(gates_tree_t *t, gates_key_t key, bool ctrl, bool shift) {
+    gates_key_event_t ev = { .key = key, .ctrl = ctrl, .shift = shift, .down = true };
+    (void)gates_input_key(t, &amp;ev);
+    (void)gates_tree_dispatch_events(t, 0);
+}
+
+static void show(const app_t *a, const char *after, bool last) {
+    gates_u64 lo = 0, hi = 0;
+    for (gates_u32 i = 0; gates_selection_range(a-&gt;sel, i, &amp;lo, &amp;hi); i++) {
+        printf("%s%llu..%llu", i &gt; 0 ? "," : "", (unsigned long long)lo, (unsigned long long)hi);
+    }
+    printf(" after %s%s", after, last ? "" : "; ");
+}
+
+static gates_err_t no_clip_get(void *ctx, gates_allocator_t al, gates_u8 **out, gates_usize_t *n) {
+    (void)ctx; (void)al;
+    *out = nullptr;
+    *n = 0;
+    return GATES_OK;
+}
+static gates_err_t no_clip_set(void *ctx, gates_str_t text) { (void)ctx; (void)text; return GATES_OK; }
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    static app_t a;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;t)) ||
+        !gates_is_ok(gates_selection_create((gates_allocator_t){0}, &amp;a.sel))) {
+        return 1;
+    }
+    gates_rows_model_t model = { .user = &amp;a, .count = m_count, .id_at = m_id_at, .index_of = m_index_of,
+                                 .cell = m_cell, .next_selected = m_next_selected };
+    if (!gates_is_ok(gates_view_create(t, gates_tree_root(t), &amp;(gates_view_desc_t){ .multi_select = true }, &amp;a.view)) ||
+        !gates_is_ok(gates_view_set_model(t, a.view, &amp;model)) ||
+        !gates_is_ok(gates_widget_set_handler(t, a.view, on_view, &amp;a)) ||
+        !gates_is_ok(gates_layout_run(t, (gates_size_t){ 300, 200 }, gates_text_backend_builtin()))) {
+        return 1;
+    }
+    gates_tree_set_clipboard(t, &amp;(gates_clipboard_t){ .get_text = no_clip_get, .set_text = no_clip_set });
+    gates_tree_set_focus(t, a.view);
+    press(t, GATES_KEY_DOWN, false, false);  /* row 0 alone */
+    press(t, GATES_KEY_END, false, true);    /* Shift+End: 0 to the last row */
+    show(&amp;a, "Shift+End", false);
+    press(t, GATES_KEY_HOME, true, false);   /* Ctrl+Home: the focus moves, nothing asked */
+    press(t, GATES_KEY_SPACE, true, false);  /* Ctrl+Space: row 0 leaves the selection */
+    show(&amp;a, "Ctrl+Space on row 0", false);
+    press(t, GATES_KEY_A, true, false);      /* Ctrl+A: all, one range */
+    show(&amp;a, "Ctrl+A", false);
+    press(t, GATES_KEY_C, true, false);      /* more than GATES_VIEW_COPY_MAX rows: the program is asked */
+    printf("copy asked for %u rows\n", a.copy_asked == 1 ? ROWS : 0u);
+    gates_tree_destroy(t);
+    gates_selection_destroy(a.sel);
+    return 0;
+}</code></pre>
+<h3 id="a-records-fields-the-property-grid">5.5 A record's fields: the property grid<a class="plink" href="#a-records-fields-the-property-grid" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>When one record has many typed fields - a document's settings, the selected object in an inspector - <code>gates_propgrid_create</code> (gates/propgrid.h) lays them out as rows of a name and an editor: <code>gates_propgrid_add_text</code>, <code>_bool</code>, <code>_choice</code> and <code>_number</code> make a text box, check box, choice or spin box. Properties are grouped by category, each a collapsible group box; properties without one come first. Every property has a stable id: <code>gates_propgrid_editor</code> gives its editor for setting and reading the value with the editor's own functions, and one handler (<code>gates_propgrid_set_handler</code>) hears every change a person makes as VALUE_CHANGED with the property id in <code>ev-&gt;result</code> and the value in <code>ev-&gt;text</code>, <code>ev-&gt;checked</code> or <code>ev-&gt;value</code>.</p>
+<pre><code class="lang-c">/* manual example (host): a property grid over a document's settings.
+ * expect: 4 properties in 2 categories; property 2 (Pages) is now 13; property 3 (Draft) is now off */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+enum { P_TITLE = 1, P_PAGES, P_DRAFT, P_PAPER };
+
+/* One handler hears every change, by property id. */
+static void on_property(gates_tree_t *tree, const gates_event_t *ev, void *user) {
+    (void)tree;
+    (void)user;
+    if (ev-&gt;result == P_PAGES) printf("property %u (Pages) is now %lld; ", ev-&gt;result, (long long)ev-&gt;value);
+    if (ev-&gt;result == P_DRAFT) printf("property %u (Draft) is now %s\n", ev-&gt;result, ev-&gt;checked ? "on" : "off");
+}
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;t))) return 1;
+    gates_node_t grid;
+    const gates_option_t papers[] = { { .id = 1, .label = GATES_STR_INIT("A4") }, { .id = 2, .label = GATES_STR_INIT("Letter") } };
+    gates_range_t pages = { .min = 1, .max = 999, .value = 12 };
+    if (!gates_is_ok(gates_propgrid_create(t, gates_tree_root(t), &amp;grid)) ||
+        !gates_is_ok(gates_propgrid_add_text(t, grid, GATES_STR("Document"), P_TITLE, GATES_STR("Title"), GATES_STR("Notes"))) ||
+        !gates_is_ok(gates_propgrid_add_number(t, grid, GATES_STR("Document"), P_PAGES, GATES_STR("Pages"), &amp;pages)) ||
+        !gates_is_ok(gates_propgrid_add_bool(t, grid, GATES_STR("Print"), P_DRAFT, GATES_STR("Draft"), true)) ||
+        !gates_is_ok(gates_propgrid_add_choice(t, grid, GATES_STR("Print"), P_PAPER, GATES_STR("Paper"), papers, 2, 1)) ||
+        !gates_is_ok(gates_propgrid_set_handler(t, grid, on_property, nullptr)) ||
+        !gates_is_ok(gates_layout_run(t, (gates_size_t){ 320, 320 }, gates_text_backend_builtin()))) {
+        return 1;
+    }
+    printf("%u properties in %d categories; ", gates_propgrid_count(t, grid),
+           !gates_node_eq(gates_propgrid_category(t, grid, GATES_STR("Print")), GATES_NODE_NULL) ? 2 : 1);
+
+    /* A person steps Pages up in its spin box, then turns Draft off with Space. */
+    gates_tree_set_focus(t, gates_node_first_child(t, gates_propgrid_editor(t, grid, P_PAGES)));
+    gates_key_event_t up = { .key = GATES_KEY_UP, .down = true };
+    (void)gates_input_key(t, &amp;up);
+    gates_tree_set_focus(t, gates_propgrid_editor(t, grid, P_DRAFT));
+    gates_key_event_t space = { .key = GATES_KEY_SPACE, .down = true };
+    (void)gates_input_key(t, &amp;space);
+    space.down = false;
+    (void)gates_input_key(t, &amp;space);
+    (void)gates_tree_dispatch_events(t, 0);
+    gates_tree_destroy(t);
+    return 0;
+}</code></pre>
+<h3 id="rules-for-models">5.6 Rules for models<a class="plink" href="#rules-for-models" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>Model callbacks run on the UI thread, never during event dispatch or inside another callback, and never after <code>gates_view_set_model(view, nullptr)</code> returns. A cell's text is borrowed until the next call into the model. The model must not change between <code>gates_view_model_changed</code> calls without telling the view; <code>set_cell</code> is the one callback that may change it (the view reads it again afterwards).</p>
+<div class="nav"><a href="manual-04-commands-focus.html">&larr; Prev</a><span class="sp"></span><a href="index.html">Contents</a><span class="sp"></span><a href="manual-06-text.html">Next &rarr;</a></div>
+</div></main>
+<script>(function(){var b=document.querySelector('.here-btn'),p=document.getElementById('here-panel');function open(o){if(!p)return;p.hidden=!o;if(b)b.setAttribute('aria-expanded',o);}if(b)b.addEventListener('click',function(){open(p.hidden);});if(p)p.addEventListener('click',function(e){if(e.target.tagName==='A'&&e.target.getAttribute('href').charAt(0)==='#')open(false);});document.addEventListener('keydown',function(e){if(e.key==='Escape')open(false);});var box=document.getElementById('setbox'),so=document.getElementById('set-open');if(!box||!so)return;var r=document.documentElement;function load(){try{return JSON.parse(localStorage.getItem('rp-read')||'{}');}catch(e){return {};}}function save(s){try{localStorage.setItem('rp-read',JSON.stringify(s));}catch(e){}}function css(n){return getComputedStyle(r).getPropertyValue(n).trim();}function hex(v){var m=v.match(/^rgba?\((\d+)[ ,]+(\d+)[ ,]+(\d+)/);if(!m)return v.charAt(0)==='#'?v:'#000000';return '#'+[1,2,3].map(function(i){return ('0'+parseInt(m[i],10).toString(16)).slice(-2);}).join('');}function paint(){var s=load();document.getElementById('s-width').checked=!!s.width;var t=s.theme||'auto';[].forEach.call(box.querySelectorAll('.segb'),function(x){x.setAttribute('aria-pressed',x.dataset.theme===t);});document.getElementById('s-fg').value=s.fg||hex(css('--fg'));document.getElementById('s-bg').value=s.bg||hex(css('--bg'));document.getElementById('s-link').value=s.link||hex(css('--link'));}so.addEventListener('click',function(){box.hidden=!box.hidden;so.setAttribute('aria-expanded',!box.hidden);if(!box.hidden)paint();});document.getElementById('s-width').addEventListener('change',function(){var s=load();s.width=this.checked;save(s);if(s.width)r.setAttribute('data-measure','on');else r.removeAttribute('data-measure');});[].forEach.call(box.querySelectorAll('.segb'),function(x){x.addEventListener('click',function(){var s=load();s.theme=x.dataset.theme;delete s.fg;delete s.bg;delete s.link;save(s);['--fg','--bg','--link'].forEach(function(n){r.style.removeProperty(n);});if(s.theme==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',s.theme);setTimeout(paint,0);});});[['s-fg','--fg','fg'],['s-bg','--bg','bg'],['s-link','--link','link']].forEach(function(a){document.getElementById(a[0]).addEventListener('input',function(){var s=load();s[a[2]]=this.value;save(s);r.style.setProperty(a[1],this.value);});});})();</script><script>
+(function(){
+  var q=document.getElementById('q'), out=document.getElementById('qr');
+  if(!q||!out) return;
+  var data=null, NONE="Nothing found";
+  function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+  function run(){
+    var v=q.value.trim().toLowerCase();
+    out.innerHTML='';
+    if(!v||!data) return;
+    var hits=[];
+    for(var i=0;i<data.length && hits.length<40;i++){
+      if(data[i][0].toLowerCase().indexOf(v)>=0) hits.push(data[i]);
+    }
+    if(!hits.length){ out.innerHTML='<li>'+NONE+'</li>'; return; }
+    out.innerHTML=hits.map(function(h){
+      return '<li><a href="'+h[1]+'">'+esc(h[0])+'</a>'+
+             (h[2]?'<span class="where">'+esc(h[2])+'</span>':'')+'</li>';
+    }).join('');
+  }
+  q.addEventListener('input',function(){
+    if(data){ run(); return; }
+    fetch('search-index.json').then(function(r){return r.json();})
+      .then(function(j){ data=j; run(); })
+      .catch(function(){ out.innerHTML='<li>'+NONE+'</li>'; });
+  });
+})();
+</script></body></html>

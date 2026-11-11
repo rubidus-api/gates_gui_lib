@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>7 Workers and timers - gates Manual</title><link rel="stylesheet" href="../book.css">
+<script>(function(){try{var s=JSON.parse(localStorage.getItem('rp-read')||'{}');var r=document.documentElement;if(s.theme&&s.theme!=='auto')r.setAttribute('data-theme',s.theme);if(s.fg)r.style.setProperty('--fg',s.fg);if(s.bg)r.style.setProperty('--bg',s.bg);if(s.link)r.style.setProperty('--link',s.link);if(s.width)r.setAttribute('data-measure','on');}catch(e){}})();</script></head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<div class="bar"><strong><a href="index.html">gates Manual</a></strong><button class="here-btn" type="button" aria-expanded="false" aria-controls="here-panel">ch. 7 <span class="caret">&#9662;</span></button><span class="sp"></span><span class="bar-nav"><a href="manual-06-text.html" title="Prev" aria-label="Prev">&larr;</a><a href="index.html" title="Contents" aria-label="Contents">&uarr;</a><a href="manual-08-themes-units.html" title="Next" aria-label="Next">&rarr;</a></span></div><div id="here-panel" class="here-panel" hidden><div class="tools"><span class="ver">0.15.0</span><button class="tool" type="button" id="set-open">&#9881; Settings</button><a class="tool" href="toc.html">&#9636; Detailed contents</a><a class="tool" href="../ko/manual-07-workers-timers.html">Ko</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.15.0/gates-manual-0.15.0-en.pdf">&#10515; PDF</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib" title="gates_gui_lib on GitHub">Git</a><a class="tool" href="https://rubidus-api.github.io/" title="rubidus-api.github.io - every published project">&#8962; All projects</a><a class="tool" href="https://github.com/rubidus-api" title="github.com/rubidus-api - every repository">&#8801; All repos</a></div><div class="setbox" id="setbox" hidden><label class="setrow"><input type="checkbox" id="s-width"><span>Limit line width</span></label><div class="setrow"><span class="setlbl">Theme</span><span class="seg"><button type="button" class="segb" data-theme="auto">System</button><button type="button" class="segb" data-theme="light">Light</button><button type="button" class="segb" data-theme="dark">Dark</button></span></div><div class="setrow"><span class="setlbl">Colours</span><label class="col"><span>Text</span><input type="color" id="s-fg"></label><label class="col"><span>Background</span><input type="color" id="s-bg"></label><label class="col"><span>Link</span><input type="color" id="s-link"></label></div><p class="setnote">Settings are kept in this browser only.</p></div><div class="here-head"><strong>In this chapter</strong></div><div class="here-body"><a class="lv3" href="#workers-never-touch-the-tree"><span class="tf-no">7.1</span>Workers never touch the tree</a><a class="lv3" href="#background-tasks"><span class="tf-no">7.2</span>Background tasks</a><a class="lv3" href="#timers"><span class="tf-no">7.3</span>Timers</a></div></div>
+<main id="content"><div class="wrap">
+<h2 id="top">7 Workers and timers</h2>
+<div class="chapter-toc"><div class="rail-label">In this chapter</div><div class="rail-body"><a class="lv3" href="#workers-never-touch-the-tree"><span class="tf-no">7.1</span>Workers never touch the tree</a><a class="lv3" href="#background-tasks"><span class="tf-no">7.2</span>Background tasks</a><a class="lv3" href="#timers"><span class="tf-no">7.3</span>Timers</a></div></div>
+<p>Headers: <code>gates/post.h</code>, <code>gates/timer.h</code>.</p>
+<h3 id="workers-never-touch-the-tree">7.1 Workers never touch the tree<a class="plink" href="#workers-never-touch-the-tree" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>The tree belongs to the UI thread. A worker thread - reading files, talking to a device, computing - hands its results over by posting messages. On the UI thread, before the worker starts, the program takes the app's sender (<code>gates_app_sender</code>) and builds a target: the tree and the node that should receive the results (<code>gates_target</code>). The worker posts messages carrying a kind and a payload; the UI thread delivers them at a safe point to the node's message handler (<code>gates_node_set_message_handler</code>) and then releases the payload.</p>
+<pre><code class="lang-c">/* manual example (windows): a worker thread feeds a log through the sender.
+ * The worker never touches the tree; it posts lines, and the UI thread
+ * delivers them to the log's message handler. */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;windows.h&gt;
+
+enum { MSG_LINE = 1 };
+
+typedef struct job_t {
+    gates_sender_t *sender;      /* retained for the worker */
+    gates_target_t target;       /* built on the UI thread */
+} job_t;
+
+static void release_line(void *payload, void *ctx) {
+    (void)ctx;
+    free(payload); /* may run on any thread: only frees */
+}
+
+static DWORD WINAPI worker(void *arg) {
+    job_t *job = arg;
+    for (int i = 1; i &lt;= 1000; i++) {
+        char *line = malloc(40);
+        if (line == nullptr) break;
+        int n = snprintf(line, 40, "line %d from the worker", i);
+        gates_message_t msg = { .target = job-&gt;target, .kind = MSG_LINE, .payload = line,
+                                .bytes = (gates_usize_t)n, .release = release_line };
+        gates_err_t err = gates_sender_post(job-&gt;sender, &amp;msg);
+        if (err == GATES_POST_FULL) { free(line); Sleep(5); i--; continue; } /* the caller keeps it */
+        if (err == GATES_POST_CLOSED) { free(line); break; }                 /* the app is closing */
+        if (!gates_is_ok(err)) { free(line); break; }
+    }
+    gates_sender_release(job-&gt;sender);
+    return 0;
+}
+
+static void on_line(gates_tree_t *tree, gates_node_t node, gates_u32 kind, void *payload,
+                    gates_usize_t bytes, void *user) {
+    (void)user;
+    if (kind == MSG_LINE) (void)gates_log_append(tree, node, (gates_str_t){ .ptr = payload, .size = bytes });
+}
+
+int main(void) {
+    gates_app_t *app = nullptr;
+    if (!gates_is_ok(gates_app_create(&amp;(gates_app_desc_t){0}, &amp;app))) return 1;
+    gates_window_t *win = nullptr;
+    gates_window_desc_t desc = { .title = GATES_STR("Worker"), .size = { 420, 300 } };
+    if (!gates_is_ok(gates_window_create(app, &amp;desc, nullptr, &amp;win))) {
+        gates_app_destroy(app);
+        return 1;
+    }
+    gates_tree_t *t = gates_window_tree(win);
+    gates_node_t root = gates_tree_root(t), log;
+    job_t job = {0};
+    gates_err_t err = gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN);
+    if (gates_is_ok(err)) err = gates_log_create(t, root, &amp;(gates_log_desc_t){ .max_lines = 500 }, &amp;log);
+    if (gates_is_ok(err)) err = gates_layout_set_child_grow(t, log, 1);
+    if (gates_is_ok(err)) err = gates_node_set_access_name(t, log, GATES_STR("Worker output"));
+    if (gates_is_ok(err)) err = gates_node_set_message_handler(t, log, on_line, nullptr);
+    if (gates_is_ok(err)) err = gates_app_sender(app, &amp;job.sender);
+    HANDLE thread = nullptr;
+    if (gates_is_ok(err)) {
+        job.target = gates_target(t, log);
+        thread = CreateThread(nullptr, 0, worker, &amp;job, 0, nullptr);
+        if (thread == nullptr) gates_sender_release(job.sender);
+    }
+    if (gates_is_ok(err)) err = gates_app_run(app);
+    gates_window_destroy(win);
+    gates_app_destroy(app); /* closes the sender: the worker sees CLOSED and stops */
+    if (thread != nullptr) {
+        WaitForSingleObject(thread, INFINITE);
+        CloseHandle(thread);
+    }
+    return gates_is_ok(err) ? 0 : 1;
+}</code></pre>
+<p>The rules that make this safe:</p>
+<ul><li>Posting never blocks and never allocates. A full queue answers <code>GATES_POST_FULL</code>: the worker keeps its payload and tries later, drops it, or merges it into the next one. A closed queue answers <code>GATES_POST_CLOSED</code>: the app is shutting down, stop and release the sender.</li><li>When a post succeeds, gates owns the payload and releases it exactly once - after delivery, when the target node is gone, when a newer snapshot replaces it (<code>replaceable</code>), or at shutdown. When a post fails, the worker still owns it.</li><li>Release functions may run on any thread; they only free.</li><li>The queue is bounded (1024 messages and 1 MiB of payload by default, <code>gates_app_desc_t</code>), and at most 64 messages are delivered per turn, so a flood never starves input and painting. It starts with 256 slots and grows on the UI thread as it fills, up to the limit, so a large limit costs memory only when bursts use it. Choose the limit by the delay you accept: a queue holds about limit / delivery-rate of waiting (at about 55000 messages a second, 1024 is under 20 ms; 65536 is over a second). No limit at all would only turn a flood into minutes of delay and unbounded memory: the delivery rate, not the queue, sets throughput.</li><li>A sender stays valid on every thread until its last reference is released, even after the app is gone.</li></ul>
+<h3 id="background-tasks">7.2 Background tasks<a class="plink" href="#background-tasks" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>For the common case - one job with progress, a result and a Cancel button - <code>gates_task_start</code> (gates/task.h) does the posting for you. The work function runs on its own thread (the window supplies it), calls <code>gates_task_report</code> with a per-mille and a short text, looks at <code>gates_task_cancelled</code> now and then, and returns its result. On the UI thread <code>on_progress</code> shows the latest report (reports the UI has not shown yet are replaced, never queued up) and <code>on_done</code> comes once, with the result and whether it was cancelled; the thread is joined for you. Closing the window cancels running tasks and waits for their work to return, so a work function should look at <code>gates_task_cancelled</code> often.</p>
+<pre><code class="lang-c">/* manual example (windows): a background task counts primes while the window
+ * shows its progress and a Cancel button stops it. The work never touches the
+ * tree: it reports, polls for cancellation and returns; the UI hears both. */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+#define LIMIT 3000000u
+
+typedef struct count_t {
+    gates_u32 primes;            /* written by the work, read in on_done */
+    gates_node_t bar, status, cancel;
+    gates_task_t *task;
+} count_t;
+
+static bool is_prime(gates_u32 n) {
+    if (n &lt; 2) return false;
+    for (gates_u32 d = 2; d * d &lt;= n; d++) {
+        if (n % d == 0) return false;
+    }
+    return true;
+}
+
+/* On the worker thread. */
+static gates_err_t count_primes(gates_task_t *task, void *user) {
+    count_t *c = user;
+    for (gates_u32 n = 0; n &lt; LIMIT; n++) {
+        if (is_prime(n)) c-&gt;primes++;
+        if (n % (LIMIT / 100) == 0) {
+            if (gates_task_cancelled(task)) return PROVEN_ERR_EOF;
+            char text[48];
+            int len = snprintf(text, sizeof text, "%u primes so far", c-&gt;primes);
+            (void)gates_task_report(task, (gates_u32)((gates_u64)n * 1000 / LIMIT),
+                                    (gates_str_t){ .ptr = (const gates_u8 *)text, .size = (gates_usize_t)len });
+        }
+    }
+    return GATES_OK;
+}
+
+/* On the UI thread. */
+static void on_progress(gates_tree_t *tree, gates_task_t *task, gates_u32 permille, gates_str_t text, void *user) {
+    (void)task;
+    count_t *c = user;
+    (void)gates_progress_set_value(tree, c-&gt;bar, (gates_i32)permille);
+    (void)gates_widget_set_text(tree, c-&gt;status, text);
+}
+
+static void on_done(gates_tree_t *tree, gates_task_t *task, gates_err_t result, bool cancelled, void *user) {
+    (void)task;
+    count_t *c = user;
+    char text[64];
+    int len = cancelled ? snprintf(text, sizeof text, "Cancelled after %u primes", c-&gt;primes)
+              : gates_is_ok(result) ? snprintf(text, sizeof text, "%u primes below %u", c-&gt;primes, LIMIT)
+                                    : snprintf(text, sizeof text, "Stopped");
+    (void)gates_widget_set_text(tree, c-&gt;status, (gates_str_t){ .ptr = (const gates_u8 *)text, .size = (gates_usize_t)len });
+    (void)gates_widget_set_disabled(tree, c-&gt;cancel, true);
+    c-&gt;task = nullptr;
+}
+
+static void on_cancel(gates_tree_t *tree, gates_node_t node, void *user) {
+    (void)tree;
+    (void)node;
+    count_t *c = user;
+    if (c-&gt;task != nullptr) gates_task_cancel(c-&gt;task);
+}
+
+int main(void) {
+    gates_app_t *app = nullptr;
+    if (!gates_is_ok(gates_app_create(&amp;(gates_app_desc_t){0}, &amp;app))) return 1;
+    gates_window_t *win = nullptr;
+    gates_window_desc_t desc = { .title = GATES_STR("Primes"), .size = { 380, 160 } };
+    if (!gates_is_ok(gates_window_create(app, &amp;desc, nullptr, &amp;win))) {
+        gates_app_destroy(app);
+        return 1;
+    }
+    gates_tree_t *t = gates_window_tree(win);
+    gates_node_t root = gates_tree_root(t);
+    count_t c = {0};
+    gates_err_t err = gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN);
+    if (gates_is_ok(err)) err = gates_layout_set_padding(t, root, 12);
+    if (gates_is_ok(err)) err = gates_layout_set_gap(t, root, 8);
+    if (gates_is_ok(err)) err = gates_progress_create(t, root, 0, &amp;c.bar);
+    if (gates_is_ok(err)) err = gates_node_set_access_name(t, c.bar, GATES_STR("Progress"));
+    if (gates_is_ok(err)) err = gates_label_create(t, root, GATES_STR("Starting..."), &amp;c.status);
+    if (gates_is_ok(err)) err = gates_button_create(t, root, GATES_STR("&amp;Cancel"), on_cancel, &amp;c, &amp;c.cancel);
+    gates_task_desc_t task = { .work = count_primes, .work_user = &amp;c, .on_progress = on_progress,
+                               .on_done = on_done, .ui_user = &amp;c };
+    if (gates_is_ok(err)) err = gates_task_start(t, &amp;task, &amp;c.task);
+    if (gates_is_ok(err)) err = gates_app_run(app);
+    gates_window_destroy(win); /* a task still running is cancelled and waited for */
+    gates_app_destroy(app);
+    return gates_is_ok(err) ? 0 : 1;
+}</code></pre>
+<h3 id="timers">7.3 Timers<a class="plink" href="#timers" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>A timer belongs to a node and runs its callback on the UI thread after an interval, once or repeatedly. Cancelling is immediate: a cancelled timer never fires again, and destroying its node or tree cancels it. A late repeating timer fires once and is rescheduled from now, never in a burst. An idle window runs no platform timer at all.</p>
+<p>A window's tree has a clock. A bare tree - in a test - gets one from the program, which then decides when time passes:</p>
+<pre><code class="lang-c">/* manual example (host): a repeating timer, driven by a test clock.
+ * expect: 3 ticks, then cancelled */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+static gates_u64 now_ms;
+static gates_u64 clock_now(void *ctx) { (void)ctx; return now_ms; }
+
+static void on_tick(gates_tree_t *tree, gates_node_t node, gates_timer_id_t id, void *user) {
+    (void)node;
+    int *ticks = user;
+    if (++*ticks == 3) (void)gates_timer_cancel(tree, id); /* a callback may cancel itself */
+}
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;t))) return 1;
+    /* A window's tree has a clock; a bare tree gets one from the program. */
+    gates_tree_set_clock(t, clock_now, nullptr, nullptr);
+    int ticks = 0;
+    gates_timer_id_t id;
+    if (!gates_is_ok(gates_timer_start(t, gates_tree_root(t), 100, true, on_tick, &amp;ticks, &amp;id))) return 1;
+    for (int step = 0; step &lt; 10; step++) {
+        now_ms += 100;
+        (void)gates_tree_run_timers(t); /* the window does this when its timer fires */
+    }
+    printf("%d ticks, then %s\n", ticks, gates_timer_active(t, id) ? "still running" : "cancelled");
+    gates_tree_destroy(t);
+    return 0;
+}</code></pre>
+<p>Before animating, ask <code>gates_window_reduced_motion</code>: when the person has turned animation effects off, show the end state instead. app_settings does this with its "applying" step: a timer fills a progress bar, or the bar is simply full.</p>
+<div class="nav"><a href="manual-06-text.html">&larr; Prev</a><span class="sp"></span><a href="index.html">Contents</a><span class="sp"></span><a href="manual-08-themes-units.html">Next &rarr;</a></div>
+</div></main>
+<script>(function(){var b=document.querySelector('.here-btn'),p=document.getElementById('here-panel');function open(o){if(!p)return;p.hidden=!o;if(b)b.setAttribute('aria-expanded',o);}if(b)b.addEventListener('click',function(){open(p.hidden);});if(p)p.addEventListener('click',function(e){if(e.target.tagName==='A'&&e.target.getAttribute('href').charAt(0)==='#')open(false);});document.addEventListener('keydown',function(e){if(e.key==='Escape')open(false);});var box=document.getElementById('setbox'),so=document.getElementById('set-open');if(!box||!so)return;var r=document.documentElement;function load(){try{return JSON.parse(localStorage.getItem('rp-read')||'{}');}catch(e){return {};}}function save(s){try{localStorage.setItem('rp-read',JSON.stringify(s));}catch(e){}}function css(n){return getComputedStyle(r).getPropertyValue(n).trim();}function hex(v){var m=v.match(/^rgba?\((\d+)[ ,]+(\d+)[ ,]+(\d+)/);if(!m)return v.charAt(0)==='#'?v:'#000000';return '#'+[1,2,3].map(function(i){return ('0'+parseInt(m[i],10).toString(16)).slice(-2);}).join('');}function paint(){var s=load();document.getElementById('s-width').checked=!!s.width;var t=s.theme||'auto';[].forEach.call(box.querySelectorAll('.segb'),function(x){x.setAttribute('aria-pressed',x.dataset.theme===t);});document.getElementById('s-fg').value=s.fg||hex(css('--fg'));document.getElementById('s-bg').value=s.bg||hex(css('--bg'));document.getElementById('s-link').value=s.link||hex(css('--link'));}so.addEventListener('click',function(){box.hidden=!box.hidden;so.setAttribute('aria-expanded',!box.hidden);if(!box.hidden)paint();});document.getElementById('s-width').addEventListener('change',function(){var s=load();s.width=this.checked;save(s);if(s.width)r.setAttribute('data-measure','on');else r.removeAttribute('data-measure');});[].forEach.call(box.querySelectorAll('.segb'),function(x){x.addEventListener('click',function(){var s=load();s.theme=x.dataset.theme;delete s.fg;delete s.bg;delete s.link;save(s);['--fg','--bg','--link'].forEach(function(n){r.style.removeProperty(n);});if(s.theme==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',s.theme);setTimeout(paint,0);});});[['s-fg','--fg','fg'],['s-bg','--bg','bg'],['s-link','--link','link']].forEach(function(a){document.getElementById(a[0]).addEventListener('input',function(){var s=load();s[a[2]]=this.value;save(s);r.style.setProperty(a[1],this.value);});});})();</script><script>
+(function(){
+  var q=document.getElementById('q'), out=document.getElementById('qr');
+  if(!q||!out) return;
+  var data=null, NONE="Nothing found";
+  function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+  function run(){
+    var v=q.value.trim().toLowerCase();
+    out.innerHTML='';
+    if(!v||!data) return;
+    var hits=[];
+    for(var i=0;i<data.length && hits.length<40;i++){
+      if(data[i][0].toLowerCase().indexOf(v)>=0) hits.push(data[i]);
+    }
+    if(!hits.length){ out.innerHTML='<li>'+NONE+'</li>'; return; }
+    out.innerHTML=hits.map(function(h){
+      return '<li><a href="'+h[1]+'">'+esc(h[0])+'</a>'+
+             (h[2]?'<span class="where">'+esc(h[2])+'</span>':'')+'</li>';
+    }).join('');
+  }
+  q.addEventListener('input',function(){
+    if(data){ run(); return; }
+    fetch('search-index.json').then(function(r){return r.json();})
+      .then(function(j){ data=j; run(); })
+      .catch(function(){ out.innerHTML='<li>'+NONE+'</li>'; });
+  });
+})();
+</script></body></html>

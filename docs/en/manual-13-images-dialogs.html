@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>13 Images and native dialogs - gates Manual</title><link rel="stylesheet" href="../book.css">
+<script>(function(){try{var s=JSON.parse(localStorage.getItem('rp-read')||'{}');var r=document.documentElement;if(s.theme&&s.theme!=='auto')r.setAttribute('data-theme',s.theme);if(s.fg)r.style.setProperty('--fg',s.fg);if(s.bg)r.style.setProperty('--bg',s.bg);if(s.link)r.style.setProperty('--link',s.link);if(s.width)r.setAttribute('data-measure','on');}catch(e){}})();</script></head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<div class="bar"><strong><a href="index.html">gates Manual</a></strong><button class="here-btn" type="button" aria-expanded="false" aria-controls="here-panel">ch. 13 <span class="caret">&#9662;</span></button><span class="sp"></span><span class="bar-nav"><a href="manual-12-numbers-layouts.html" title="Prev" aria-label="Prev">&larr;</a><a href="index.html" title="Contents" aria-label="Contents">&uarr;</a><a href="manual-14-api-reference.html" title="Next" aria-label="Next">&rarr;</a></span></div><div id="here-panel" class="here-panel" hidden><div class="tools"><span class="ver">0.15.0</span><button class="tool" type="button" id="set-open">&#9881; Settings</button><a class="tool" href="toc.html">&#9636; Detailed contents</a><a class="tool" href="../ko/manual-13-images-dialogs.html">Ko</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.15.0/gates-manual-0.15.0-en.pdf">&#10515; PDF</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib" title="gates_gui_lib on GitHub">Git</a><a class="tool" href="https://rubidus-api.github.io/" title="rubidus-api.github.io - every published project">&#8962; All projects</a><a class="tool" href="https://github.com/rubidus-api" title="github.com/rubidus-api - every repository">&#8801; All repos</a></div><div class="setbox" id="setbox" hidden><label class="setrow"><input type="checkbox" id="s-width"><span>Limit line width</span></label><div class="setrow"><span class="setlbl">Theme</span><span class="seg"><button type="button" class="segb" data-theme="auto">System</button><button type="button" class="segb" data-theme="light">Light</button><button type="button" class="segb" data-theme="dark">Dark</button></span></div><div class="setrow"><span class="setlbl">Colours</span><label class="col"><span>Text</span><input type="color" id="s-fg"></label><label class="col"><span>Background</span><input type="color" id="s-bg"></label><label class="col"><span>Link</span><input type="color" id="s-link"></label></div><p class="setnote">Settings are kept in this browser only.</p></div><div class="here-head"><strong>In this chapter</strong></div><div class="here-body"><a class="lv3" href="#images"><span class="tf-no">13.1</span>Images</a><a class="lv3" href="#icons"><span class="tf-no">13.2</span>Icons</a><a class="lv3" href="#native-dialogs"><span class="tf-no">13.3</span>Native dialogs</a></div></div>
+<main id="content"><div class="wrap">
+<h2 id="top">13 Images and native dialogs</h2>
+<div class="chapter-toc"><div class="rail-label">In this chapter</div><div class="rail-body"><a class="lv3" href="#images"><span class="tf-no">13.1</span>Images</a><a class="lv3" href="#icons"><span class="tf-no">13.2</span>Icons</a><a class="lv3" href="#native-dialogs"><span class="tf-no">13.3</span>Native dialogs</a></div></div>
+<p>Headers: <code>gates/image.h</code>, <code>gates/draw.h</code>, <code>gates/window.h</code>.</p>
+<h3 id="images">13.1 Images<a class="plink" href="#images" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>A tree keeps images by id. <code>gates_image_add_rgba(tree, w, h, pixels, stride, &amp;id)</code> copies straight-alpha RGBA pixels in; <code>gates_image_load_file</code> and <code>gates_image_load_memory</code> decode PNG, JPEG, BMP, GIF, ICO or TIFF through the decoder the platform installs (every Windows window has one; a bare tree answers UNSUPPORTED). <code>gates_image_remove</code> frees an image; nodes that showed it then show nothing, and ids are never reused.</p>
+<p>An image's natural size is its pixel size in logical units, so a 32 x 16 picture covers 32 x 16 units and scales with the window like text: at 150 % it is drawn on 48 x 24 pixels, smoothed (bilinear). Supply larger pixels when a picture must stay sharp at large scales.</p>
+<p>An image can carry those larger pixels itself (0.10.0). <code>gates_image_add_variant_rgba(tree, id, w, h, rgba, stride)</code> adds the same picture at another pixel size - a 16-unit icon drawn at 24 and 32 pixels, say - and <code>gates_image_load_variant_file</code> / <code>_memory</code> decode one. The natural size stays the first set's. Whenever the image is drawn, the renderer takes the smallest set that covers the device pixels it fills, else the largest: at 100 % the 16-pixel set, at 150 % the 24, at 200 % the 32. A set must have the picture's shape (its height within a pixel of w x natural h / natural w); one as wide as a set added before replaces it. <code>gates_image_variant_count</code>, <code>gates_image_variant_size</code> and <code>gates_image_pick_size</code> tell what an image holds and which set a size would use.</p>
+<p><code>gates_image_create(tree, parent, id, &amp;node)</code> shows an image. <code>gates_image_node_set_size</code> gives it another size; the picture then keeps its aspect ratio, centred. An image with an accessible name (<code>gates_node_set_access_name</code>) is an Image to screen readers; without one it is decoration and not announced.</p>
+<h3 id="icons">13.2 Icons<a class="plink" href="#icons" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>Icons are drawn at 16 x 16 units (<code>GATES_ICON_SIZE</code>). <code>gates_button_set_icon</code> puts one left of a button's label; a button with an icon and no text is an icon button, and needs an access name. <code>gates_command_set_icon</code> gives a command an icon: menus draw it in the gutter (a checked command shows its mark instead) and toolbars left of the label, or alone with <code>gates_toolbar_set_icons_only</code> - the label then lives on in the tooltip and the accessible name.</p>
+<p>For custom painting, <code>gates_tree_image</code> returns the image for <code>gates_draw_image(dl, rect, image)</code>; the draw list borrows it, so keep it until the list is rendered.</p>
+<pre><code class="lang-c">/* manual example (host): an image from pixels, an icon on a button and on a command.
+ * expect: logo 32x16, drawn 32x16 at 192 dpi as 64x32 pixels; Save button 20 units wider with its icon */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+int main(void) {
+    gates_tree_t *t = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;t))) return 1;
+    gates_node_t root = gates_tree_root(t), logo, save;
+    /* 32 x 16 pixels, a left-to-right fade from blue to transparent. */
+    static gates_u8 px[16][32][4];
+    for (int y = 0; y &lt; 16; y++) {
+        for (int x = 0; x &lt; 32; x++) {
+            px[y][x][0] = 0; px[y][x][1] = 90; px[y][x][2] = 200; px[y][x][3] = (gates_u8)(255 - x * 8);
+        }
+    }
+    /* A 16 x 16 icon: a grey square. */
+    static gates_u8 ic[16][16][4];
+    for (int y = 0; y &lt; 16; y++) {
+        for (int x = 0; x &lt; 16; x++) {
+            ic[y][x][0] = ic[y][x][1] = ic[y][x][2] = 90; ic[y][x][3] = 255;
+        }
+    }
+    gates_image_id_t pic = 0, icon = 0;
+    if (!gates_is_ok(gates_image_add_rgba(t, 32, 16, &amp;px[0][0][0], 0, &amp;pic)) ||
+        !gates_is_ok(gates_image_add_rgba(t, 16, 16, &amp;ic[0][0][0], 0, &amp;icon)) ||
+        !gates_is_ok(gates_layout_set(t, root, GATES_LAYOUT_KIND_COLUMN)) ||
+        !gates_is_ok(gates_image_create(t, root, pic, &amp;logo)) ||
+        !gates_is_ok(gates_node_set_access_name(t, logo, GATES_STR("Logo"))) ||   /* named: an Image */
+        !gates_is_ok(gates_layout_set_child_align(t, logo, GATES_ALIGN_START_V)) ||
+        !gates_is_ok(gates_button_create(t, root, GATES_STR("Save"), nullptr, nullptr, &amp;save)) ||
+        !gates_is_ok(gates_layout_set_child_align(t, save, GATES_ALIGN_START_V)) ||
+        !gates_is_ok(gates_layout_run(t, (gates_size_t){ 200, 100 }, gates_text_backend_builtin()))) {
+        return 1;
+    }
+    gates_i32 plain = gates_node_preferred_size(t, save).w;
+    if (!gates_is_ok(gates_button_set_icon(t, save, icon)) ||
+        !gates_is_ok(gates_layout_run(t, (gates_size_t){ 200, 100 }, gates_text_backend_builtin()))) {
+        return 1;
+    }
+    /* Render at 192 dpi: the logo covers 64 x 32 device pixels. */
+    gates_draw_list_t dl;
+    static gates_u32 pixels[200 * 2 * 100 * 2];
+    gates_pixels_t target = { .ptr = pixels, .w = 400, .h = 200, .stride_bytes = 1600 };
+    if (!gates_is_ok(gates_draw_list_init(&amp;dl, (gates_allocator_t){0}, 0)) ||
+        !gates_is_ok(gates_paint_tree(t, &amp;dl, gates_theme_light(), gates_text_backend_builtin())) ||
+        !gates_is_ok(gates_render_soft_scaled(&amp;dl, target, gates_text_backend_builtin(), 192))) {
+        return 1;
+    }
+    gates_rect_t r = gates_node_layout_rect(t, logo), dev = gates_rect_px(r, 192);
+    printf("logo %dx%d, drawn %dx%d at 192 dpi as %dx%d pixels; Save button %d units wider with its icon\n",
+           gates_image_size(t, pic).w, gates_image_size(t, pic).h, r.w, r.h, dev.w, dev.h,
+           gates_node_preferred_size(t, save).w - plain);
+    gates_draw_list_deinit(&amp;dl);
+    gates_tree_destroy(t);
+    return 0;
+}</code></pre>
+<h3 id="native-dialogs">13.3 Native dialogs<a class="plink" href="#native-dialogs" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>Choosing a file, a folder or a colour, and asking a yes-or-no question, are best left to the platform: people know its dialogs, and they come with the platform's keyboard support, screen reader support and recent places. On Windows:</p>
+<ul><li><code>gates_window_open_file</code>, <code>gates_window_save_file</code> and <code>gates_window_choose_folder</code> take a <code>gates_file_dialog_t</code> (a title, filters such as <code>"Pictures|*.png;*.jpg|All files|*.*"</code>, a starting folder, and for saving a suggested name) and write the chosen path, in UTF-8, to your buffer. A save dialog asks before overwriting. <code>gates_window_open_files</code> lets the person pick several files: each path ends with a NUL byte in the buffer, and <code>count</code> says how many.</li><li><code>gates_window_choose_color</code> starts from a colour and answers with the chosen one.</li><li><code>gates_window_message</code> shows a message with OK, OK/Cancel, Yes/No or Yes/No/Cancel and an information, warning, error or question icon, and returns the answer (Escape and the close box answer Cancel).</li></ul>
+<p>These are the platform's modal dialogs: the call returns when the person answers, and the window's own menus close first. A cancel is not an error - the path comes back empty, or <code>chosen</code> false. Call them from a command or event handler, never while painting.</p>
+<div class="nav"><a href="manual-12-numbers-layouts.html">&larr; Prev</a><span class="sp"></span><a href="index.html">Contents</a><span class="sp"></span><a href="manual-14-api-reference.html">Next &rarr;</a></div>
+</div></main>
+<script>(function(){var b=document.querySelector('.here-btn'),p=document.getElementById('here-panel');function open(o){if(!p)return;p.hidden=!o;if(b)b.setAttribute('aria-expanded',o);}if(b)b.addEventListener('click',function(){open(p.hidden);});if(p)p.addEventListener('click',function(e){if(e.target.tagName==='A'&&e.target.getAttribute('href').charAt(0)==='#')open(false);});document.addEventListener('keydown',function(e){if(e.key==='Escape')open(false);});var box=document.getElementById('setbox'),so=document.getElementById('set-open');if(!box||!so)return;var r=document.documentElement;function load(){try{return JSON.parse(localStorage.getItem('rp-read')||'{}');}catch(e){return {};}}function save(s){try{localStorage.setItem('rp-read',JSON.stringify(s));}catch(e){}}function css(n){return getComputedStyle(r).getPropertyValue(n).trim();}function hex(v){var m=v.match(/^rgba?\((\d+)[ ,]+(\d+)[ ,]+(\d+)/);if(!m)return v.charAt(0)==='#'?v:'#000000';return '#'+[1,2,3].map(function(i){return ('0'+parseInt(m[i],10).toString(16)).slice(-2);}).join('');}function paint(){var s=load();document.getElementById('s-width').checked=!!s.width;var t=s.theme||'auto';[].forEach.call(box.querySelectorAll('.segb'),function(x){x.setAttribute('aria-pressed',x.dataset.theme===t);});document.getElementById('s-fg').value=s.fg||hex(css('--fg'));document.getElementById('s-bg').value=s.bg||hex(css('--bg'));document.getElementById('s-link').value=s.link||hex(css('--link'));}so.addEventListener('click',function(){box.hidden=!box.hidden;so.setAttribute('aria-expanded',!box.hidden);if(!box.hidden)paint();});document.getElementById('s-width').addEventListener('change',function(){var s=load();s.width=this.checked;save(s);if(s.width)r.setAttribute('data-measure','on');else r.removeAttribute('data-measure');});[].forEach.call(box.querySelectorAll('.segb'),function(x){x.addEventListener('click',function(){var s=load();s.theme=x.dataset.theme;delete s.fg;delete s.bg;delete s.link;save(s);['--fg','--bg','--link'].forEach(function(n){r.style.removeProperty(n);});if(s.theme==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',s.theme);setTimeout(paint,0);});});[['s-fg','--fg','fg'],['s-bg','--bg','bg'],['s-link','--link','link']].forEach(function(a){document.getElementById(a[0]).addEventListener('input',function(){var s=load();s[a[2]]=this.value;save(s);r.style.setProperty(a[1],this.value);});});})();</script><script>
+(function(){
+  var q=document.getElementById('q'), out=document.getElementById('qr');
+  if(!q||!out) return;
+  var data=null, NONE="Nothing found";
+  function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+  function run(){
+    var v=q.value.trim().toLowerCase();
+    out.innerHTML='';
+    if(!v||!data) return;
+    var hits=[];
+    for(var i=0;i<data.length && hits.length<40;i++){
+      if(data[i][0].toLowerCase().indexOf(v)>=0) hits.push(data[i]);
+    }
+    if(!hits.length){ out.innerHTML='<li>'+NONE+'</li>'; return; }
+    out.innerHTML=hits.map(function(h){
+      return '<li><a href="'+h[1]+'">'+esc(h[0])+'</a>'+
+             (h[2]?'<span class="where">'+esc(h[2])+'</span>':'')+'</li>';
+    }).join('');
+  }
+  q.addEventListener('input',function(){
+    if(data){ run(); return; }
+    fetch('search-index.json').then(function(r){return r.json();})
+      .then(function(j){ data=j; run(); })
+      .catch(function(){ out.innerHTML='<li>'+NONE+'</li>'; });
+  });
+})();
+</script></body></html>

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>0 Start here - gates Manual</title><link rel="stylesheet" href="../book.css">
+<script>(function(){try{var s=JSON.parse(localStorage.getItem('rp-read')||'{}');var r=document.documentElement;if(s.theme&&s.theme!=='auto')r.setAttribute('data-theme',s.theme);if(s.fg)r.style.setProperty('--fg',s.fg);if(s.bg)r.style.setProperty('--bg',s.bg);if(s.link)r.style.setProperty('--link',s.link);if(s.width)r.setAttribute('data-measure','on');}catch(e){}})();</script></head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<div class="bar"><strong><a href="index.html">gates Manual</a></strong><button class="here-btn" type="button" aria-expanded="false" aria-controls="here-panel">ch. 0 <span class="caret">&#9662;</span></button><span class="sp"></span><span class="bar-nav"><a href="index.html" title="Prev" aria-label="Prev">&larr;</a><a href="index.html" title="Contents" aria-label="Contents">&uarr;</a><a href="manual-01-concepts.html" title="Next" aria-label="Next">&rarr;</a></span></div><div id="here-panel" class="here-panel" hidden><div class="tools"><span class="ver">0.15.0</span><button class="tool" type="button" id="set-open">&#9881; Settings</button><a class="tool" href="toc.html">&#9636; Detailed contents</a><a class="tool" href="../ko/manual-00-start-here.html">Ko</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib/releases/download/v0.15.0/gates-manual-0.15.0-en.pdf">&#10515; PDF</a><a class="tool" href="https://github.com/rubidus-api/gates_gui_lib" title="gates_gui_lib on GitHub">Git</a><a class="tool" href="https://rubidus-api.github.io/" title="rubidus-api.github.io - every published project">&#8962; All projects</a><a class="tool" href="https://github.com/rubidus-api" title="github.com/rubidus-api - every repository">&#8801; All repos</a></div><div class="setbox" id="setbox" hidden><label class="setrow"><input type="checkbox" id="s-width"><span>Limit line width</span></label><div class="setrow"><span class="setlbl">Theme</span><span class="seg"><button type="button" class="segb" data-theme="auto">System</button><button type="button" class="segb" data-theme="light">Light</button><button type="button" class="segb" data-theme="dark">Dark</button></span></div><div class="setrow"><span class="setlbl">Colours</span><label class="col"><span>Text</span><input type="color" id="s-fg"></label><label class="col"><span>Background</span><input type="color" id="s-bg"></label><label class="col"><span>Link</span><input type="color" id="s-link"></label></div><p class="setnote">Settings are kept in this browser only.</p></div><div class="here-head"><strong>In this chapter</strong></div><div class="here-body"><a class="lv3" href="#what-gates-is-for"><span class="tf-no">0.1</span>What gates is for</a><a class="lv3" href="#the-package"><span class="tf-no">0.2</span>The package</a><a class="lv3" href="#the-first-program"><span class="tf-no">0.3</span>The first program</a><a class="lv3" href="#without-a-window"><span class="tf-no">0.4</span>Without a window</a><a class="lv3" href="#the-headers"><span class="tf-no">0.5</span>The headers</a></div></div>
+<main id="content"><div class="wrap">
+<h2 id="top">0 Start here</h2>
+<div class="chapter-toc"><div class="rail-label">In this chapter</div><div class="rail-body"><a class="lv3" href="#what-gates-is-for"><span class="tf-no">0.1</span>What gates is for</a><a class="lv3" href="#the-package"><span class="tf-no">0.2</span>The package</a><a class="lv3" href="#the-first-program"><span class="tf-no">0.3</span>The first program</a><a class="lv3" href="#without-a-window"><span class="tf-no">0.4</span>Without a window</a><a class="lv3" href="#the-headers"><span class="tf-no">0.5</span>The headers</a></div></div>
+<h3 id="what-gates-is-for">0.1 What gates is for<a class="plink" href="#what-gates-is-for" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>gates is a GUI library for programs whose job is to let a person look at something and change it: a settings dialog, a record inspector, a log viewer, a build tool. It is written in C23, keeps a tree of nodes that describes the interface, and does the work that such programs otherwise redo badly: keyboard focus, text entry with the installed input method, forms, lists over large data, commands shared by buttons and shortcuts, dialogs, threads that feed the interface, themes, scaling, and accessibility.</p>
+<p>It is not a browser engine, not a game UI, and not a pixel-exact drawing kit. Think of HTML and CSS: the program says what things are and how they relate; how they finally look is the business of the backend and the theme. A feature in gates is finished when the interaction it serves works - reachable, usable with pointer, keyboard and input method, readable by a screen reader - not when it matches a picture.</p>
+<p>Version 0.15.0 has one backend: Win32 with a software renderer. The core (everything except the window) is platform-free and runs anywhere a C23 compiler does, which is how its tests run.</p>
+<h3 id="the-package">0.2 The package<a class="plink" href="#the-package" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>A release is a folder, <code>gates-0.15.0/</code>:</p>
+<div class="tblwrap"><table><tr><th>Path</th><th>What</th></tr><tr><td><code>include/gates/</code></td><td>the public headers; <code>gates/gates.h</code> includes all of them</td></tr><tr><td><code>include/proven/</code></td><td>the headers of the proven library that gates builds on</td></tr><tr><td><code>lib/win64/libgates.a</code></td><td>gates for Windows (core + Win32 backend), mingw-w64</td></tr><tr><td><code>lib/host/libgates_core.a</code></td><td>the platform-free core, for tests and headless tools</td></tr><tr><td><code>lib/*/libproven.a</code></td><td>proven, the foundation library (allocators, strings, results)</td></tr><tr><td><code>manual/</code>, <code>manual-ko/</code></td><td>this manual in English and Korean</td></tr><tr><td><code>examples/consumer/</code></td><td>a program built from the package alone, with its Makefile</td></tr></table></div>
+<p>gates and proven are separate libraries: link both, gates first. A program that already uses proven (0.1.x) may link its own copy instead of the one in the package.</p>
+<h3 id="the-first-program">0.3 The first program<a class="plink" href="#the-first-program" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>A window with a label and a button; pressing the button changes the label.</p>
+<pre><code class="lang-c">/* manual example (windows): the first program - a window, a label, a button.
+ * Build: see chapter 0 (links -lgates -lproven and the Windows libraries). */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+typedef struct hello_t {
+    gates_app_t *app;
+    gates_tree_t *tree;
+    gates_node_t count_label;
+    int clicks;
+} hello_t;
+
+/* The button tells us it was pressed; we change the label. Nothing is read
+ * back from widgets while painting. */
+static void on_button(gates_tree_t *tree, const gates_event_t *ev, void *user) {
+    hello_t *h = user;
+    if (ev-&gt;kind != GATES_EVENT_ACTIVATED) return;
+    h-&gt;clicks++;
+    char text[48];
+    int n = snprintf(text, sizeof text, "Pressed %d time%s", h-&gt;clicks, h-&gt;clicks == 1 ? "" : "s");
+    (void)gates_widget_set_text(tree, h-&gt;count_label, (gates_str_t){ .ptr = (const gates_u8 *)text, .size = (gates_usize_t)n });
+}
+
+static void on_key(gates_window_t *win, const gates_key_event_t *ev, void *user) {
+    (void)win;
+    hello_t *h = user;
+    if (ev-&gt;down &amp;&amp; ev-&gt;key == GATES_KEY_ESCAPE) gates_app_quit(h-&gt;app);
+}
+
+int main(void) {
+    gates_app_t *app = nullptr;
+    if (!gates_is_ok(gates_app_create(&amp;(gates_app_desc_t){0}, &amp;app))) return 1;
+    hello_t h = { .app = app };
+    gates_window_desc_t desc = { .title = GATES_STR("Hello, gates"), .size = { 320, 160 } };
+    gates_window_callbacks_t cb = { .on_key = on_key, .user_data = &amp;h };
+    gates_window_t *win = nullptr;
+    if (!gates_is_ok(gates_window_create(app, &amp;desc, &amp;cb, &amp;win))) {
+        gates_app_destroy(app);
+        return 1;
+    }
+    h.tree = gates_window_tree(win);
+    gates_node_t root = gates_tree_root(h.tree), button;
+    gates_err_t err = gates_layout_set(h.tree, root, GATES_LAYOUT_KIND_COLUMN);
+    if (gates_is_ok(err)) err = gates_layout_set_padding(h.tree, root, 12);
+    if (gates_is_ok(err)) err = gates_label_create(h.tree, root, GATES_STR("Not pressed yet"), &amp;h.count_label);
+    if (gates_is_ok(err)) err = gates_button_create(h.tree, root, GATES_STR("Press me"), nullptr, nullptr, &amp;button);
+    if (gates_is_ok(err)) err = gates_widget_set_handler(h.tree, button, on_button, &amp;h);
+    if (gates_is_ok(err)) err = gates_app_run(app); /* returns when the last window closes */
+    gates_window_destroy(win);
+    gates_app_destroy(app);
+    return gates_is_ok(err) ? 0 : 1;
+}</code></pre>
+<p>Build it with mingw-w64 (on Linux, or MSYS2 on Windows), from the package folder:</p>
+<pre><code class="lang-sh">x86_64-w64-mingw32-gcc -std=c23 -O2 -Iinclude hello.c -Llib/win64 -lgates -lproven \
+    -lgdi32 -luser32 -limm32 -ldwmapi -ladvapi32 -luiautomationcore -lole32 -loleaut32 \
+    -luuid -mwindows -o hello.exe</code></pre>
+<p>Three things in it are the whole shape of a gates program. The program builds nodes into the window's tree (<code>gates_label_create</code>, <code>gates_button_create</code>). It learns what the person did from events (<code>gates_widget_set_handler</code>), never by reading widgets while the window paints. And <code>gates_app_run</code> owns the loop until the last window closes.</p>
+<h3 id="without-a-window">0.4 Without a window<a class="plink" href="#without-a-window" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p>The core needs no window: build a tree, lay it out with the builtin text backend, and ask what is where. Tests and command-line tools use gates this way.</p>
+<pre><code class="lang-c">/* manual example (host): gates without a window - build, lay out, inspect.
+ * expect: Press me: button at 0,16 320x26 */
+#include &lt;gates/gates.h&gt;
+
+#include &lt;stdio.h&gt;
+
+int main(void) {
+    gates_tree_t *tree = nullptr;
+    if (!gates_is_ok(gates_tree_create(&amp;(gates_tree_desc_t){0}, &amp;tree))) return 1;
+    gates_node_t root = gates_tree_root(tree), label, button;
+    gates_err_t err = gates_layout_set(tree, root, GATES_LAYOUT_KIND_COLUMN);
+    if (gates_is_ok(err)) err = gates_label_create(tree, root, GATES_STR("Not pressed yet"), &amp;label);
+    if (gates_is_ok(err)) err = gates_button_create(tree, root, GATES_STR("Press me"), nullptr, nullptr, &amp;button);
+    /* Layout needs text metrics: the builtin backend works everywhere. */
+    if (gates_is_ok(err)) err = gates_layout_run(tree, (gates_size_t){ 320, 160 }, gates_text_backend_builtin());
+    gates_access_info_t info;
+    if (gates_is_ok(err)) err = gates_access_info(tree, button, 0, &amp;info);
+    if (gates_is_ok(err)) {
+        printf("%.*s: %s at %d,%d %dx%d\n", (int)info.name.size, (const char *)info.name.ptr,
+               info.role == GATES_ROLE_BUTTON ? "button" : "?", info.bounds.x, info.bounds.y, info.bounds.w,
+               info.bounds.h);
+    }
+    gates_tree_destroy(tree);
+    return gates_is_ok(err) ? 0 : 1;
+}</code></pre>
+<pre><code class="lang-sh">cc -std=c23 -Iinclude headless.c -Llib/host -lgates_core -lproven -lm -o headless</code></pre>
+<p>It prints <code>Press me: button at 0,16 320x26</code>: the column put the button under the label and stretched it to the full width.</p>
+<h3 id="the-headers">0.5 The headers<a class="plink" href="#the-headers" aria-label="Link to this section" title="Link to this section">#</a></h3>
+<p><code>gates/gates.h</code> includes everything. The headers, in the order this manual meets them:</p>
+<div class="tblwrap"><table class="key"><tr><th>Header</th><th>What it holds</th><th>Chapter</th></tr><tr><td><code>gates/types.h</code></td><td>integers, strings (<code>gates_str_t</code>), errors, the allocator</td><td>1</td></tr><tr><td><code>gates/version.h</code></td><td>the version and <code>gates_version()</code></td><td>10</td></tr><tr><td><code>gates/tree.h</code></td><td>the node tree, handles, focus, hidden nodes</td><td>1</td></tr><tr><td><code>gates/event.h</code></td><td>typed events and their delivery</td><td>1</td></tr><tr><td><code>gates/widget.h</code></td><td>labels, buttons, check boxes, text boxes, radio groups, choices, progress</td><td>2</td></tr><tr><td><code>gates/layout.h</code></td><td>row, column, stack, split, scroll, form layouts</td><td>2</td></tr><tr><td><code>gates/geometry.h</code></td><td>points, sizes, rectangles, logical units</td><td>2, 8</td></tr><tr><td><code>gates/form.h</code></td><td>forms with labels, help and error lines</td><td>3</td></tr><tr><td><code>gates/command.h</code></td><td>commands shared by buttons, shortcuts and menus</td><td>4</td></tr><tr><td><code>gates/overlay.h</code></td><td>modal dialogs and context menus</td><td>4</td></tr><tr><td><code>gates/view.h</code></td><td>lists, tables, trees and logs over your data</td><td>5</td></tr><tr><td><code>gates/text_edit.h</code></td><td>the text edit core under every text box</td><td>6</td></tr><tr><td><code>gates/clipboard.h</code></td><td>the clipboard boundary</td><td>6</td></tr><tr><td><code>gates/input.h</code></td><td>pointer and key events</td><td>6</td></tr><tr><td><code>gates/ui.h</code></td><td>input routing, hit testing, painting a tree</td><td>6</td></tr><tr><td><code>gates/post.h</code></td><td>posting from worker threads</td><td>7</td></tr><tr><td><code>gates/timer.h</code></td><td>timers on the UI thread</td><td>7</td></tr><tr><td><code>gates/theme.h</code></td><td>themes: colour tokens, light, dark, high contrast</td><td>8</td></tr><tr><td><code>gates/draw.h</code></td><td>the draw command list</td><td>8</td></tr><tr><td><code>gates/render.h</code></td><td>the software renderer</td><td>8</td></tr><tr><td><code>gates/text.h</code></td><td>fonts, text metrics and text backends</td><td>8</td></tr><tr><td><code>gates/access.h</code></td><td>accessibility: roles, names, actions, the audit</td><td>9</td></tr><tr><td><code>gates/app.h</code></td><td>the application and its loop</td><td>10</td></tr><tr><td><code>gates/window.h</code></td><td>windows, themes, zoom, announcements</td><td>10</td></tr></table></div>
+<div class="nav"><a href="index.html">&larr; Prev</a><span class="sp"></span><a href="index.html">Contents</a><span class="sp"></span><a href="manual-01-concepts.html">Next &rarr;</a></div>
+</div></main>
+<script>(function(){var b=document.querySelector('.here-btn'),p=document.getElementById('here-panel');function open(o){if(!p)return;p.hidden=!o;if(b)b.setAttribute('aria-expanded',o);}if(b)b.addEventListener('click',function(){open(p.hidden);});if(p)p.addEventListener('click',function(e){if(e.target.tagName==='A'&&e.target.getAttribute('href').charAt(0)==='#')open(false);});document.addEventListener('keydown',function(e){if(e.key==='Escape')open(false);});var box=document.getElementById('setbox'),so=document.getElementById('set-open');if(!box||!so)return;var r=document.documentElement;function load(){try{return JSON.parse(localStorage.getItem('rp-read')||'{}');}catch(e){return {};}}function save(s){try{localStorage.setItem('rp-read',JSON.stringify(s));}catch(e){}}function css(n){return getComputedStyle(r).getPropertyValue(n).trim();}function hex(v){var m=v.match(/^rgba?\((\d+)[ ,]+(\d+)[ ,]+(\d+)/);if(!m)return v.charAt(0)==='#'?v:'#000000';return '#'+[1,2,3].map(function(i){return ('0'+parseInt(m[i],10).toString(16)).slice(-2);}).join('');}function paint(){var s=load();document.getElementById('s-width').checked=!!s.width;var t=s.theme||'auto';[].forEach.call(box.querySelectorAll('.segb'),function(x){x.setAttribute('aria-pressed',x.dataset.theme===t);});document.getElementById('s-fg').value=s.fg||hex(css('--fg'));document.getElementById('s-bg').value=s.bg||hex(css('--bg'));document.getElementById('s-link').value=s.link||hex(css('--link'));}so.addEventListener('click',function(){box.hidden=!box.hidden;so.setAttribute('aria-expanded',!box.hidden);if(!box.hidden)paint();});document.getElementById('s-width').addEventListener('change',function(){var s=load();s.width=this.checked;save(s);if(s.width)r.setAttribute('data-measure','on');else r.removeAttribute('data-measure');});[].forEach.call(box.querySelectorAll('.segb'),function(x){x.addEventListener('click',function(){var s=load();s.theme=x.dataset.theme;delete s.fg;delete s.bg;delete s.link;save(s);['--fg','--bg','--link'].forEach(function(n){r.style.removeProperty(n);});if(s.theme==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',s.theme);setTimeout(paint,0);});});[['s-fg','--fg','fg'],['s-bg','--bg','bg'],['s-link','--link','link']].forEach(function(a){document.getElementById(a[0]).addEventListener('input',function(){var s=load();s[a[2]]=this.value;save(s);r.style.setProperty(a[1],this.value);});});})();</script><script>
+(function(){
+  var q=document.getElementById('q'), out=document.getElementById('qr');
+  if(!q||!out) return;
+  var data=null, NONE="Nothing found";
+  function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+  function run(){
+    var v=q.value.trim().toLowerCase();
+    out.innerHTML='';
+    if(!v||!data) return;
+    var hits=[];
+    for(var i=0;i<data.length && hits.length<40;i++){
+      if(data[i][0].toLowerCase().indexOf(v)>=0) hits.push(data[i]);
+    }
+    if(!hits.length){ out.innerHTML='<li>'+NONE+'</li>'; return; }
+    out.innerHTML=hits.map(function(h){
+      return '<li><a href="'+h[1]+'">'+esc(h[0])+'</a>'+
+             (h[2]?'<span class="where">'+esc(h[2])+'</span>':'')+'</li>';
+    }).join('');
+  }
+  q.addEventListener('input',function(){
+    if(data){ run(); return; }
+    fetch('search-index.json').then(function(r){return r.json();})
+      .then(function(j){ data=j; run(); })
+      .catch(function(){ out.innerHTML='<li>'+NONE+'</li>'; });
+  });
+})();
+</script></body></html>

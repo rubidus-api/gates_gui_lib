@@ -277,6 +277,15 @@ bench: lib-host
 manual-book:
 	python3 manual/book/build.py --out $(BUILD)/book
 
+# The web edition as the repository's GitHub Pages site: docs/ (Pages: deploy from main, /docs) holds
+# only what `manual-book` makes, no PDFs (they are release assets). Run after manual-book, commit docs/.
+manual-pages: manual-book
+	rm -rf docs
+	mkdir -p docs
+	cp -R $(BUILD)/book/. docs/
+	rm -f docs/*.pdf
+	touch docs/.nojekyll
+
 manual-sync:
 	sh tests/manual_check.sh sync
 	sh tests/api_reference.sh write
