@@ -94,6 +94,7 @@ gates 와 기반 라이브러리 proven 은 따로 된 정적 라이브러리입
 
 ## 문서
 
+- 온라인: <https://rubidus-api.github.io/gates_gui_lib/ko/> (한국어, 영어판은 `en/`).
 - [매뉴얼](manual-ko/manual-ko.md)(한국어)과 [Manual](manual/manual.md)(영어): 첫 프로그램부터
   배포와 문제 해결까지. 매뉴얼에 실린 프로그램은 모두 빌드가 컴파일합니다. 두 판이 어긋나면
   영문판이 기준입니다. 릴리스마다 안내 부분은 PDF 로, API 참조까지 모두는 웹판(zip)으로도 함께 올립니다.
