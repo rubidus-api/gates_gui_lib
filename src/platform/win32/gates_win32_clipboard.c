@@ -59,6 +59,7 @@ static gates_err_t clip_get(void *ctx, gates_allocator_t alloc, gates_u8 **out,
                 gates_usize_t n = 0;
                 for (gates_usize_t i = 0; i < units; i++) {
                     gates_u32 cp = w[i];
+                    if (cp == 0x0D && i + 1 < units && w[i + 1] == 0x0A) continue; /* CR LF reads as LF (R9-07) */
                     if (cp >= 0xD800 && cp <= 0xDBFF && i + 1 < units && w[i + 1] >= 0xDC00 &&
                         w[i + 1] <= 0xDFFF) {
                         cp = 0x10000 + ((cp - 0xD800) << 10) + ((gates_u32)w[i + 1] - 0xDC00);
@@ -80,8 +81,8 @@ static gates_err_t clip_get(void *ctx, gates_allocator_t alloc, gates_u8 **out,
 
 static gates_err_t clip_set(void *ctx, gates_str_t text) {
     gates_window_t *win = ctx;
-    /* UTF-8 -> UTF-16: at most one unit per byte, plus the terminator. */
-    HGLOBAL mem = GlobalAlloc(GMEM_MOVEABLE, (text.size + 1u) * sizeof(wchar_t));
+    /* UTF-8 -> UTF-16: at most one unit per byte, a CR more for each LF, plus the terminator. */
+    HGLOBAL mem = GlobalAlloc(GMEM_MOVEABLE, (2u * text.size + 1u) * sizeof(wchar_t));
     if (mem == nullptr) {
         return PROVEN_ERR_NOMEM;
     }
@@ -94,6 +95,7 @@ static gates_err_t clip_set(void *ctx, gates_str_t text) {
     for (gates_u32 at = 0; at < text.size;) {
         gates_u32 cp = 0;
         at += gates_text_decode(text, at, &cp);
+        if (cp == 0x0A && (n == 0 || w[n - 1] != L'\r')) w[n++] = L'\r'; /* Windows programs expect CR LF (R9-07) */
         if (cp >= 0x10000) {
             cp -= 0x10000;
             w[n++] = (wchar_t)(0xD800 + (cp >> 10));

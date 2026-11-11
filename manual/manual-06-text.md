@@ -100,7 +100,8 @@ text itself - tests, automation - `gates_input_commit` delivers text as an IME w
 ## The clipboard
 
 The window provides the platform clipboard (`gates/clipboard.h`): text crosses it as UTF-8 and
-is converted at the edge. A tree without a clipboard provider (headless) makes copy, cut and
+is converted at the edge. On Windows a line end is CR LF on the clipboard: copy writes LF as CR LF
+and paste reads CR LF as LF, so a text keeps its line ends through other programs (0.15.1). A tree without a clipboard provider (headless) makes copy, cut and
 paste do nothing.
 
 ## Other encodings at the edge

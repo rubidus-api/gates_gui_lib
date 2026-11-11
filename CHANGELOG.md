@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project follows Keep a Changelog.
 
+## [0.15.1] - 2026-11-11
+
+### Fixed
+
+- Windows clipboard line ends: copy writes a line feed as CR LF and paste reads CR LF as a line
+  feed. Programs that insist on CR LF (classic Notepad) showed a copied multi-line text as one
+  line; a text copied from one and pasted into gates kept the CRs. (RFC-0009 R9-07.)
+
 ## [0.15.0] - 2026-11-11
 
 A whole-source review (security, memory, undefined behaviour, logic), fixed.
