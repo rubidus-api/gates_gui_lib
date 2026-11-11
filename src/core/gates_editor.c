@@ -384,7 +384,7 @@ static gates_i32 caret_x(const gates_tree_t *tree, const lay_t *L, struct gates_
     gates_str_t t = line_text(tree, e, line, nullptr);
     gates_u32 rs, re, rel = off - gates_text_buffer_line_start(e->buf, line);
     (void)row_at(L, e, t, rel, end, &rs, &re);
-    gates_i32 x = x_in(L->be, L->font, e, (gates_str_t){ .ptr = t.ptr + rs, .size = t.size - rs }, rel - rs);
+    gates_i32 x = x_in(L->be, L->font, e, (gates_str_t){ .ptr = gates_i_ptr_add(t.ptr, rs), .size = t.size - rs }, rel - rs);
     if (!e->wrap && x + 1 > e->max_w) e->max_w = x + 1;
     return x;
 }
@@ -396,7 +396,7 @@ static gates_u32 at_row_x(const gates_tree_t *tree, const lay_t *L, struct gates
     gates_str_t t = line_text(tree, e, p.line, nullptr);
     gates_u32 rs, re;
     (void)row_range(L, e, t, p.row, &rs, &re);
-    gates_u32 rel = rs + (L->be != nullptr ? at_x(L->be, L->font, e, (gates_str_t){ .ptr = t.ptr + rs, .size = re - rs }, x) : 0);
+    gates_u32 rel = rs + (L->be != nullptr ? at_x(L->be, L->font, e, (gates_str_t){ .ptr = gates_i_ptr_add(t.ptr, rs), .size = re - rs }, x) : 0);
     *end = rel == re; /* row_at keeps a line's last row whatever the flag */
     return gates_text_buffer_line_start(e->buf, p.line) + rel;
 }
@@ -541,11 +541,12 @@ gates_err_t gates_editor_create(gates_tree_t *tree, gates_node_t parent, const g
     e->pref_x = -1;
     e->tab_inserts = desc->tab_inserts;
     e->read_only = desc->read_only;
-    e->tab_width = desc->tab_width != 0 ? desc->tab_width : 4;
+    e->tab_width = desc->tab_width == 0 ? 4 : desc->tab_width > 1024 ? 1024 : desc->tab_width;
     e->max_bytes = desc->max_bytes != 0 && desc->max_bytes < GATES_TEXT_BUFFER_MAX ? desc->max_bytes
                                                                                     : GATES_TEXT_BUFFER_MAX;
-    e->rows = desc->rows != 0 ? desc->rows : 10;
-    e->cols = desc->cols != 0 ? desc->cols : 40;
+    /* Size hints are held to GATES_EXTENT_MAX (R9-12): they are multiplied by a character's size. */
+    e->rows = desc->rows == 0 ? 10 : desc->rows > GATES_EXTENT_MAX ? (gates_u32)GATES_EXTENT_MAX : desc->rows;
+    e->cols = desc->cols == 0 ? 40 : desc->cols > GATES_EXTENT_MAX ? (gates_u32)GATES_EXTENT_MAX : desc->cols;
     e->wrap = desc->wrap;
     e->line_numbers = desc->line_numbers;
     e->auto_indent = desc->auto_indent;
@@ -1039,7 +1040,7 @@ gates_err_t gates_i_editor_paint(const gates_tree_t *tree, gates_u32 idx, gates_
         gates_i32 y = g.text.y + (gates_i32)k * g.row_h;
         gates_i32 x0 = g.text.x - g.scroll_x;
         bool last_row = re >= t.size;
-        gates_str_t u = { .ptr = t.ptr + rs, .size = re - rs };
+        gates_str_t u = { .ptr = gates_i_ptr_add(t.ptr, rs), .size = re - rs };
         gates_u32 rb = ls + rs, rend = ls + re; /* the row's offsets */
         gates_i32 width = x_in(text, font, e, u, (gates_u32)u.size);
         if (!e->wrap && width + 1 > e->max_w) e->max_w = width + 1; /* the scroll extent grows as lines are seen */
@@ -1746,7 +1747,7 @@ gates_u32 gates_i_editor_text_rects(gates_tree_t *tree, gates_u32 idx, gates_u32
         (void)row_range(&L, e, t, p.row, &rs, &re);
         gates_u32 ls = gates_text_buffer_line_start(e->buf, p.line), rb = ls + rs, rend = ls + re;
         bool last_row = re >= t.size;
-        gates_str_t u = { .ptr = t.ptr + rs, .size = re - rs };
+        gates_str_t u = { .ptr = gates_i_ptr_add(t.ptr, rs), .size = re - rs };
         gates_u32 a = start > rb ? start : rb, z = end < rend ? end : rend;
         bool here = start == end ? (start >= rb && (start < rend || (last_row && start == rend))) : a < z;
         if (here) {

@@ -78,7 +78,8 @@ TESTS     := test_foundation test_node_pool test_tree test_draw_list test_render
              test_events test_text_editing test_focus_commands \
              test_overlay test_controls test_form test_view test_view_adapters test_post \
              test_post_stress test_theme_dpi test_access test_text_prop test_frame test_inputs test_images \
-             test_data test_undo test_task test_text_buffer test_editor test_selection test_encoding
+             test_data test_undo test_task test_text_buffer test_editor test_selection test_encoding \
+             test_hardening
 TEST_BINS := $(addprefix $(TESTBIN)/,$(TESTS))
 TEST_OBJ  := $(patsubst %,$(OBJ)/tests/%.o,$(TESTS))
 
@@ -118,6 +119,11 @@ $(addprefix $(TESTBIN)/,$(THREADED_TESTS)): $(TESTBIN)/%: $(OBJ)/tests/%.o $(COR
 test: all check-core
 	@set -e; for t in $(TEST_BINS); do echo "== $$t"; "$$t"; done
 	@echo "all tests passed ($(CC))"
+
+# The sanitizer lane (RFC-0009): clang with address, undefined-behaviour and float-conversion checks,
+# none of them allowed to continue. clang reports what gcc's UBSan does not (null plus zero).
+ubsan:
+	$(MAKE) test CC=clang BUILD=build-ubsan CFLAGS="-std=c23 -g -O1 -Wall -Wextra -Werror -fsanitize=address,undefined,float-cast-overflow -fno-sanitize-recover=all"
 
 # Core purity: no platform headers anywhere in public headers, core, or renderer.
 check-core:

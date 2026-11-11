@@ -37,13 +37,15 @@ typedef struct gates_range_t {
                                               const gates_range_t *range, bool vertical,
                                               gates_node_t *out_slider);
 
-/* Silent; clamped into the range. INVALID_ARG for other nodes. */
+/* Silent; clamped into the range. INVALID_ARG for other nodes. A range may span all of
+ * gates_i64: stepping saturates and the track maps by fraction (0.15.0). */
 [[nodiscard]] gates_err_t gates_range_set_value(gates_tree_t *tree, gates_node_t node, gates_i64 value);
 gates_i64 gates_range_value(const gates_tree_t *tree, gates_node_t node);
 /* New limits and steps (the value is clamped into them, silently). */
 [[nodiscard]] gates_err_t gates_range_set(gates_tree_t *tree, gates_node_t node, const gates_range_t *range);
 gates_range_t gates_range_get(const gates_tree_t *tree, gates_node_t node);
-/* Slider tick marks every `steps` steps (0 = none). */
+/* Slider tick marks every `steps` steps (0 = none). Ticks closer than a pixel are not drawn:
+ * a range with more ticks than the track has pixels shows none (0.15.0). */
 [[nodiscard]] gates_err_t gates_slider_set_ticks(gates_tree_t *tree, gates_node_t slider, gates_u32 steps);
 /* The spin box's text box (for a label target, an access name, a width). */
 gates_node_t gates_spin_box(const gates_tree_t *tree, gates_node_t spin);

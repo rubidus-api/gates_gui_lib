@@ -455,7 +455,7 @@ gates_err_t gates_encoding_stream_feed(gates_encoding_stream_t *st, const void *
             c = window;
             avail = st->pending_n;
         } else {
-            c = p + pos;
+            c = p != nullptr ? p + pos : nullptr; /* R9-04: an empty input may be a null pointer */
             avail = size - pos;
         }
         if (avail == 0) break;

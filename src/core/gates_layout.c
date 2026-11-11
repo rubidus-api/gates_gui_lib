@@ -23,7 +23,7 @@ gates_err_t gates_layout_set(gates_tree_t *tree, gates_node_t node, gates_layout
 
 gates_err_t gates_layout_set_padding(gates_tree_t *tree, gates_node_t node, gates_i32 padding) {
     gates_node_slot_t *s = slot_checked(tree, node);
-    if (s == nullptr || padding < 0) {
+    if (s == nullptr || padding < 0 || padding > GATES_EXTENT_MAX) {
         return PROVEN_ERR_INVALID_ARG;
     }
     s->padding = padding;
@@ -33,7 +33,7 @@ gates_err_t gates_layout_set_padding(gates_tree_t *tree, gates_node_t node, gate
 
 gates_err_t gates_layout_set_gap(gates_tree_t *tree, gates_node_t node, gates_i32 gap) {
     gates_node_slot_t *s = slot_checked(tree, node);
-    if (s == nullptr || gap < 0) {
+    if (s == nullptr || gap < 0 || gap > GATES_EXTENT_MAX) {
         return PROVEN_ERR_INVALID_ARG;
     }
     s->gap = gap;
@@ -81,7 +81,7 @@ gates_err_t gates_layout_set_scroll_offset(gates_tree_t *tree, gates_node_t node
     if (s == nullptr) {
         return PROVEN_ERR_INVALID_ARG;
     }
-    gates_i32 clamped = gates_i_scroll_clamp(tree, node.index, offset_y);
+    gates_i32 clamped = gates_i_scroll_clamp(tree, node.index, gates_coord_clamp(offset_y));
     if (clamped != s->scroll_offset) {
         s->scroll_offset = clamped;
         gates_i_mark_dirty(tree, node.index, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
@@ -117,7 +117,7 @@ gates_err_t gates_layout_set_scroll_x(gates_tree_t *tree, gates_node_t node, gat
     if (s == nullptr) {
         return PROVEN_ERR_INVALID_ARG;
     }
-    gates_i32 clamped = gates_i_hscroll_clamp(tree, node.index, offset_x);
+    gates_i32 clamped = gates_i_hscroll_clamp(tree, node.index, gates_coord_clamp(offset_x));
     if (clamped != s->scroll_x) {
         s->scroll_x = clamped;
         gates_i_mark_dirty(tree, node.index, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
@@ -160,7 +160,8 @@ gates_err_t gates_layout_set_abs_rect(gates_tree_t *tree, gates_node_t node, gat
     if (s == nullptr) {
         return PROVEN_ERR_INVALID_ARG;
     }
-    s->abs_rect = rect;
+    s->abs_rect = (gates_rect_t){ gates_coord_clamp(rect.x), gates_coord_clamp(rect.y),
+                                  gates_coord_clamp(rect.w), gates_coord_clamp(rect.h) };
     gates_i_mark_dirty(tree, node.index, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
     return GATES_OK;
 }
@@ -994,6 +995,8 @@ gates_err_t gates_layout_run(gates_tree_t *tree, gates_size_t viewport,
         text->metrics == nullptr || viewport.w < 0 || viewport.h < 0) {
         return PROVEN_ERR_INVALID_ARG;
     }
+    if (viewport.w > GATES_COORD_MAX) viewport.w = GATES_COORD_MAX; /* R9-03: no window is wider */
+    if (viewport.h > GATES_COORD_MAX) viewport.h = GATES_COORD_MAX;
     gates_text_metrics_t root_metrics = text->metrics(text->ctx, 0);
     tree->line_height = root_metrics.line_height; /* wheel step unit */
     tree->advance = root_metrics.advance;         /* average width: sizing hints */

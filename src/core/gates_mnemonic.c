@@ -40,7 +40,7 @@ static bool walk(gates_str_t text, piece_fn piece, void *ctx) {
         if (text.ptr[i] != '&' || i + 1 >= text.size) continue;
         gates_u8 next = text.ptr[i + 1];
         if (next != '&' && !alnum(next)) continue; /* shown as it is */
-        if (i > start && !piece(ctx, (gates_str_t){ .ptr = text.ptr + start, .size = i - start }, false)) {
+        if (i > start && !piece(ctx, (gates_str_t){ .ptr = gates_i_ptr_add(text.ptr, start), .size = i - start }, false)) {
             return false;
         }
         bool mn = next != '&' && !found;
@@ -52,7 +52,7 @@ static bool walk(gates_str_t text, piece_fn piece, void *ctx) {
         start = i + 1;
     }
     if (start < text.size) {
-        return piece(ctx, (gates_str_t){ .ptr = text.ptr + start, .size = text.size - start }, false);
+        return piece(ctx, (gates_str_t){ .ptr = gates_i_ptr_add(text.ptr, start), .size = text.size - start }, false);
     }
     return true;
 }

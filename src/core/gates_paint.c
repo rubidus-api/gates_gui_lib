@@ -297,7 +297,7 @@ static void paint_node(paint_ctx_t *ctx, gates_u32 idx) {
             }
         } else {
             gates_str_t head = { .ptr = txt.ptr, .size = pre_at };
-            gates_str_t tail = { .ptr = txt.ptr + pre_at, .size = txt.size - pre_at };
+            gates_str_t tail = { .ptr = gates_i_ptr_add(txt.ptr, pre_at), .size = txt.size - pre_at };
             gates_i32 pre_x = origin_x + pre_x0;
             if (head.size > 0) {
                 emit(ctx, gates_draw_text(ctx->dl, (gates_rect_t){ origin_x, inner.y, pre_x0, m.line_height },

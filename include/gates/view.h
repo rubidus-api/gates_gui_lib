@@ -340,7 +340,7 @@ gates_rect_t gates_view_part_rect(const gates_tree_t *tree, gates_node_t view,
  * worker-thread producer uses gates/post.h through the same
  * append path. gates_view_set_model is refused on a log view. */
 typedef struct gates_log_desc_t {
-    gates_u32 max_lines;         /* 0 -> 1000 */
+    gates_u32 max_lines;         /* 0 -> 1000; a limit, not a reservation: memory grows with the lines (0.15.0) */
     gates_usize_t max_bytes;     /* text bytes kept; 0 -> 1 MiB */
 } gates_log_desc_t;
 

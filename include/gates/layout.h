@@ -82,7 +82,8 @@ typedef enum gates_align_t {
                                                          gates_u8 weight);
 [[nodiscard]] gates_err_t gates_layout_set_child_span(gates_tree_t *tree, gates_node_t child, gates_u32 columns);
 
-/* Container properties. */
+/* Container properties. Padding and gap are 0..GATES_EXTENT_MAX (gates/geometry.h): a larger
+ * value is INVALID_ARG, like a negative one (0.15.0). */
 [[nodiscard]] gates_err_t gates_layout_set(gates_tree_t *tree, gates_node_t node,
                                            gates_layout_t kind);
 [[nodiscard]] gates_err_t gates_layout_set_padding(gates_tree_t *tree, gates_node_t node,
@@ -127,11 +128,13 @@ gates_size_t gates_layout_scroll_content(const gates_tree_t *tree, gates_node_t 
                                                       gates_u8 weight);
 [[nodiscard]] gates_err_t gates_layout_set_child_align(gates_tree_t *tree, gates_node_t node,
                                                        gates_align_t align);
-/* ABSOLUTE child: requested rect relative to the parent's content box. */
+/* ABSOLUTE child: requested rect relative to the parent's content box (each number held to
+ * +-GATES_COORD_MAX, 0.15.0). */
 [[nodiscard]] gates_err_t gates_layout_set_abs_rect(gates_tree_t *tree, gates_node_t node,
                                                     gates_rect_t rect);
 
-/* Runs measure + arrange over the whole tree; root gets {0,0,viewport}.
+/* Runs measure + arrange over the whole tree; root gets {0,0,viewport} (a viewport past
+ * GATES_COORD_MAX is held to it, 0.15.0).
  * Clears the tree's layout-dirty bit. */
 [[nodiscard]] gates_err_t gates_layout_run(gates_tree_t *tree, gates_size_t viewport,
                                            const gates_text_backend_t *text);

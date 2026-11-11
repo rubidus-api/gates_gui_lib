@@ -85,7 +85,7 @@ gates_err_t gates_textbox_create(gates_tree_t *tree, gates_node_t parent, gates_
         return err;
     }
     gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, out_node->index)->state_index);
-    st->cols = cols != 0 ? cols : 16u;
+    st->cols = cols == 0 ? 16u : cols > GATES_EXTENT_MAX ? (gates_u32)GATES_EXTENT_MAX : cols; /* R9-12 */
 
     proven_result_mem_mut_t res = tree->alloc.alloc_fn(tree->alloc.ctx,
                                                        sizeof(gates_text_edit_t),

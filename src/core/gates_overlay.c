@@ -495,6 +495,7 @@ gates_err_t gates_menu_open(gates_tree_t *tree, gates_point_t at, gates_node_t s
         return PROVEN_ERR_INVALID_ARG;
     }
     *out_menu = GATES_NODE_NULL;
+    at = (gates_point_t){ gates_coord_clamp(at.x), gates_coord_clamp(at.y) };
     gates_u32 focus = tree->focus;
     gates_err_t err = menu_create(tree, at, at.y, scope, ids, count, out_menu);
     if (gates_is_ok(err) && focus != GATES_NONE) {

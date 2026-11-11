@@ -310,6 +310,43 @@ static void test_destroy_while_running(void) {
     gates_sender_release(w.sender);
 }
 
+
+/* RFC-0009 R9-05: a tree destroyed while the sender's queue is full and a work has just returned.
+ * The worker's end cannot be posted (FULL) and nobody drains the queue: destroy used to wait for
+ * the join forever. Destroy now tells the worker nobody listens, so it lets go of its end. */
+static atomic_bool destroy_done;
+static void *destroy_thread(void *p) {
+    gates_tree_destroy(((world_t *)p)->tree);
+    atomic_store(&destroy_done, true);
+    return nullptr;
+}
+
+static void test_destroy_with_full_queue(void) {
+    world_t w;
+    world(&w, 1); /* one slot */
+    job_t j = { .wait_for_cancel = true };
+    gates_task_desc_t d = desc_for(&j);
+    GT_ASSERT_OK(gates_task_start(w.tree, &d, &j.task));
+    while (!atomic_load(&j.ran)) sched_yield();
+    gates_message_t filler = { .target = gates_target(w.tree, gates_tree_root(w.tree)), .kind = 7 };
+    GT_ASSERT_OK(gates_sender_post(w.sender, &filler)); /* the queue is full now */
+    GT_ASSERT(gates_sender_post(w.sender, &filler) == GATES_POST_FULL);
+    atomic_store(&destroy_done, false);
+    pthread_t th;
+    GT_ASSERT(pthread_create(&th, nullptr, destroy_thread, &w) == 0);
+    bool in_time = false;
+    for (int i = 0; i < 4000 && !in_time; i++) { /* up to ~2 s */
+        in_time = atomic_load(&destroy_done);
+        if (!in_time) nap();
+    }
+    GT_ASSERT(in_time);
+    if (!in_time) gates_sender_close(w.sender); /* unstick a deadlocked build so the test can report */
+    pthread_join(th, nullptr);
+    GT_ASSERT(j.done_calls == 0);
+    gates_sender_close(w.sender);
+    gates_sender_release(w.sender);
+}
+
 /* The app shuts the queue down while a task finishes: its end is dropped quietly. */
 static void test_closed_queue(void) {
     world_t w;
@@ -332,6 +369,7 @@ int main(void) {
     test_full_queue();
     test_start_refusals();
     test_destroy_while_running();
+    test_destroy_with_full_queue();
     test_closed_queue();
     return gt_report("test_task");
 }

@@ -161,7 +161,7 @@ gates_err_t gates_tree_defer(gates_tree_t *tree, gates_u32 key, gates_defer_fn f
         tree->defers = (gates_i_defer *)r.value.ptr;
         tree->defer_cap = cap;
     }
-    tree->defers[tree->defer_count++] = (gates_i_defer){ .key = key, .fn = fn, .user = user };
+    tree->defers[tree->defer_count++] = (gates_i_defer){ .epoch = tree->defer_epoch, .key = key, .fn = fn, .user = user };
     return GATES_OK;
 }
 
@@ -177,14 +177,19 @@ bool gates_tree_cancel_defer(gates_tree_t *tree, gates_u32 key) {
     return false;
 }
 
-/* Runs the calls waiting now, oldest first; calls asked for meanwhile wait. */
+/* Runs the calls waiting now, oldest first; calls asked for meanwhile wait for the next run
+ * (R9-06: a call that cancels another and asks for a third used to see the third run at once). */
 static void run_defers(gates_tree_t *tree) {
-    gates_u32 n = tree->defer_count;
-    for (gates_u32 k = 0; k < n && tree->defer_count > 0; k++) {
-        gates_i_defer d = tree->defers[0];
-        memmove(&tree->defers[0], &tree->defers[1], (tree->defer_count - 1) * sizeof *tree->defers);
+    if (tree->defer_count == 0) return; /* the turn number moves only when there is something to run */
+    gates_u32 turn = tree->defer_epoch++; /* asks from here on carry the next number */
+    for (;;) {
+        gates_u32 i = 0;
+        while (i < tree->defer_count && tree->defers[i].epoch > turn) i++;
+        if (i == tree->defer_count) break;
+        gates_i_defer d = tree->defers[i];
+        memmove(&tree->defers[i], &tree->defers[i + 1], (tree->defer_count - i - 1) * sizeof *tree->defers);
         tree->defer_count--;
-        d.fn(tree, d.key, d.user); /* may defer again: that one runs next time */
+        d.fn(tree, d.key, d.user);
     }
 }
 

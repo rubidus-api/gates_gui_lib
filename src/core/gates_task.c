@@ -17,6 +17,7 @@
 struct gates_task {
     atomic_int refs;             /* the UI's and the worker's */
     atomic_bool cancel;
+    atomic_bool orphaned;        /* the tree is being destroyed: nobody takes the end (R9-05) */
     gates_task_work_fn work;
     void *work_user;
     gates_task_progress_fn on_progress;
@@ -76,6 +77,8 @@ static void task_main(void *arg) {
         gates_err_t err = gates_sender_post(t->sender, &m);
         if (gates_is_ok(err)) return; /* the message holds the worker's reference now */
         if (err != GATES_POST_FULL) break;
+        /* A tree being destroyed joins this thread and drains nothing: the end has no reader. */
+        if (atomic_load(&t->orphaned)) break;
         t->threads.yield(t->threads.ctx);
     }
     task_unref(t);
@@ -121,6 +124,7 @@ gates_err_t gates_task_start(gates_tree_t *tree, const gates_task_desc_t *desc, 
     memset(t, 0, sizeof *t);
     atomic_init(&t->refs, 2);
     atomic_init(&t->cancel, false);
+    atomic_init(&t->orphaned, false);
     t->work = desc->work;
     t->work_user = desc->work_user;
     t->on_progress = desc->on_progress;
@@ -188,7 +192,10 @@ void gates_i_task_message(gates_tree_t *tree, gates_u32 kind, void *payload) {
 }
 
 void gates_i_tasks_shutdown(gates_tree_t *tree) {
-    for (gates_task_t *t = tree->tasks; t != nullptr; t = t->next) atomic_store(&t->cancel, true);
+    for (gates_task_t *t = tree->tasks; t != nullptr; t = t->next) {
+        atomic_store(&t->cancel, true);
+        atomic_store(&t->orphaned, true); /* a worker that finds the queue full must not wait for us */
+    }
     while (tree->tasks != nullptr) {
         gates_task_t *t = tree->tasks;
         tree->tasks = t->next;

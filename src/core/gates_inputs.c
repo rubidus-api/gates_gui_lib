@@ -8,6 +8,7 @@
 #include "gates_tree_internal.h"
 #include <gates/timer.h>
 
+#include <stdckdint.h>
 #include <string.h>
 
 #define ARROWS_W 18
@@ -34,6 +35,20 @@ static gates_i64 clamp(const gates_i_range *r, gates_i64 v) {
     return v < r->min ? r->min : v > r->max ? r->max : v;
 }
 
+/* Saturating i64 arithmetic: a range may span the whole of gates_i64 (R9-01). */
+static gates_i64 sadd(gates_i64 a, gates_i64 b) {
+    gates_i64 r;
+    return ckd_add(&r, a, b) ? (b < 0 ? INT64_MIN : INT64_MAX) : r;
+}
+static gates_i64 ssub(gates_i64 a, gates_i64 b) {
+    gates_i64 r;
+    return ckd_sub(&r, a, b) ? (b > 0 ? INT64_MIN : INT64_MAX) : r;
+}
+static gates_i64 smul(gates_i64 a, gates_i64 b) {
+    gates_i64 r;
+    return ckd_mul(&r, a, b) ? ((a < 0) != (b < 0) ? INT64_MIN : INT64_MAX) : r;
+}
+
 static bool scale_ok(gates_u32 scale) {
     return scale == 0 || scale == 1 || scale == 10 || scale == 100 || scale == 1000;
 }
@@ -50,7 +65,7 @@ static void from_desc(gates_i_range *r, const gates_range_t *d) {
     r->min = d->min;
     r->max = d->max;
     r->step = d->step > 0 ? d->step : 1;
-    r->page = d->page > 0 ? d->page : 10 * r->step;
+    r->page = d->page > 0 ? d->page : smul(10, r->step);
     if (r->page < r->step) r->page = r->step;
     r->scale = d->scale;
     r->value = clamp(r, d->value);
@@ -384,7 +399,7 @@ bool gates_i_spin_key(gates_tree_t *tree, gates_u32 spin, const gates_key_event_
     }
     gates_i_spin_commit(tree, spin);
     gates_i64 v = r->value;
-    gates_i64 to = (d > 0 && v > INT64_MAX - d) ? INT64_MAX : (d < 0 && v < INT64_MIN - d) ? INT64_MIN : v + d;
+    gates_i64 to = sadd(v, d); /* user_set holds it to the range */
     user_set_or_record(tree, spin, to);
     return true;
 }
@@ -522,8 +537,9 @@ static gates_i32 pos_of(const gates_tree_t *tree, gates_u32 idx, gates_i64 v) {
     const gates_i_range *r = range_of(tree, idx);
     gates_i32 lo, hi;
     travel(tree, idx, &lo, &hi);
-    gates_i64 span = r->max - r->min;
-    gates_i32 off = span > 0 ? (gates_i32)((double)(v - r->min) * (double)(hi - lo) / (double)span + 0.5) : 0;
+    /* In doubles: the span of a range may not fit gates_i64 (R9-01), and a pixel needs no more. */
+    double span = (double)r->max - (double)r->min;
+    gates_i32 off = span > 0 ? (gates_i32)(((double)v - (double)r->min) * (double)(hi - lo) / span + 0.5) : 0;
     return r->vertical ? hi - off : lo + off;
 }
 
@@ -535,12 +551,20 @@ static gates_i64 value_at(const gates_tree_t *tree, gates_u32 idx, gates_point_t
     gates_i32 at = r->vertical ? lo + (hi - p.y) : p.x;
     if (at < lo) at = lo;
     if (at > hi) at = hi;
-    gates_i64 span = r->max - r->min;
-    if (hi == lo || span == 0) return r->min;
+    if (hi == lo || r->max == r->min) return r->min;
+    gates_i64 span;
+    if (ckd_sub(&span, r->max, r->min)) { /* wider than gates_i64: by fraction, in doubles */
+        double f = (double)(at - lo) / (double)(hi - lo);
+        if (f >= 1.0) return r->max;
+        double steps = (f * ((double)r->max - (double)r->min)) / (double)r->step + 0.5;
+        double k = steps < 9007199254740992.0 ? (double)(gates_i64)steps : steps; /* past 2^53 every double is whole */
+        double v = (double)r->min + k * (double)r->step;
+        return v >= (double)r->max ? r->max : v <= (double)r->min ? r->min : clamp(r, (gates_i64)v);
+    }
     double raw = (double)(at - lo) * (double)span / (double)(hi - lo); /* plenty for a screen */
     double steps = raw / (double)r->step + 0.5;
-    gates_i64 k = steps >= (double)INT64_MAX ? INT64_MAX : (gates_i64)steps;
-    return k > (r->max - r->min) / r->step ? r->max : clamp(r, r->min + k * r->step);
+    gates_i64 k = steps >= 9223372036854775807.0 ? INT64_MAX : (gates_i64)steps;
+    return k > span / r->step ? r->max : clamp(r, sadd(r->min, smul(k, r->step)));
 }
 
 static gates_rect_t thumb(const gates_tree_t *tree, gates_u32 idx) {
@@ -564,8 +588,10 @@ gates_err_t gates_i_slider_paint(const gates_tree_t *tree, gates_u32 idx, gates_
                                      : (gates_rect_t){ lo, b.y + (b.h - TRACK_THICK) / 2, hi - lo + 1, TRACK_THICK };
     gates_err_t err = gates_draw_rect(dl, track, border);
     /* Ticks every `ticks` steps, beside the track. */
-    if (gates_is_ok(err) && r->ticks > 0 && r->step > 0) {
-        gates_i64 every = r->step * (gates_i64)r->ticks;
+    gates_i64 every = smul(r->step, (gates_i64)r->ticks);
+    /* R9-09: a tick closer than a pixel is not a tick: past one per pixel of track, draw none
+     * (a range of billions with a tick on every step emitted a command per step). */
+    if (gates_is_ok(err) && r->ticks > 0 && r->step > 0 && ssub(r->max, r->min) / every <= (gates_i64)(hi - lo)) {
         for (gates_i64 v = r->min; v <= r->max && gates_is_ok(err); v += every) {
             gates_i32 p = pos_of(tree, idx, v);
             err = r->vertical ? gates_draw_rect(dl, (gates_rect_t){ b.x + 1, p, 3, 1 }, border)
@@ -591,10 +617,10 @@ bool gates_i_slider_key(gates_tree_t *tree, gates_u32 idx, const gates_key_event
     const gates_i_range *r = range_of(tree, idx);
     gates_i64 v = r->value, to;
     switch (ev->key) {
-    case GATES_KEY_RIGHT: case GATES_KEY_UP: to = v > r->max - r->step ? r->max : v + r->step; break;
-    case GATES_KEY_LEFT: case GATES_KEY_DOWN: to = v < r->min + r->step ? r->min : v - r->step; break;
-    case GATES_KEY_PAGE_UP: to = v > r->max - r->page ? r->max : v + r->page; break;
-    case GATES_KEY_PAGE_DOWN: to = v < r->min + r->page ? r->min : v - r->page; break;
+    case GATES_KEY_RIGHT: case GATES_KEY_UP: to = sadd(v, r->step); break;
+    case GATES_KEY_LEFT: case GATES_KEY_DOWN: to = ssub(v, r->step); break;
+    case GATES_KEY_PAGE_UP: to = sadd(v, r->page); break;
+    case GATES_KEY_PAGE_DOWN: to = ssub(v, r->page); break;
     case GATES_KEY_HOME: to = r->min; break;
     case GATES_KEY_END: to = r->max; break;
     default: return false;
@@ -621,8 +647,7 @@ bool gates_i_slider_press(gates_tree_t *tree, gates_u32 idx, gates_point_t p) {
     gates_i32 c = pos_of(tree, idx, r->value);
     bool more = r->vertical ? p.y < c : p.x > c;
     gates_i64 v = r->value;
-    user_set_or_record(tree, idx, more ? (v > r->max - r->page ? r->max : v + r->page)
-                                       : (v < r->min + r->page ? r->min : v - r->page));
+    user_set_or_record(tree, idx, more ? sadd(v, r->page) : ssub(v, r->page));
     return true;
 }
 

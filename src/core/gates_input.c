@@ -70,7 +70,7 @@ static void copy_selection(gates_tree_t *tree, gates_widget_state_t *st) {
     gates_u32 b = gates_text_edit_sel_begin(ed), e = gates_text_edit_sel_end(ed);
     gates_str_t t = gates_text_edit_text(ed);
     gates_err_t err = tree->clipboard.set_text(tree->clipboard.ctx,
-                                               (gates_str_t){ .ptr = t.ptr + b, .size = e - b });
+                                               (gates_str_t){ .ptr = gates_i_ptr_add(t.ptr, b), .size = e - b });
     if (!gates_is_ok(err)) {
         tree->input_error = err;
     }

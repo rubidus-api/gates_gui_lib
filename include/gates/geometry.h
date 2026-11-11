@@ -29,6 +29,18 @@ typedef struct gates_vec2_t {
     float y;
 } gates_vec2_t;
 
+/* Limits on what a program may hand in (0.15.0): arithmetic on layout rectangles stays inside
+ * 32 bits for them. A position, viewport size, scroll offset or absolute rectangle is held to
+ * +-GATES_COORD_MAX (16,777,216 units); a padding, gap or column width is refused past
+ * GATES_EXTENT_MAX (65,536 units). No window or screen comes near either. */
+#define GATES_COORD_MAX  (1 << 24)
+#define GATES_EXTENT_MAX (1 << 16)
+
+/* v held to [-GATES_COORD_MAX, GATES_COORD_MAX]. */
+static inline gates_i32 gates_coord_clamp(gates_i32 v) {
+    return v < -GATES_COORD_MAX ? -GATES_COORD_MAX : v > GATES_COORD_MAX ? GATES_COORD_MAX : v;
+}
+
 /* No area (w or h <= 0). */
 static inline bool gates_rect_is_empty(gates_rect_t r) {
     return r.w <= 0 || r.h <= 0;

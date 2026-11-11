@@ -37,7 +37,8 @@ typedef enum gates_cursor_t {
 } gates_cursor_t;
 gates_cursor_t gates_cursor_at(gates_tree_t *tree, gates_point_t p);
 
-/* Routes a pointer event: updates hover/pressed, fires button on_click and
+/* (0.15.0: a position is held to +-GATES_COORD_MAX, a wheel amount to +-1000 notches, NaN is 0.)
+ * Routes a pointer event: updates hover/pressed, fires button on_click and
  * checkbox on_toggle on release-inside, marks paint dirty on state changes.
  * Returns the node that consumed the event (or GATES_NODE_NULL). */
 gates_node_t gates_input_pointer(gates_tree_t *tree, const gates_pointer_event_t *ev);

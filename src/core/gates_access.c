@@ -654,6 +654,7 @@ gates_access_ref_t gates_access_prev(gates_tree_t *tree, gates_access_ref_t ref)
 }
 
 gates_access_ref_t gates_access_at_point(gates_tree_t *tree, gates_point_t p) {
+    p = (gates_point_t){ gates_coord_clamp(p.x), gates_coord_clamp(p.y) }; /* R9-03 */
     if (tree == nullptr) return NO_REF;
     gates_node_t n = gates_hit_test(tree, p);
     if (!gates_i_valid(tree, n)) return ref_of(tree, tree->root, 0);
@@ -1614,6 +1615,7 @@ bool gates_access_text_line(gates_tree_t *tree, gates_node_t node, gates_u32 off
 }
 
 gates_u32 gates_access_text_offset_at(gates_tree_t *tree, gates_node_t node, gates_point_t p) {
+    p = (gates_point_t){ gates_coord_clamp(p.x), gates_coord_clamp(p.y) }; /* R9-03 */
     if (is_editor(tree, node)) return gates_i_editor_offset_at_point(tree, node.index, p);
     const gates_widget_state_t *st = text_box(tree, node);
     if (st == nullptr) return 0;
@@ -1633,6 +1635,7 @@ gates_u32 gates_access_cell_count(gates_tree_t *tree, gates_node_t node, gates_u
 }
 
 gates_u32 gates_access_cell_at(gates_tree_t *tree, gates_node_t node, gates_point_t p) {
+    p = (gates_point_t){ gates_coord_clamp(p.x), gates_coord_clamp(p.y) }; /* R9-03 */
     if (tree == nullptr || !gates_i_valid(tree, node) || gates_i_slot(tree, node.index)->kind != GATES_NODE_VIEW) return 0;
     if (gates_i_view_row_at(tree, node.index, p) == 0) return 0;
     gates_i32 k = gates_i_view_col_at(tree, node.index, p);

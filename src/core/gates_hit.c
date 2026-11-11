@@ -56,6 +56,7 @@ gates_node_t gates_hit_test(const gates_tree_t *tree, gates_point_t p) {
     if (tree == nullptr) {
         return GATES_NODE_NULL;
     }
+    p = (gates_point_t){ gates_coord_clamp(p.x), gates_coord_clamp(p.y) };
     /* The topmost overlay under the point wins; a modal dialog hides the rest. */
     for (gates_u32 i = tree->overlay_count; i-- > 0;) {
         gates_u32 o = tree->overlays[i].index;
@@ -73,6 +74,7 @@ gates_node_t gates_hit_test(const gates_tree_t *tree, gates_point_t p) {
 
 gates_cursor_t gates_cursor_at(gates_tree_t *tree, gates_point_t p) {
     if (tree == nullptr) return GATES_CURSOR_ARROW;
+    p = (gates_point_t){ gates_coord_clamp(p.x), gates_coord_clamp(p.y) };
     switch ((gates_drag_kind_i)tree->drag_kind) { /* a drag keeps its shape (0.13.0) */
     case GATES_DRAG_NONE: break;
     case GATES_DRAG_SPLIT:
@@ -430,10 +432,22 @@ static void wheel_scroll(gates_tree_t *tree, gates_u32 from, gates_vec2_t wheel)
     }
 }
 
-gates_node_t gates_input_pointer(gates_tree_t *tree, const gates_pointer_event_t *ev) {
-    if (tree == nullptr || ev == nullptr) {
+/* A wheel amount from outside, made safe to turn into an integer (R9-02): NaN is nothing, an
+ * infinite or huge value is held to GATES_WHEEL_MAX notches. */
+static float wheel_clean(float v) {
+    if (v != v) return 0.0f;
+    return v < -GATES_WHEEL_MAX ? -GATES_WHEEL_MAX : v > GATES_WHEEL_MAX ? GATES_WHEEL_MAX : v;
+}
+
+gates_node_t gates_input_pointer(gates_tree_t *tree, const gates_pointer_event_t *event) {
+    if (tree == nullptr || event == nullptr) {
         return GATES_NODE_NULL;
     }
+    /* The event as the rest of the core sees it: coordinates and wheel held to sane ranges (R9-02, R9-03). */
+    gates_pointer_event_t clean = *event;
+    clean.pos = (gates_point_t){ gates_coord_clamp(event->pos.x), gates_coord_clamp(event->pos.y) };
+    clean.wheel = (gates_vec2_t){ wheel_clean(event->wheel.x), wheel_clean(event->wheel.y) };
+    const gates_pointer_event_t *ev = &clean;
 
     /* An active handle/thumb drag owns the event stream until release. */
     if (tree->drag_kind != GATES_DRAG_NONE) {

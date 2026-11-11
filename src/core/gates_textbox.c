@@ -358,7 +358,7 @@ gates_err_t gates_i_box_edit(gates_tree_t *tree, gates_u32 idx, gates_u32 b, gat
     cur = gates_text_edit_text(ed);
     gates_u32 anchor_before = ed->anchor;
     gates_u32 caret_before = ed->caret;
-    gates_str_t removed = { .ptr = cur.ptr + b, .size = e - b };
+    gates_str_t removed = { .ptr = gates_i_ptr_add(cur.ptr, b), .size = e - b };
     gates_u8 small[4];
     if (plan.u != nullptr && removed.size > 0) {
         gates_u8 *dst = plan.merge ? small : plan.fresh.buf;

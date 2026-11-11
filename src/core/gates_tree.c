@@ -382,51 +382,19 @@ static void for_each_in_subtree(gates_tree_t *tree, gates_u32 start,
     }
 }
 
-static void visit_count(gates_tree_t *tree, gates_u32 idx, void *ctx) {
-    (void)tree; (void)idx;
-    (*(gates_u32 *)ctx)++;
-}
-
 static void visit_mark_pending(gates_tree_t *tree, gates_u32 idx, void *ctx) {
     (void)ctx;
     gates_node_slot_t *s = gates_i_slot(tree, idx);
     s->destroy_pending = true;
+    s->next_free = GATES_NONE;
     tree->live_count--;
-    tree->pending[tree->pending_len++] = idx;
-}
-
-static gates_err_t pending_reserve(gates_tree_t *tree, gates_u32 extra) {
-    gates_u32 need = tree->pending_len + extra;
-    if (need < tree->pending_len) {
-        return PROVEN_ERR_OVERFLOW;
-    }
-    if (need <= tree->pending_cap) {
-        return GATES_OK;
-    }
-    gates_u32 new_cap = tree->pending_cap == 0 ? 16u : tree->pending_cap;
-    while (new_cap < need) {
-        if (new_cap > (UINT32_MAX / 2u)) {
-            return PROVEN_ERR_OVERFLOW;
-        }
-        new_cap *= 2u;
-    }
-    proven_result_mem_mut_t res;
-    if (tree->pending == nullptr) {
-        res = tree->alloc.alloc_fn(tree->alloc.ctx,
-                                   (proven_size_t)new_cap * sizeof(gates_u32),
-                                   alignof(gates_u32));
+    if (tree->pending_tail == GATES_NONE) {
+        tree->pending_head = idx;
     } else {
-        res = tree->alloc.realloc_fn(tree->alloc.ctx, tree->pending,
-                                     (proven_size_t)tree->pending_cap * sizeof(gates_u32),
-                                     (proven_size_t)new_cap * sizeof(gates_u32),
-                                     alignof(gates_u32));
+        gates_i_slot(tree, tree->pending_tail)->next_free = idx;
     }
-    if (!proven_is_ok(res.err)) {
-        return res.err;
-    }
-    tree->pending = (gates_u32 *)res.value.ptr;
-    tree->pending_cap = new_cap;
-    return GATES_OK;
+    tree->pending_tail = idx;
+    tree->pending_len++;
 }
 
 /* -- lifecycle -------------------------------------------------------------- */
@@ -459,6 +427,7 @@ gates_err_t gates_tree_create(const gates_tree_desc_t *desc, gates_tree_t **out_
     tree->first_free = GATES_NONE;
     tree->root = GATES_NONE;
     tree->state_first_free = GATES_NONE;
+    tree->pending_head = tree->pending_tail = GATES_NONE;
     tree->hover = GATES_NONE;
     tree->pressed = GATES_NONE;
     tree->drag_node = GATES_NONE;
@@ -539,9 +508,6 @@ void gates_tree_destroy(gates_tree_t *tree) {
             gates_i_editor_free(tree, &tree->states[i]);
         }
         alloc.free_fn(alloc.ctx, tree->states);
-    }
-    if (tree->pending != nullptr) {
-        alloc.free_fn(alloc.ctx, tree->pending);
     }
     gates_i_event_free(tree);
     gates_i_commands_free(tree);
@@ -657,12 +623,6 @@ gates_err_t gates_node_destroy(gates_tree_t *tree, gates_node_t node) {
     if (node.index == tree->root) {
         return PROVEN_ERR_INVALID_ARG;
     }
-    gates_u32 subtree_size = 0;
-    for_each_in_subtree(tree, node.index, visit_count, &subtree_size);
-    gates_err_t err = pending_reserve(tree, subtree_size);
-    if (!gates_is_ok(err)) {
-        return err;
-    }
     gates_i_access_log(tree, GATES_ACCESS_REMOVED, node.index, 0); /* before the slot can be reused */
     gates_i_overlay_node_destroyed(tree, node.index); /* an open overlay ends quietly */
     gates_i_menubar_destroying(tree, node.index);   /* its open menu closes, menu mode ends */
@@ -680,9 +640,12 @@ gates_err_t gates_tree_flush_destroys(gates_tree_t *tree) {
     if (tree == nullptr) {
         return PROVEN_ERR_INVALID_ARG;
     }
-    for (gates_u32 i = 0; i < tree->pending_len; i++) {
-        pool_free_slot(tree, tree->pending[i]);
+    for (gates_u32 i = tree->pending_head; i != GATES_NONE;) {
+        gates_u32 next = gates_i_slot(tree, i)->next_free; /* pool_free_slot reuses the field */
+        pool_free_slot(tree, i);
+        i = next;
     }
+    tree->pending_head = tree->pending_tail = GATES_NONE;
     tree->pending_len = 0;
     return GATES_OK;
 }

@@ -1235,6 +1235,12 @@ and not part of the API.
 Pixel geometry is integer (gates_i32); float appears only in vectors that
 carry sub-pixel data (pointer deltas). Platform-free.
 
+v held to [-GATES_COORD_MAX, GATES_COORD_MAX].
+
+```c
+static inline gates_i32 gates_coord_clamp(gates_i32 v);
+```
+
 No area (w or h <= 0).
 
 ```c
@@ -1452,7 +1458,8 @@ INVALID_ARG for min > max, a negative step or page, or another scale.
 [[nodiscard]] gates_err_t gates_slider_create(gates_tree_t *tree, gates_node_t parent, const gates_range_t *range, bool vertical, gates_node_t *out_slider);
 ```
 
-Silent; clamped into the range. INVALID_ARG for other nodes.
+Silent; clamped into the range. INVALID_ARG for other nodes. A range may span all of
+gates_i64: stepping saturates and the track maps by fraction (0.15.0).
 
 ```c
 [[nodiscard]] gates_err_t gates_range_set_value(gates_tree_t *tree, gates_node_t node, gates_i64 value);
@@ -1466,7 +1473,8 @@ New limits and steps (the value is clamped into them, silently).
 gates_range_t gates_range_get(const gates_tree_t *tree, gates_node_t node);
 ```
 
-Slider tick marks every `steps` steps (0 = none).
+Slider tick marks every `steps` steps (0 = none). Ticks closer than a pixel are not drawn:
+a range with more ticks than the track has pixels shows none (0.15.0).
 
 ```c
 [[nodiscard]] gates_err_t gates_slider_set_ticks(gates_tree_t *tree, gates_node_t slider, gates_u32 steps);
@@ -1513,7 +1521,8 @@ A row's grow weight (0.8.0): row < GATES_GRID_MAX_GROW_ROWS, counted over shown 
 [[nodiscard]] gates_err_t gates_layout_set_child_span(gates_tree_t *tree, gates_node_t child, gates_u32 columns);
 ```
 
-Container properties.
+Container properties. Padding and gap are 0..GATES_EXTENT_MAX (gates/geometry.h): a larger
+value is INVALID_ARG, like a negative one (0.15.0).
 
 ```c
 [[nodiscard]] gates_err_t gates_layout_set(gates_tree_t *tree, gates_node_t node, gates_layout_t kind);
@@ -1572,13 +1581,15 @@ Child properties.
 [[nodiscard]] gates_err_t gates_layout_set_child_align(gates_tree_t *tree, gates_node_t node, gates_align_t align);
 ```
 
-ABSOLUTE child: requested rect relative to the parent's content box.
+ABSOLUTE child: requested rect relative to the parent's content box (each number held to
++-GATES_COORD_MAX, 0.15.0).
 
 ```c
 [[nodiscard]] gates_err_t gates_layout_set_abs_rect(gates_tree_t *tree, gates_node_t node, gates_rect_t rect);
 ```
 
-Runs measure + arrange over the whole tree; root gets {0,0,viewport}.
+Runs measure + arrange over the whole tree; root gets {0,0,viewport} (a viewport past
+GATES_COORD_MAX is held to it, 0.15.0).
 Clears the tree's layout-dirty bit.
 
 ```c
@@ -2627,6 +2638,7 @@ shape wherever the pointer is. The platform asks before it draws the pointer
 gates_cursor_t gates_cursor_at(gates_tree_t *tree, gates_point_t p);
 ```
 
+(0.15.0: a position is held to +-GATES_COORD_MAX, a wheel amount to +-1000 notches, NaN is 0.)
 Routes a pointer event: updates hover/pressed, fires button on_click and
 checkbox on_toggle on release-inside, marks paint dirty on state changes.
 Returns the node that consumed the event (or GATES_NODE_NULL).
@@ -3121,7 +3133,8 @@ Creation: parent may be GATES_NODE_NULL (attach later). Text is copied.
 [[nodiscard]] gates_err_t gates_checkbox_create(gates_tree_t *tree, gates_node_t parent, gates_str_t text, bool checked, gates_toggle_fn on_toggle, void *user, gates_node_t *out_node);
 ```
 
-Single-line textbox. `cols` is the intrinsic width in average character widths (0 -> 16).
+Single-line textbox. `cols` is the intrinsic width in average character widths (0 -> 16, at most
+GATES_EXTENT_MAX, 0.15.0).
 Editing state lives in a gates_text_edit_t owned by the widget.
 
 ```c

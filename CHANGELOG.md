@@ -4,6 +4,50 @@ All notable changes to this project will be documented in this file.
 
 This project follows Keep a Changelog.
 
+## [0.15.0] - 2026-11-11
+
+A whole-source review (security, memory, undefined behaviour, logic), fixed.
+
+### Fixed
+
+- Destroying a subtree that owns an open menu (its commands live in it) could write past the end of
+  the list of destroyed nodes when the subtree's size plus the menu's filled the list exactly: a heap
+  overflow of a few bytes. The list is now threaded through the nodes themselves, allocates nothing
+  and cannot fail (`gates_node_destroy` no longer returns NOMEM). Found by fuzzing under injected
+  allocation failures.
+- A log view reserved memory for its whole `max_lines` at creation (4 billion lines asked for
+  100 GB); it now starts small and grows with the lines, up to the limit.
+- Closing a window while a background task had finished but the message queue was full no longer
+  hangs: `gates_tree_destroy` told the worker nobody listens, it lets go of its end and the join
+  returns. (It used to wait for ever; found by reading the task protocol.)
+- Ranges that span all of 64 bits: stepping, paging, the default page (ten steps), the thumb's
+  place and a drag to the end no longer overflow. A slider over `INT64_MIN..INT64_MAX` shows its
+  thumb where the value is and a drag reaches both ends.
+- A slider with ticks on every step of a huge range emitted a draw command per step (billions; for
+  `0..INT64_MAX` the loop never ended). Ticks closer than a pixel are not drawn now.
+- A wheel amount that is NaN, infinite or far beyond the integers no longer reaches an integer
+  conversion (undefined behaviour in C): NaN moves nothing, anything else is held to 1000 notches.
+- Numbers at the edge of 32 bits - a viewport, an absolute rectangle, a scroll offset, a column
+  width, the position of a menu or pointer - no longer overflow inside layout, painting and
+  rendering (about forty places in all).
+- Deferred calls (`gates_tree_defer`) asked for while a run is in progress wait for the next run,
+  as documented, also when a call of the run cancels others.
+- Size hints that are unsigned and huge (`cols` of a text box or editor, `rows`, the tab width) are
+  held, and `gates_access_at_point`, `_cell_at` and `_text_offset_at` hold their points like the
+  pointer calls do.
+- The null pointer of an empty text no longer has zero added to it (eight places and the
+  encoding stream); clang's sanitizer reports that, gcc's does not.
+
+### Changed
+
+- `gates_layout_set_padding` and `gates_layout_set_gap` refuse more than `GATES_EXTENT_MAX`
+  (65,536) with `INVALID_ARG`, as they already did for a negative number; column widths are held
+  to it. A viewport, absolute rectangle, scroll offset, menu position and pointer position are held
+  to +-`GATES_COORD_MAX` (16,777,216). Both constants are in `gates/geometry.h`.
+- Build: `make ubsan` runs the whole suite under clang with address, undefined-behaviour and
+  float-conversion checks; it is part of the release gate. The suite gained `test_hardening`.
+- The vendored proven_c_lib is v0.113.0 (was v0.6.0); no gates source needed changing for it.
+
 ## [0.14.0] - 2026-10-03
 
 A toolbar no longer reads as another row of tabs.

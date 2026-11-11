@@ -45,7 +45,8 @@ typedef struct gates_i_line {
 struct gates_i_log {
     gates_u32 max_lines;
     gates_usize_t max_bytes;
-    gates_i_line_t *lines;       /* max_lines slots */
+    gates_i_line_t *lines;       /* cap slots, a ring; cap grows up to max_lines as lines come (R9-10) */
+    gates_u32 cap;
     gates_u32 head, n;
     gates_usize_t bytes;
     gates_item_id_t next_id;
@@ -113,7 +114,7 @@ void gates_i_view_free(gates_tree_t *tree, gates_widget_state_t *st) {
         struct gates_i_log *lg = st->view->log;
         if (lg != nullptr) {
             for (gates_u32 k = 0; k < lg->n; k++) {
-                tree->alloc.free_fn(tree->alloc.ctx, lg->lines[(lg->head + k) % lg->max_lines].text);
+                tree->alloc.free_fn(tree->alloc.ctx, lg->lines[(lg->head + k) % lg->cap].text);
             }
             tree->alloc.free_fn(tree->alloc.ctx, lg->lines);
             tree->alloc.free_fn(tree->alloc.ctx, lg);
@@ -142,6 +143,11 @@ static struct gates_i_view *view_of(const gates_tree_t *tree, gates_node_t node)
 static struct gates_i_view *view_at(const gates_tree_t *tree, gates_u32 idx) {
     const gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
     return st != nullptr ? st->view : nullptr;
+}
+
+/* A column width held to what layout arithmetic can add up (R9-03). */
+static gates_i32 col_limit(gates_i32 w) {
+    return w > GATES_EXTENT_MAX ? GATES_EXTENT_MAX : w;
 }
 
 static gates_u64 model_count(struct gates_i_view *v) {
@@ -332,8 +338,8 @@ gates_err_t gates_view_create(gates_tree_t *tree, gates_node_t parent, const gat
             for (gates_u32 i = 0; i < v->ncol; i++) {
                 const gates_column_desc_t *c = &desc->columns[i];
                 if (c->label.size > 0) memcpy(text, c->label.ptr, c->label.size);
-                gates_i32 minw = c->min_width > 0 ? c->min_width : 3 * adv;
-                gates_i32 w = c->width > 0 ? c->width : 12 * adv;
+                gates_i32 minw = c->min_width > 0 ? col_limit(c->min_width) : 3 * adv;
+                gates_i32 w = c->width > 0 ? col_limit(c->width) : 12 * adv;
                 v->cols[i] = (gates_i_column_t){ .id = c->id, .label = text,
                                                  .label_len = (gates_u32)c->label.size,
                                                  .width = w < minw ? minw : w, .min_width = minw,
@@ -566,7 +572,7 @@ gates_err_t gates_view_set_column_width(gates_tree_t *tree, gates_node_t view,
     if (c == nullptr) {
         return PROVEN_ERR_INVALID_ARG;
     }
-    c->width = width < c->min_width ? c->min_width : width;
+    c->width = col_limit(width < c->min_width ? c->min_width : width);
     gates_i_mark_dirty(tree, view.index, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
     return GATES_OK;
 }
@@ -1710,7 +1716,7 @@ void gates_i_view_drag(gates_tree_t *tree, gates_point_t p) {
     geom_now(tree, idx, v, &g);
     if (tree->drag_kind == GATES_DRAG_VIEW_COLUMN) {
         gates_i_column_t *c = &v->cols[v->drag_col];
-        gates_i32 w = v->drag_value + (p.x - tree->drag_start.x);
+        gates_i32 w = col_limit(v->drag_value + (gates_coord_clamp(p.x) - tree->drag_start.x));
         if (w < c->min_width) w = c->min_width;
         if (w != c->width) {
             c->width = w;
@@ -1769,11 +1775,13 @@ bool gates_i_view_wheel(gates_tree_t *tree, gates_u32 idx, gates_vec2_t wheel) {
 
 /* -- log view ---------------------------------------------------------------- */
 
+#define LOG_FIRST_SLOTS 64u
+
 static gates_u64 log_count(void *u) { return ((struct gates_i_log *)u)->n; }
 
 static gates_item_id_t log_id_at(void *u, gates_u64 row) {
     struct gates_i_log *lg = u;
-    return row < lg->n ? lg->lines[(lg->head + row) % lg->max_lines].id : 0;
+    return row < lg->n ? lg->lines[(lg->head + row) % lg->cap].id : 0;
 }
 
 static bool log_index_of(void *u, gates_item_id_t id, gates_u64 *row) {
@@ -1790,7 +1798,7 @@ static gates_err_t log_cell(void *u, gates_item_id_t id, gates_column_id_t col, 
     (void)col;
     gates_u64 row = 0;
     if (!log_index_of(lg, id, &row)) return PROVEN_ERR_INVALID_ARG;
-    const gates_i_line_t *l = &lg->lines[(lg->head + row) % lg->max_lines];
+    const gates_i_line_t *l = &lg->lines[(lg->head + row) % lg->cap];
     out->text = (gates_str_t){ .ptr = l->text, .size = l->len };
     return GATES_OK;
 }
@@ -1822,11 +1830,14 @@ gates_err_t gates_log_create(gates_tree_t *tree, gates_node_t parent, const gate
         lg->max_lines = desc->max_lines != 0 ? desc->max_lines : 1000u;
         lg->max_bytes = desc->max_bytes != 0 ? desc->max_bytes : (gates_usize_t)1 << 20;
         lg->next_id = 1;
-        proven_result_mem_mut_t rl = a.alloc_fn(a.ctx, (gates_usize_t)lg->max_lines * sizeof(gates_i_line_t),
+        /* The ring starts small and doubles up to max_lines: a limit of billions costs nothing until used. */
+        gates_u32 cap0 = lg->max_lines < LOG_FIRST_SLOTS ? lg->max_lines : LOG_FIRST_SLOTS;
+        proven_result_mem_mut_t rl = a.alloc_fn(a.ctx, (gates_usize_t)cap0 * sizeof(gates_i_line_t),
                                                 alignof(gates_i_line_t));
         err = rl.err;
         if (gates_is_ok(err)) {
             lg->lines = (gates_i_line_t *)rl.value.ptr;
+            lg->cap = cap0;
         } else {
             a.free_fn(a.ctx, lg);
             lg = nullptr;
@@ -1858,7 +1869,7 @@ static void log_drop_oldest(gates_tree_t *tree, struct gates_i_log *lg) {
     lg->bytes -= l->len;
     tree->alloc.free_fn(tree->alloc.ctx, l->text);
     *l = (gates_i_line_t){0};
-    lg->head = (lg->head + 1) % lg->max_lines;
+    lg->head = (lg->head + 1) % lg->cap;
     lg->n--;
     lg->dropped++;
 }
@@ -1884,12 +1895,28 @@ gates_err_t gates_log_append(gates_tree_t *tree, gates_node_t log, gates_str_t l
             copy[i] = (c == '\r' || c == '\n' || c == '\t') ? (gates_u8)' ' : c;
         }
     }
+    if (lg->n == lg->cap && lg->cap < lg->max_lines) { /* room first: a failure changes nothing */
+        gates_u64 want = (gates_u64)lg->cap * 2u;
+        gates_u32 nc = want > lg->max_lines ? lg->max_lines : (gates_u32)want;
+        proven_result_mem_mut_t rg = tree->alloc.alloc_fn(tree->alloc.ctx, (gates_usize_t)nc * sizeof(gates_i_line_t),
+                                                          alignof(gates_i_line_t));
+        if (!proven_is_ok(rg.err)) {
+            if (copy != nullptr) tree->alloc.free_fn(tree->alloc.ctx, copy);
+            return rg.err;
+        }
+        gates_i_line_t *grown = (gates_i_line_t *)rg.value.ptr;
+        for (gates_u32 k = 0; k < lg->n; k++) grown[k] = lg->lines[(lg->head + k) % lg->cap];
+        tree->alloc.free_fn(tree->alloc.ctx, lg->lines);
+        lg->lines = grown;
+        lg->cap = nc;
+        lg->head = 0;
+    }
     gates_u64 dropped_now = 0;
     while (lg->n > 0 && (lg->n == lg->max_lines || lg->bytes + line.size > lg->max_bytes)) {
         log_drop_oldest(tree, lg);
         dropped_now++;
     }
-    lg->lines[(lg->head + lg->n) % lg->max_lines] =
+    lg->lines[(lg->head + lg->n) % lg->cap] =
         (gates_i_line_t){ .id = lg->next_id++, .text = copy, .len = (gates_u32)line.size };
     lg->n++;
     lg->bytes += line.size;
@@ -2263,7 +2290,7 @@ void gates_i_view_set_col_width(gates_tree_t *tree, gates_u32 idx, gates_u32 k, 
     gates_widget_state_t *st = gates_i_state(tree, gates_i_slot(tree, idx)->state_index);
     if (st == nullptr || st->view == nullptr || k >= st->view->ncol) return;
     gates_i_column_t *c = &st->view->cols[k];
-    c->width = width < c->min_width ? c->min_width : width;
+    c->width = col_limit(width < c->min_width ? c->min_width : width);
     gates_i_mark_dirty(tree, idx, GATES_DIRTY_LAYOUT | GATES_DIRTY_PAINT);
 }
 
@@ -2328,7 +2355,7 @@ bool gates_i_view_apply_cols(gates_tree_t *tree, gates_u32 idx, const gates_colu
         if (c < 0 || (gates_u32)c < place) continue; /* unknown, or named twice */
         gates_i_column_t moved = v->cols[c];
         memmove(&v->cols[place + 1], &v->cols[place], (gates_usize_t)((gates_u32)c - place) * sizeof moved);
-        moved.width = widths[k] < moved.min_width ? moved.min_width : widths[k];
+        moved.width = col_limit(widths[k] < moved.min_width ? moved.min_width : widths[k]);
         moved.hidden = hidden[k];
         v->cols[place++] = moved;
     }

@@ -45,11 +45,11 @@
 
 typedef struct gates_editor_desc_t {
     bool tab_inserts;            /* Tab types a tab (Ctrl+Tab still leaves when not in tabs) */
-    gates_u32 tab_width;         /* in space advances; 0 -> 4 */
+    gates_u32 tab_width;         /* in space advances; 0 -> 4, at most 1024 (0.15.0) */
     bool read_only;              /* selectable and copyable, not editable */
     gates_u32 max_bytes;         /* 0 -> GATES_TEXT_BUFFER_MAX; typing past it is refused */
-    gates_u32 rows;              /* preferred height in lines; 0 -> 10 */
-    gates_u32 cols;              /* preferred width in average characters; 0 -> 40 */
+    gates_u32 rows;              /* preferred height in lines; 0 -> 10, at most GATES_EXTENT_MAX (0.15.0) */
+    gates_u32 cols;              /* preferred width in average characters; 0 -> 40, at most GATES_EXTENT_MAX (0.15.0) */
     bool wrap;                   /* soft wrap at the view's width (no sideways scrolling) */
     bool line_numbers;           /* a gutter with line numbers */
     bool auto_indent;            /* Enter repeats the line's leading blanks */

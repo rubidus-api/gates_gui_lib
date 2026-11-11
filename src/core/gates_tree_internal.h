@@ -24,6 +24,15 @@
 #include <gates/task.h>
 #include <gates/text.h>
 
+/* p + n that is also defined for the empty text, whose pointer is null (R9-04): C does not define
+ * null plus zero, and a sanitizer says so. */
+static inline const gates_u8 *gates_i_ptr_add(const gates_u8 *p, gates_usize_t n) {
+    return p == nullptr ? nullptr : p + n;
+}
+
+/* The most wheel notches one event may move (R9-02); more is held to it. */
+#define GATES_WHEEL_MAX 1000.0f
+
 /* One queued notification: kind/origin plus the source's handle. The payload
  * is read from the widget when the event is delivered (latest state). */
 typedef struct gates_i_event_t {
@@ -341,9 +350,11 @@ struct gates_tree {
     gates_u32 root;
     gates_u32 live_count;
 
-    gates_u32 *pending;
+    /* Nodes marked destroyed, awaiting a flush: a list through the slots' next_free (a slot that
+     * waits is not free yet), so marking allocates nothing and cannot fail or overrun (R9-11). */
+    gates_u32 pending_head;
+    gates_u32 pending_tail;
     gates_u32 pending_len;
-    gates_u32 pending_cap;
 
     /* Widget state pool. */
     gates_widget_state_t *states;
@@ -464,6 +475,7 @@ struct gates_tree {
     struct gates_i_defer *defers;
     gates_u32 defer_count;
     gates_u32 defer_cap;
+    gates_u32 defer_epoch;       /* grows by one at each run of the deferred calls */
     /* Tooltips (0.3.0). */
     gates_u32 tip_index;         /* target node, GATES_NONE when none */
     gates_u32 tip_generation;
@@ -516,6 +528,7 @@ typedef struct gates_i_bubble {
     void *user;
 } gates_i_bubble;
 typedef struct gates_i_defer {
+    gates_u32 epoch;             /* the turn that asked (R9-06): a run takes only older turns' calls */
     gates_u32 key;
     gates_defer_fn fn;
     void *user;
