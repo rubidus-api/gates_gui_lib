@@ -123,7 +123,7 @@ headless use on any system.
 
 ## Documentation
 
-- Online: <https://rubidus-api.github.io/gates_gui_lib/> (English and Korean).
+- Online: <https://rubidus-api.github.io/gates_gui_lib/> (English and Korean); PDFs and zips: <https://rubidus-api.github.io/gates_gui_lib/download/>.
 - [Manual](manual/manual.md) (English) and [매뉴얼](manual-ko/manual-ko.md) (Korean): from the
   first program to deployment and troubleshooting; every program it prints is compiled by the
   build. Each release also carries the guide as a PDF and the whole manual, with the API

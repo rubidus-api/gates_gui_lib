@@ -278,13 +278,19 @@ manual-book:
 	python3 manual/book/build.py --out $(BUILD)/book
 
 # The web edition as the repository's GitHub Pages site: docs/ (Pages: deploy from main, /docs) holds
-# only what `manual-book` makes, no PDFs (they are release assets). Run after manual-book, commit docs/.
+# only public files: what `manual-book` makes (no PDFs there) and docs/download/, the release's PDFs
+# and small zips (the sdk, the sources, the web edition; the 17 MB examples zip stays a release
+# asset) with an index page. Needs the release files in dist/ (see the release notes of the
+# project); run after the release, commit docs/. Only the newest version is kept.
 manual-pages: manual-book
 	rm -rf docs
-	mkdir -p docs
+	mkdir -p docs/download
 	cp -R $(BUILD)/book/. docs/
 	rm -f docs/*.pdf
 	touch docs/.nojekyll
+	cp dist/gates-manual-$(VERSION)-en.pdf dist/gates-manual-$(VERSION)-ko.pdf \
+	   dist/gates-$(VERSION)-sdk.zip dist/gates-$(VERSION)-src.zip dist/gates-$(VERSION)-manual-web.zip docs/download/
+	sh tests/pages_downloads.sh $(VERSION) > docs/download/index.html
 
 manual-sync:
 	sh tests/manual_check.sh sync
